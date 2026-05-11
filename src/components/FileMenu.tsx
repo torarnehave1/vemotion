@@ -1,12 +1,15 @@
 import React, { useRef, useState } from 'react';
 import { ChevronDown, FilePlus, Save, Upload, FolderOpen, Trash2, Loader2 } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
+import { readStoredUser } from '../lib/auth';
+
+const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
 interface SavedComposition {
   id: string;
   name: string;
-  created_at: number;
-  updated_at: number;
+  updatedAt: string;
+  layerCount?: number;
 }
 
 interface FileMenuProps {
@@ -68,13 +71,19 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
 
   // ── Cloud ───────────────────────────────────────────────────────────────────
 
+  const getToken = () => readStoredUser()?.emailVerificationToken ?? null;
+
   const openCloud = async () => {
-    if (!userEmail) { setError('Sign in to use cloud save.'); return; }
+    const token = getToken();
+    if (!token) { setError('Sign in to use cloud save.'); return; }
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/compositions?email=${encodeURIComponent(userEmail)}`);
+      const res = await fetch(`${VEMOTION_API}/compositions`, {
+        headers: { 'X-API-Token': token },
+      });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
       setCloudList(data.compositions ?? []);
       setShowCloud(true);
     } catch {
@@ -85,15 +94,16 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
   };
 
   const saveToCloud = async () => {
-    if (!userEmail) { setError('Sign in to use cloud save.'); return; }
+    const token = getToken();
+    if (!token) { setError('Sign in to use cloud save.'); return; }
     const name = saveName.trim() || `Composition ${new Date().toLocaleDateString()}`;
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/api/compositions', {
+      const res = await fetch(`${VEMOTION_API}/composition/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: currentId, email: userEmail, name, composition }),
+        headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+        body: JSON.stringify({ id: currentId ?? undefined, name, composition }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -107,10 +117,14 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
   };
 
   const loadFromCloud = async (id: string) => {
+    const token = getToken();
+    if (!token) { setError('Sign in to use cloud save.'); return; }
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/compositions/${id}`);
+      const res = await fetch(`${VEMOTION_API}/composition?id=${encodeURIComponent(id)}`, {
+        headers: { 'X-API-Token': token },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       onLoad(data.composition);
@@ -127,7 +141,12 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
   const deleteFromCloud = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Delete this composition?')) return;
-    await fetch(`/api/compositions/${id}`, { method: 'DELETE' });
+    const token = getToken();
+    if (!token) return;
+    await fetch(`${VEMOTION_API}/composition?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'X-API-Token': token },
+    });
     setCloudList(prev => prev.filter(c => c.id !== id));
   };
 
@@ -189,7 +208,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
                     >
                       <div className="min-w-0">
                         <p className="text-sm text-slate-200 truncate">{c.name}</p>
-                        <p className="text-xs text-slate-500">{new Date(c.updated_at * 1000).toLocaleDateString()}</p>
+                        <p className="text-xs text-slate-500">{new Date(c.updatedAt).toLocaleDateString()}</p>
                       </div>
                       <button
                         className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition flex-shrink-0"

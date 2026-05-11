@@ -17,6 +17,9 @@
 - After changing `worker/index.ts`, redeploy with: `npx wrangler deploy`
 
 ## Knowledge Graph API
+- Full OpenAPI spec: `https://knowledge.vegvisr.org/openapi.json`
+- Base URL: `https://knowledge.vegvisr.org` (production worker: `https://knowledge-graph-worker.torarnehave.workers.dev`)
+- Auth: `X-API-Token` header — token in `/Users/torarnehave/Documents/GitHub/Knowledge-Editor/.env.example` as `VITE_KNOWLEDGE_API_TOKEN`
 - mermaid diagrams use node type `mermaid-diagram` with raw Mermaid code (no fences) in the `info` field
 - `patchNode` requires `expectedVersion` — node `.version` in `getknowgraph` response is always `null`; instead call `patchNode` with `expectedVersion: 0` first — if there's a version mismatch, the error response includes `"currentVersion": N`; use that N as `expectedVersion` and retry
 - For complex JSON payloads (mermaid diagrams etc), write to a temp file and use `curl --data-binary @file` to avoid shell escaping issues

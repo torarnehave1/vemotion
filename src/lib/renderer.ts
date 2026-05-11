@@ -97,6 +97,9 @@ export class CanvasRenderer {
       case 'kg-shape':
         this.drawKgShape(layer, values);
         break;
+      case 'card':
+        this.drawCard(layer, values);
+        break;
     }
 
     this.ctx.restore();
@@ -228,6 +231,109 @@ export class CanvasRenderer {
     } else {
       this.ctx.fillRect(x, y, w, h);
     }
+  }
+
+  // ── Rounded rectangle helper ──────────────────────────────────────────────
+  private roundedRect(x: number, y: number, w: number, h: number, r: number): void {
+    const radius = Math.min(r, w / 2, h / 2);
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + radius, y);
+    this.ctx.lineTo(x + w - radius, y);
+    this.ctx.arcTo(x + w, y, x + w, y + radius, radius);
+    this.ctx.lineTo(x + w, y + h - radius);
+    this.ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
+    this.ctx.lineTo(x + radius, y + h);
+    this.ctx.arcTo(x, y + h, x, y + h - radius, radius);
+    this.ctx.lineTo(x, y + radius);
+    this.ctx.arcTo(x, y, x + radius, y, radius);
+    this.ctx.closePath();
+  }
+
+  // ── Card layer ────────────────────────────────────────────────────────────
+  private drawCard(layer: Layer, values: Record<string, unknown>): void {
+    const x = layer.position.x + ((values.offsetX as number) ?? 0);
+    const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const w = layer.size.width;
+    const h = layer.size.height;
+
+    const bg            = (values.backgroundColor as string) ?? '#1e293b';
+    const borderRadius  = (values.borderRadius as number) ?? 12;
+    const padding       = (values.padding as number) ?? 24;
+
+    const title         = (values.title as string) ?? 'Title';
+    const titleSize     = (values.titleFontSize as number) ?? 32;
+    const titleColor    = (values.titleColor as string) ?? '#ffffff';
+    const titleWeight   = (values.titleFontWeight as string) ?? '700';
+    const titleFamily   = (values.fontFamily as string) ?? 'Inter, system-ui, sans-serif';
+
+    const body          = (values.body as string) ?? '';
+    const bodySize      = (values.bodyFontSize as number) ?? 22;
+    const bodyColor     = (values.bodyColor as string) ?? '#cbd5e1';
+    const bodyFamily    = titleFamily;
+    const gap           = (values.gap as number) ?? 12;
+    const lineHeightMul = 1.25;
+
+    // ── Background ───────────────────────────────────────────────────────────
+    this.ctx.fillStyle = bg;
+    this.roundedRect(x, y, w, h, borderRadius);
+    this.ctx.fill();
+
+    // Clip content to card bounds
+    this.ctx.save();
+    this.roundedRect(x, y, w, h, borderRadius);
+    this.ctx.clip();
+
+    const contentX = x + padding;
+    const contentW = w - padding * 2;
+    let cursorY = y + padding;
+
+    // ── Title ────────────────────────────────────────────────────────────────
+    this.ctx.font = `${titleWeight} ${titleSize}px ${titleFamily}`;
+    this.ctx.fillStyle = titleColor;
+    this.ctx.textBaseline = 'top';
+    this.ctx.textAlign = 'left';
+
+    const titleLines = this.wrapWords(title, contentW);
+    const titleLineH = titleSize * lineHeightMul;
+    for (const line of titleLines) {
+      if (cursorY + titleLineH > y + h - padding) break;
+      this.ctx.fillText(line, contentX, cursorY);
+      cursorY += titleLineH;
+    }
+
+    // ── Body ─────────────────────────────────────────────────────────────────
+    if (body) {
+      cursorY += gap;
+      this.ctx.font = `400 ${bodySize}px ${bodyFamily}`;
+      this.ctx.fillStyle = bodyColor;
+      const bodyLineH = bodySize * lineHeightMul;
+      const bodyLines = this.wrapWords(body, contentW);
+      for (const line of bodyLines) {
+        if (cursorY + bodyLineH > y + h - padding) break;
+        this.ctx.fillText(line, contentX, cursorY);
+        cursorY += bodyLineH;
+      }
+    }
+
+    this.ctx.restore();
+  }
+
+  // Word-wrap helper — returns array of lines that fit within maxWidth
+  private wrapWords(text: string, maxWidth: number): string[] {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let current = '';
+    for (const word of words) {
+      const test = current ? `${current} ${word}` : word;
+      if (this.ctx.measureText(test).width <= maxWidth) {
+        current = test;
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
   }
 }
 

@@ -8,7 +8,7 @@ export type CompositionData = {
 
 export type Layer = {
   id: string;
-  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape';
+  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card';
   position: { x: number; y: number };
   size: { width: number; height: number };
   startTime?: number;

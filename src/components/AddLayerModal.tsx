@@ -3,6 +3,7 @@ import { X, Sparkles, Loader2 } from 'lucide-react';
 import type { Layer } from '../lib/api';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
+const KG_CARDS_GRAPH  = 'vemotion-cards';
 const KG_BASE = 'https://knowledge.vegvisr.org';
 
 interface KgShapeNode {
@@ -11,6 +12,23 @@ interface KgShapeNode {
   color: string;
   info: string;
   metadata?: { viewBox?: string };
+}
+
+interface KgCardNode {
+  id: string;
+  label: string;
+  color: string;
+  metadata?: {
+    backgroundColor?: string;
+    padding?: number;
+    titleFontSize?: number;
+    titleColor?: string;
+    titleFontWeight?: string;
+    bodyFontSize?: number;
+    bodyColor?: string;
+    defaultWidth?: number;
+    defaultHeight?: number;
+  };
 }
 
 interface AddLayerModalProps {
@@ -80,8 +98,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 }) => {
   const isEditing = !!editingLayer;
   const isKgShape = editingLayer?.type === 'kg-shape';
-  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes'>('manual');
+  const isKgCard  = editingLayer?.type === 'card';
+  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
+  const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
   const [kgLoading, setKgLoading] = useState(false);
   const [kgError, setKgError] = useState('');
 
@@ -92,6 +112,16 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       .then(r => r.json())
       .then(data => setKgShapes((data.nodes ?? []).filter((n: KgShapeNode) => n.info)))
       .catch(() => setKgError('Failed to load shapes from graph.'))
+      .finally(() => setKgLoading(false));
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'cards' || kgCards.length > 0) return;
+    setKgLoading(true);
+    fetch(`${KG_BASE}/getknowgraph?id=${KG_CARDS_GRAPH}`)
+      .then(r => r.json())
+      .then(data => setKgCards(data.nodes ?? []))
+      .catch(() => setKgError('Failed to load cards from graph.'))
       .finally(() => setKgLoading(false));
   }, [tab]);
   const [layerType, setLayerType] = useState<'text' | 'shape'>(
@@ -115,6 +145,16 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [kgHeight, setKgHeight] = useState(editingLayer?.size.height ?? 200);
   const [kgPreset, setKgPreset] = useState<AnimationPreset>('fade-in');
 
+  // Card edit state
+  const [cardTitle,    setCardTitle]    = useState((editingLayer?.properties.title as string) ?? 'Title');
+  const [cardBody,     setCardBody]     = useState((editingLayer?.properties.body as string) ?? '');
+  const [cardPosX,     setCardPosX]     = useState(editingLayer?.position.x ?? 0);
+  const [cardPosY,     setCardPosY]     = useState(editingLayer?.position.y ?? 0);
+  const [cardWidth,    setCardWidth]    = useState(editingLayer?.size.width ?? 470);
+  const [cardHeight,   setCardHeight]   = useState(editingLayer?.size.height ?? 250);
+  const [cardPreset,   setCardPreset]   = useState<AnimationPreset>('fade-in');
+  const [cardPickPreset, setCardPickPreset] = useState<AnimationPreset>('fade-in');
+
   // AI prompt
   const [prompt, setPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -129,6 +169,19 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       size: { width: kgWidth, height: kgHeight },
       animation,
       properties: { ...editingLayer.properties, color: kgColor },
+    });
+    onClose();
+  };
+
+  const handleSaveCard = () => {
+    if (!editingLayer || !isKgCard) return;
+    const animation = buildAnimation(cardPreset, compositionDuration, compositionWidth, compositionHeight, cardWidth, cardHeight);
+    onAdd({
+      ...editingLayer,
+      position: { x: cardPosX, y: cardPosY },
+      size: { width: cardWidth, height: cardHeight },
+      animation,
+      properties: { ...editingLayer.properties, title: cardTitle, body: cardBody },
     });
     onClose();
   };
@@ -212,6 +265,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               Shapes
             </button>
             <button
+              onClick={() => setTab('cards')}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'cards' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Cards
+            </button>
+            <button
               onClick={() => setTab('ai')}
               className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${tab === 'ai' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
             >
@@ -221,7 +280,47 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         )}
 
         <div className="p-6 space-y-4">
-          {isKgShape ? (
+          {isKgCard ? (
+            <>
+              <div className="flex justify-center py-2">
+                <div className="rounded-xl px-4 py-3 text-center w-48"
+                  style={{ backgroundColor: (editingLayer.properties.backgroundColor as string) ?? '#1e293b' }}>
+                  <p className="font-bold text-sm truncate" style={{ color: (editingLayer.properties.titleColor as string) ?? '#fff' }}>{cardTitle || 'Title'}</p>
+                  <p className="text-xs mt-1 opacity-80 line-clamp-2" style={{ color: (editingLayer.properties.bodyColor as string) ?? '#cbd5e1' }}>{cardBody || 'Body text'}</p>
+                </div>
+              </div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Title</label>
+                <input value={cardTitle} onChange={e => setCardTitle(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Body</label>
+                <textarea value={cardBody} onChange={e => setCardBody(e.target.value)} rows={3}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-400 mb-1 block">Position X</label>
+                  <input type="number" value={cardPosX} onChange={e => setCardPosX(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
+                  <input type="number" value={cardPosY} onChange={e => setCardPosY(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Width</label>
+                  <input type="number" value={cardWidth} onChange={e => setCardWidth(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Height</label>
+                  <input type="number" value={cardHeight} onChange={e => setCardHeight(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+              </div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <select value={cardPreset} onChange={e => setCardPreset(e.target.value as AnimationPreset)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+              <button onClick={handleSaveCard}
+                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                Save Changes
+              </button>
+            </>
+          ) : isKgShape ? (
             <>
               <div className="flex justify-center py-2">
                 <svg viewBox={(editingLayer.properties.viewBox as string) ?? '0 0 24 24'} className="w-16 h-16">
@@ -307,6 +406,56 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     <span className="text-xs text-slate-400 group-hover:text-white truncate w-full text-center">{shape.label}</span>
                   </button>
                 ))}
+              </div>
+            </>
+          ) : tab === 'cards' ? (
+            <>
+              <p className="text-xs text-slate-400">Pick a card template from the <span className="text-sky-400">vemotion-cards</span> graph. Title and body text are editable after adding.</p>
+              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <select value={cardPickPreset} onChange={e => setCardPickPreset(e.target.value as AnimationPreset)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+              {kgLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+              {kgError && <p className="text-red-400 text-sm">{kgError}</p>}
+              <div className="grid grid-cols-2 gap-3">
+                {kgCards.map(card => {
+                  const bg = card.metadata?.backgroundColor ?? '#1e293b';
+                  const tc = card.metadata?.titleColor ?? '#ffffff';
+                  const bc = card.metadata?.bodyColor ?? '#94a3b8';
+                  const dw = card.metadata?.defaultWidth ?? 470;
+                  const dh = card.metadata?.defaultHeight ?? 250;
+                  return (
+                    <button
+                      key={card.id}
+                      className="flex flex-col items-start gap-1 p-3 rounded-xl border border-slate-700 hover:border-sky-500 transition group"
+                      style={{ backgroundColor: bg }}
+                      onClick={() => {
+                        const animation = buildAnimation(cardPickPreset, compositionDuration, compositionWidth, compositionHeight, dw, dh);
+                        const layer: Layer = {
+                          id: generateId(),
+                          type: 'card',
+                          position: { x: Math.floor((compositionWidth - dw) / 2), y: Math.floor((compositionHeight - dh) / 2) },
+                          size: { width: dw, height: dh },
+                          animation,
+                          properties: {
+                            ...card.metadata,
+                            title: 'Card Title',
+                            body: 'Edit this text to describe your content here.',
+                            kgNodeId: card.id,
+                            kgGraphId: KG_CARDS_GRAPH,
+                          },
+                        };
+                        onAdd(layer);
+                        onClose();
+                      }}
+                    >
+                      <p className="text-sm font-bold truncate w-full" style={{ color: tc }}>{card.label}</p>
+                      <p className="text-xs opacity-70 w-full text-left" style={{ color: bc }}>{dw} × {dh}</p>
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : tab === 'manual' ? (

@@ -11,7 +11,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8790',
+        target: process.env.VITE_WORKER_URL ?? 'http://localhost:8790',
         changeOrigin: true,
       },
     },

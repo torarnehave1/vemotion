@@ -48,6 +48,21 @@ Can we build a composable, AI-assisted video generation system that is lightweig
 
 **Worker:** `https://api.vegvisr.org/vemotion/*` — deployed via `npx wrangler deploy` from `/Users/torarnehave/Documents/GitHub/vegvisr-frontend/vemotion-worker/`
 
+**Vemotion Worker OpenAPI spec:** `https://api.vegvisr.org/vemotion/openapi.json`
+
+**Key endpoints (all require `X-API-Token` header except health/openapi):**
+- `GET  /vemotion/health` — health check
+- `GET  /vemotion/compositions` — list all compositions for the authed user
+- `GET  /vemotion/composition?id=<id>` — fetch a single composition
+- `POST /vemotion/composition/save` — save/update a composition `{ id?, name, composition }`
+- `DELETE /vemotion/composition?id=<id>` — delete a composition
+- `GET  /vemotion/projects` — list projects
+- `POST /vemotion/project` — create/update a project
+- `DELETE /vemotion/project?id=<id>` — delete a project
+- `POST /vemotion/render` — queue a render job `{ compositionId? | composition, format? }`
+- `GET  /vemotion/render?id=<id>` — poll render job status
+- `GET  /vemotion/renders` — list all render jobs for the authed user
+
 **Remaining gaps:**
 - Image, video, audio layers
 - Spring animations

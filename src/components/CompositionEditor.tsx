@@ -4,6 +4,14 @@ import { Plus, Trash2, Download, Loader2 } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 
+const SIZE_PRESETS = [
+  { label: 'YouTube / Landscape HD — 1920×1080', w: 1920, h: 1080 },
+  { label: 'YouTube Short / Reels / TikTok — 1080×1920', w: 1080, h: 1920 },
+  { label: 'Instagram Square — 1080×1080', w: 1080, h: 1080 },
+  { label: 'Instagram Landscape — 1280×720', w: 1280, h: 720 },
+  { label: 'Custom', w: 0, h: 0 },
+] as const;
+
 interface CompositionEditorProps {
   composition: CompositionData;
   onChange: (c: CompositionData) => void;
@@ -67,31 +75,44 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           </select>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Canvas size</label>
+          <select
+            value={SIZE_PRESETS.find(p => p.w === composition.width && p.h === composition.height)?.label ?? 'Custom'}
+            onChange={(e) => {
+              const preset = SIZE_PRESETS.find(p => p.label === e.target.value);
+              if (preset && preset.w !== 0) set({ width: preset.w, height: preset.h });
+            }}
+            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          >
+            {SIZE_PRESETS.map(p => (
+              <option key={p.label} value={p.label}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Width</label>
-            <select
+            <label className="block text-xs text-slate-500 mb-1">Width (px)</label>
+            <input
+              type="number"
               value={composition.width}
-              onChange={(e) => set({ width: parseInt(e.target.value) })}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              <option value={1280}>1280</option>
-              <option value={1920}>1920</option>
-              <option value={1080}>1080</option>
-              <option value={720}>720</option>
-            </select>
+              min={100}
+              max={3840}
+              onChange={(e) => set({ width: parseInt(e.target.value) || composition.width })}
+              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Height</label>
-            <select
+            <label className="block text-xs text-slate-500 mb-1">Height (px)</label>
+            <input
+              type="number"
               value={composition.height}
-              onChange={(e) => set({ height: parseInt(e.target.value) })}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              <option value={720}>720</option>
-              <option value={1080}>1080</option>
-              <option value={1920}>1920</option>
-            </select>
+              min={100}
+              max={3840}
+              onChange={(e) => set({ height: parseInt(e.target.value) || composition.height })}
+              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
           </div>
         </div>
       </div>

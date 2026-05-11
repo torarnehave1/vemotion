@@ -24,9 +24,20 @@ function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 }
 
-// Resolve all animated properties for a layer at a given time
+// Resolve all animated properties for a layer at a given time.
+// Also normalises property aliases produced by external generators (e.g. Codex):
+//   fill  → color   (shape fill colour)
+//   rectangle → rect, ellipse → circle (shape type names)
 function resolveLayerValues(layer: Layer, time: number): Record<string, unknown> {
   const values: Record<string, unknown> = { ...layer.properties };
+
+  // Alias: fill → color
+  if (values.fill !== undefined && values.color === undefined) {
+    values.color = values.fill;
+  }
+  // Alias: shape name normalisation
+  if (values.shape === 'rectangle') values.shape = 'rect';
+  if (values.shape === 'ellipse')   values.shape = 'circle';
 
   if (layer.animation) {
     values[layer.animation.property] = interpolate(layer.animation.keyframes, time);
@@ -96,40 +107,69 @@ export class CanvasRenderer {
     const color = (values.color as string) ?? '#ffffff';
     const text = (values.text as string) ?? '';
     const fontFamily = (values.fontFamily as string) ?? 'Inter, system-ui, sans-serif';
-    const align = (values.align as CanvasTextAlign) ?? 'left';
+    const align = (values.align as CanvasTextAlign) ?? ((values.textAlign as CanvasTextAlign) ?? 'left');
     const fontWeight = (values.fontWeight as string) ?? '600';
+    const lineHeightMultiplier = (values.lineHeight as number) ?? 1.25;
 
     const offsetX = (values.offsetX as number) ?? 0;
     const offsetY = (values.offsetY as number) ?? 0;
 
-    // Center within layer bounds if align = center
-    let x = layer.position.x + offsetX;
-    const y = layer.position.y + offsetY;
-
-    if (align === 'center') {
-      x = layer.position.x + layer.size.width / 2 + offsetX;
-    } else if (align === 'right') {
-      x = layer.position.x + layer.size.width + offsetX;
-    }
+    const maxWidth = layer.size.width;
+    const layerLeft = layer.position.x + offsetX;
+    const layerTop  = layer.position.y + offsetY;
 
     this.ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+
+    // ── Word-wrap ────────────────────────────────────────────────────────────
+    const lineHeight = fontSize * lineHeightMultiplier;
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let current = '';
+
+    for (const word of words) {
+      const test = current ? `${current} ${word}` : word;
+      if (this.ctx.measureText(test).width <= maxWidth) {
+        current = test;
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    }
+    if (current) lines.push(current);
+
+    const totalTextHeight = lines.length * lineHeight;
+
+    // Clip to layer bounds so nothing bleeds outside
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(layerLeft, layerTop, maxWidth, layer.size.height);
+    this.ctx.clip();
+
+    // Anchor x depending on alignment
+    let x = layerLeft;
+    if (align === 'center') x = layerLeft + maxWidth / 2;
+    else if (align === 'right') x = layerLeft + maxWidth;
+
+    // Vertically centre the text block inside the layer
+    const startY = layerTop + (layer.size.height - totalTextHeight) / 2 + lineHeight / 2;
+
     this.ctx.fillStyle = color;
     this.ctx.textBaseline = 'middle';
     this.ctx.textAlign = align;
-
-    // Subtle text shadow for readability
     this.ctx.shadowColor = 'rgba(0,0,0,0.5)';
     this.ctx.shadowBlur = 8;
     this.ctx.shadowOffsetX = 2;
     this.ctx.shadowOffsetY = 2;
 
-    this.ctx.fillText(text, x, y + layer.size.height / 2);
+    lines.forEach((line, i) => {
+      this.ctx.fillText(line, x, startY + i * lineHeight);
+    });
 
-    // Reset shadow
     this.ctx.shadowColor = 'transparent';
     this.ctx.shadowBlur = 0;
     this.ctx.shadowOffsetX = 0;
     this.ctx.shadowOffsetY = 0;
+    this.ctx.restore();
   }
 
   private drawKgShape(layer: Layer, values: Record<string, unknown>): void {

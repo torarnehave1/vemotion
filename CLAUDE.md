@@ -27,3 +27,26 @@
 ## General
 - Keep components consistent with the existing dark slate design system.
 - Prefer editing existing files over creating new ones.
+
+## Project Context — Vemotion
+
+**POC graph:** `video-generator-poc-2026` — view at https://www.vegvisr.org/gnew-viewer?graphId=video-generator-poc-2026
+
+**Why this was built:**
+Vemotion was initially built on Remotion. Remotion's dependency on Node.js, headless Chromium, and FFmpeg made it incompatible with a Cloudflare-native architecture. This POC explores a lightweight, fully open source alternative — running entirely on Cloudflare with the browser doing the rendering.
+
+**The core question answered (confirmed 2026-05-11):**
+Can we build a composable, AI-assisted video generation system that is lightweight, fully open source, exposes open APIs, runs on Cloudflare with the browser rendering, and produces high-quality MP4s? **Yes.** MP4 export via ffmpeg.wasm proven working in the browser.
+
+**KG graphs used by Vemotion:**
+- `vemotion-shapes` — SVG path shapes, snapshotted into compositions as `kg-shape` layers
+- `vemotion-cards` — card templates (background, title, body styling), snapshotted as `card` layers
+- `vemotion-architecture-2026` — architecture diagram of the full system
+
+**Worker:** `https://api.vegvisr.org/vemotion/*` — deployed via `npx wrangler deploy` from `/Users/torarnehave/Documents/GitHub/vegvisr-frontend/vemotion-worker/`
+
+**Remaining gaps:**
+- Image, video, audio layers
+- Spring animations
+- Multiple animations per layer
+- Agent-Builder video subagent wiring

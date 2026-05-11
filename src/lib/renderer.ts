@@ -83,6 +83,9 @@ export class CanvasRenderer {
       case 'image':
         // Image rendering requires async — handled separately
         break;
+      case 'kg-shape':
+        this.drawKgShape(layer, values);
+        break;
     }
 
     this.ctx.restore();
@@ -127,6 +130,45 @@ export class CanvasRenderer {
     this.ctx.shadowBlur = 0;
     this.ctx.shadowOffsetX = 0;
     this.ctx.shadowOffsetY = 0;
+  }
+
+  private drawKgShape(layer: Layer, values: Record<string, unknown>): void {
+    const svgPath = (values.svgPath as string) ?? '';
+    const viewBox = (values.viewBox as string) ?? '0 0 24 24';
+    const color = (values.color as string) ?? '#ffffff';
+    const strokeColor = (values.strokeColor as string) ?? '';
+    const strokeWidth = (values.strokeWidth as number) ?? 0;
+    const filled = (values.filled as boolean) ?? true;
+
+    if (!svgPath) return;
+
+    const [, , vbW, vbH] = viewBox.split(' ').map(Number);
+    const scaleX = layer.size.width / vbW;
+    const scaleY = layer.size.height / vbH;
+    const offsetX = layer.position.x + ((values.offsetX as number) ?? 0);
+    const offsetY = layer.position.y + ((values.offsetY as number) ?? 0);
+
+    this.ctx.save();
+    this.ctx.translate(offsetX, offsetY);
+    this.ctx.scale(scaleX, scaleY);
+
+    const path = new Path2D(svgPath);
+
+    if (filled) {
+      this.ctx.fillStyle = color;
+      this.ctx.fill(path);
+    }
+    if (strokeColor && strokeWidth > 0) {
+      this.ctx.strokeStyle = strokeColor;
+      this.ctx.lineWidth = strokeWidth;
+      this.ctx.stroke(path);
+    } else if (!filled) {
+      this.ctx.strokeStyle = color;
+      this.ctx.lineWidth = strokeWidth || 2;
+      this.ctx.stroke(path);
+    }
+
+    this.ctx.restore();
   }
 
   private drawShape(layer: Layer, values: Record<string, unknown>): void {

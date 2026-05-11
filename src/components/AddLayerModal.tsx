@@ -1,6 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Loader2 } from 'lucide-react';
 import type { Layer } from '../lib/api';
+
+const KG_SHAPES_GRAPH = 'vemotion-shapes';
+const KG_BASE = 'https://knowledge.vegvisr.org';
+
+interface KgShapeNode {
+  id: string;
+  label: string;
+  color: string;
+  info: string;
+  metadata?: { viewBox?: string };
+}
 
 interface AddLayerModalProps {
   onAdd: (layer: Layer) => void;
@@ -68,7 +79,20 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   onAdd, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
 }) => {
   const isEditing = !!editingLayer;
-  const [tab, setTab] = useState<'manual' | 'ai'>('manual');
+  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes'>('manual');
+  const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
+  const [kgLoading, setKgLoading] = useState(false);
+  const [kgError, setKgError] = useState('');
+
+  useEffect(() => {
+    if (tab !== 'shapes' || kgShapes.length > 0) return;
+    setKgLoading(true);
+    fetch(`${KG_BASE}/getknowgraph?id=${KG_SHAPES_GRAPH}`)
+      .then(r => r.json())
+      .then(data => setKgShapes((data.nodes ?? []).filter((n: KgShapeNode) => n.info)))
+      .catch(() => setKgError('Failed to load shapes from graph.'))
+      .finally(() => setKgLoading(false));
+  }, [tab]);
   const [layerType, setLayerType] = useState<'text' | 'shape'>(
     (editingLayer?.type === 'text' || editingLayer?.type === 'shape') ? editingLayer.type : 'text'
   );
@@ -161,16 +185,60 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               Manual
             </button>
             <button
+              onClick={() => setTab('shapes')}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'shapes' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Shapes
+            </button>
+            <button
               onClick={() => setTab('ai')}
               className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${tab === 'ai' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
             >
-              <Sparkles className="w-4 h-4" /> AI Prompt
+              <Sparkles className="w-4 h-4" /> AI
             </button>
           </div>
         )}
 
         <div className="p-6 space-y-4">
-          {tab === 'manual' ? (
+          {tab === 'shapes' ? (
+            <>
+              <p className="text-xs text-slate-400">Pick a shape from the <span className="text-sky-400">vemotion-shapes</span> graph. It will be snapshotted into your composition.</p>
+              {kgLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+              {kgError && <p className="text-red-400 text-sm">{kgError}</p>}
+              <div className="grid grid-cols-3 gap-3">
+                {kgShapes.map(shape => (
+                  <button
+                    key={shape.id}
+                    className="flex flex-col items-center gap-2 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-sky-500 rounded-xl transition group"
+                    onClick={() => {
+                      const viewBox = shape.metadata?.viewBox ?? '0 0 24 24';
+                      const layer: Layer = {
+                        id: generateId(),
+                        type: 'kg-shape',
+                        position: { x: Math.floor((compositionWidth - 200) / 2), y: Math.floor((compositionHeight - 200) / 2) },
+                        size: { width: 200, height: 200 },
+                        properties: {
+                          svgPath: shape.info,
+                          viewBox,
+                          color: shape.color,
+                          filled: true,
+                          kgNodeId: shape.id,
+                          kgGraphId: KG_SHAPES_GRAPH,
+                        },
+                      };
+                      onAdd(layer);
+                      onClose();
+                    }}
+                  >
+                    <svg viewBox={shape.metadata?.viewBox ?? '0 0 24 24'} className="w-10 h-10" fill="none" stroke={shape.color} strokeWidth="1.5">
+                      <path d={shape.info} fill={shape.color} stroke="none" />
+                    </svg>
+                    <span className="text-xs text-slate-400 group-hover:text-white truncate w-full text-center">{shape.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : tab === 'manual' ? (
             <>
               {/* Layer type */}
               <div className="flex gap-2">

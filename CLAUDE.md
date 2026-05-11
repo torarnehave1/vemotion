@@ -16,6 +16,11 @@
 - D1 migrations live in `worker/migrations/`. Apply them with: `npx wrangler d1 execute video_generator --file=worker/migrations/<file>.sql --remote`
 - After changing `worker/index.ts`, redeploy with: `npx wrangler deploy`
 
+## Knowledge Graph API
+- mermaid diagrams use node type `mermaid-diagram` with raw Mermaid code (no fences) in the `info` field
+- `patchNode` requires `expectedVersion` — fetch current version first with `getknowgraph`
+- For complex JSON payloads (mermaid diagrams etc), write to a temp file and use `curl --data-binary @file` to avoid shell escaping issues
+
 ## Self-updating rule
 - When a command fails due to a missing tool, wrong path, expired credential, or wrong assumption about the environment, add a note to this file immediately so the same mistake is not repeated.
 

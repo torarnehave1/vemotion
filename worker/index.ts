@@ -19,6 +19,64 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok' });
 });
 
+// ── Compositions ──────────────────────────────────────────────────────────────
+
+// List compositions for a user
+app.get('/api/compositions', async (c) => {
+  const email = c.req.query('email');
+  if (!email) return c.json({ error: 'Missing email' }, { status: 400 });
+  try {
+    const rows = await c.env.DB.prepare(
+      'SELECT id, name, created_at, updated_at FROM compositions WHERE user_email = ? ORDER BY updated_at DESC'
+    ).bind(email).all();
+    return c.json({ compositions: rows.results });
+  } catch (e) {
+    return c.json({ error: 'Failed to list compositions' }, { status: 500 });
+  }
+});
+
+// Save (create or update) a composition
+app.post('/api/compositions', async (c) => {
+  try {
+    const { id, email, name, composition } = await c.req.json();
+    if (!email || !name || !composition) return c.json({ error: 'Missing fields' }, { status: 400 });
+    const compositionId = id || `comp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    await c.env.DB.prepare(
+      `INSERT INTO compositions (id, user_email, name, composition, created_at, updated_at)
+       VALUES (?, ?, ?, ?, unixepoch(), unixepoch())
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, composition = excluded.composition, updated_at = unixepoch()`
+    ).bind(compositionId, email, name, JSON.stringify(composition)).run();
+    return c.json({ id: compositionId });
+  } catch (e) {
+    return c.json({ error: 'Failed to save composition' }, { status: 500 });
+  }
+});
+
+// Load a single composition
+app.get('/api/compositions/:id', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const row = await c.env.DB.prepare(
+      'SELECT * FROM compositions WHERE id = ?'
+    ).bind(id).first();
+    if (!row) return c.json({ error: 'Not found' }, { status: 404 });
+    return c.json({ ...row, composition: JSON.parse(row.composition as string) });
+  } catch (e) {
+    return c.json({ error: 'Failed to load composition' }, { status: 500 });
+  }
+});
+
+// Delete a composition
+app.delete('/api/compositions/:id', async (c) => {
+  const id = c.req.param('id');
+  try {
+    await c.env.DB.prepare('DELETE FROM compositions WHERE id = ?').bind(id).run();
+    return c.json({ success: true });
+  } catch (e) {
+    return c.json({ error: 'Failed to delete composition' }, { status: 500 });
+  }
+});
+
 // Create a new video render job
 app.post('/api/video/create', async (c) => {
   try {

@@ -3,6 +3,8 @@ import type { CompositionData } from '../lib/api';
 import { CompositionEditor } from './CompositionEditor';
 import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
+import { FileMenu } from './FileMenu';
+import { useAuth } from '../App';
 
 const defaultComposition: CompositionData = {
   duration: 5,
@@ -53,6 +55,7 @@ const defaultComposition: CompositionData = {
 };
 
 export const Dashboard: React.FC = () => {
+  const auth = useAuth();
   const [composition, setComposition] = useState<CompositionData>(defaultComposition);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [seekFrame, setSeekFrame] = useState<number | undefined>(undefined);
@@ -64,6 +67,16 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-slate-200">Vemotion</h1>
+        <FileMenu
+          composition={composition}
+          userEmail={auth?.email}
+          onLoad={c => { setComposition(c); setCurrentFrame(0); setSeekFrame(0); }}
+          onNew={() => { setComposition(defaultComposition); setCurrentFrame(0); setSeekFrame(0); }}
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CompositionEditor
           composition={composition}

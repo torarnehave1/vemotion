@@ -51,14 +51,11 @@ export const Login: React.FC<LoginProps> = ({ onDevLogin }) => {
         className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl"
       >
         <div className="flex justify-center mb-8">
-          <div className="w-20 h-20 bg-sky-600/10 rounded-3xl flex items-center justify-center border border-sky-500/20 shadow-inner">
-            <div className="w-14 h-14 rounded-xl bg-sky-500/20 flex items-center justify-center text-sky-400">
-              <svg viewBox="0 0 24 24" className="w-8 h-8 fill-current">
-                <path d="M15.5 5H11L6 12l5 7h4.5l-5-7 5-7z" />
-                <path d="M19.5 5H15L10 12l5 7h4.5l-5-7 5-7z" opacity="0.6" />
-              </svg>
-            </div>
-          </div>
+          <img
+            src="https://vegvisr.imgix.net/sdxl-1778295825277.jpg"
+            alt="Vemotion"
+            className="w-20 h-20 rounded-3xl object-cover shadow-lg"
+          />
         </div>
 
         <h1 className="text-2xl font-bold text-white text-center mb-2">

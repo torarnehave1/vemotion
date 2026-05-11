@@ -6,6 +6,17 @@ const KG_SHAPES_GRAPH = 'vemotion-shapes';
 const KG_CARDS_GRAPH  = 'vemotion-cards';
 const KG_BASE = 'https://knowledge.vegvisr.org';
 
+const FONT_OPTIONS = [
+  { label: 'Composition default', value: '' },
+  { label: 'Inter',               value: 'Inter' },
+  { label: 'Poppins',             value: 'Poppins' },
+  { label: 'Caveat (hand-drawn)', value: 'Caveat' },
+  { label: 'Montserrat',          value: 'Montserrat' },
+  { label: 'DM Sans',             value: 'DM Sans' },
+  { label: 'Plus Jakarta Sans',   value: 'Plus Jakarta Sans' },
+  { label: 'Space Grotesk',       value: 'Space Grotesk' },
+];
+
 interface KgShapeNode {
   id: string;
   label: string;
@@ -145,6 +156,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [kgHeight, setKgHeight] = useState(editingLayer?.size.height ?? 200);
   const [kgPreset, setKgPreset] = useState<AnimationPreset>('fade-in');
 
+  // Font override
+  const [fontFamily, setFontFamily] = useState((editingLayer?.properties.fontFamily as string) ?? '');
+  const [cardFontFamily, setCardFontFamily] = useState((editingLayer?.properties.fontFamily as string) ?? '');
+
   // Card edit state
   const [cardTitle,    setCardTitle]    = useState((editingLayer?.properties.title as string) ?? 'Title');
   const [cardBody,     setCardBody]     = useState((editingLayer?.properties.body as string) ?? '');
@@ -181,7 +196,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       position: { x: cardPosX, y: cardPosY },
       size: { width: cardWidth, height: cardHeight },
       animation,
-      properties: { ...editingLayer.properties, title: cardTitle, body: cardBody },
+      properties: { ...editingLayer.properties, title: cardTitle, body: cardBody, ...(cardFontFamily ? { fontFamily: cardFontFamily } : {}) },
     });
     onClose();
   };
@@ -200,7 +215,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       layerDuration: isEditing ? editingLayer.layerDuration : undefined,
       animation,
       properties: layerType === 'text'
-        ? { text, fontSize, color, align, fontWeight: '600' }
+        ? { text, fontSize, color, align, fontWeight: '600', ...(fontFamily ? { fontFamily } : {}) }
         : { shape, color },
     };
 
@@ -313,6 +328,15 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 <select value={cardPreset} onChange={e => setCardPreset(e.target.value as AnimationPreset)}
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Font override</label>
+                <select value={cardFontFamily} onChange={e => setCardFontFamily(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  style={{ fontFamily: cardFontFamily || undefined }}>
+                  {FONT_OPTIONS.map(f => (
+                    <option key={f.value} value={f.value} style={{ fontFamily: f.value || undefined }}>{f.label}</option>
+                  ))}
                 </select>
               </div>
               <button onClick={handleSaveCard}
@@ -499,6 +523,16 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                         <option value="right">Right</option>
                       </select>
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Font override</label>
+                    <select value={fontFamily} onChange={e => setFontFamily(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      style={{ fontFamily: fontFamily || undefined }}>
+                      {FONT_OPTIONS.map(f => (
+                        <option key={f.value} value={f.value} style={{ fontFamily: f.value || undefined }}>{f.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </>
               ) : (

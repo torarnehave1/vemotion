@@ -51,6 +51,7 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
 export class CanvasRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private compositionFont = 'Inter, system-ui, sans-serif';
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -59,6 +60,10 @@ export class CanvasRenderer {
 
   renderFrame(composition: CompositionData, frameNumber: number): void {
     const time = frameNumber / composition.fps;
+
+    this.compositionFont = composition.fontFamily
+      ? `${composition.fontFamily}, system-ui, sans-serif`
+      : 'Inter, system-ui, sans-serif';
 
     this.canvas.width = composition.width;
     this.canvas.height = composition.height;
@@ -109,7 +114,7 @@ export class CanvasRenderer {
     const fontSize = (values.fontSize as number) ?? 48;
     const color = (values.color as string) ?? '#ffffff';
     const text = (values.text as string) ?? '';
-    const fontFamily = (values.fontFamily as string) ?? 'Inter, system-ui, sans-serif';
+    const fontFamily = (values.fontFamily as string) ?? this.compositionFont;
     const align = (values.align as CanvasTextAlign) ?? ((values.textAlign as CanvasTextAlign) ?? 'left');
     const fontWeight = (values.fontWeight as string) ?? '600';
     const lineHeightMultiplier = (values.lineHeight as number) ?? 1.25;
@@ -264,7 +269,7 @@ export class CanvasRenderer {
     const titleSize     = (values.titleFontSize as number) ?? 32;
     const titleColor    = (values.titleColor as string) ?? '#ffffff';
     const titleWeight   = (values.titleFontWeight as string) ?? '700';
-    const titleFamily   = (values.fontFamily as string) ?? 'Inter, system-ui, sans-serif';
+    const titleFamily   = (values.fontFamily as string) ?? this.compositionFont;
 
     const body          = (values.body as string) ?? '';
     const bodySize      = (values.bodyFontSize as number) ?? 22;

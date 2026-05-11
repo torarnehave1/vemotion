@@ -3,6 +3,7 @@ export type CompositionData = {
   fps: number;
   width: number;
   height: number;
+  fontFamily?: string;
   layers: Layer[];
 };
 

@@ -18,7 +18,7 @@
 
 ## Knowledge Graph API
 - mermaid diagrams use node type `mermaid-diagram` with raw Mermaid code (no fences) in the `info` field
-- `patchNode` requires `expectedVersion` — fetch current version first with `getknowgraph`
+- `patchNode` requires `expectedVersion` — node `.version` in `getknowgraph` response is always `null`; instead call `patchNode` with `expectedVersion: 0` first — if there's a version mismatch, the error response includes `"currentVersion": N`; use that N as `expectedVersion` and retry
 - For complex JSON payloads (mermaid diagrams etc), write to a temp file and use `curl --data-binary @file` to avoid shell escaping issues
 
 ## Self-updating rule

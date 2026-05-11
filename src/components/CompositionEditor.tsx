@@ -4,6 +4,16 @@ import { Plus, Trash2, Download, Loader2 } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 
+const FONT_PRESETS = [
+  { label: 'Inter — neutral default',        value: 'Inter' },
+  { label: 'Poppins — friendly rounded',     value: 'Poppins' },
+  { label: 'Caveat — hand-drawn (Excalidraw)', value: 'Caveat' },
+  { label: 'Montserrat — bold headlines',    value: 'Montserrat' },
+  { label: 'DM Sans — minimal',              value: 'DM Sans' },
+  { label: 'Plus Jakarta Sans — techy',      value: 'Plus Jakarta Sans' },
+  { label: 'Space Grotesk — geometric',      value: 'Space Grotesk' },
+] as const;
+
 const SIZE_PRESETS = [
   { label: 'YouTube / Landscape HD — 1920×1080', w: 1920, h: 1080 },
   { label: 'YouTube Short / Reels / TikTok — 1080×1920', w: 1080, h: 1920 },
@@ -87,6 +97,20 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           >
             {SIZE_PRESETS.map(p => (
               <option key={p.label} value={p.label}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Default font</label>
+          <select
+            value={composition.fontFamily ?? 'Inter'}
+            onChange={(e) => set({ fontFamily: e.target.value })}
+            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            style={{ fontFamily: composition.fontFamily ?? 'Inter' }}
+          >
+            {FONT_PRESETS.map(f => (
+              <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>
             ))}
           </select>
         </div>

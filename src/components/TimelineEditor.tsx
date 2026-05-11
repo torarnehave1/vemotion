@@ -67,7 +67,6 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
 
     const onMove = (e: MouseEvent) => {
       if (!trackRef.current) return;
-      const rect = trackRef.current.getBoundingClientRect();
       const dx = e.clientX - drag.startMouseX;
       const dt = dx / pxPerSecond;
 
@@ -129,15 +128,6 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     const startTime = layer.startTime ?? 0;
     const dur = layer.layerDuration ?? (composition.duration - startTime);
     setDrag({ type: 'resize-left', layerId: layer.id, startMouseX: e.clientX, originalStartTime: startTime, originalDuration: dur });
-  };
-
-  const updateLayerField = (layerId: string, fields: Partial<Layer['properties']>) => {
-    onChange({
-      ...composition,
-      layers: composition.layers.map(l =>
-        l.id === layerId ? { ...l, properties: { ...l.properties, ...fields } } : l
-      ),
-    });
   };
 
   // Ruler ticks

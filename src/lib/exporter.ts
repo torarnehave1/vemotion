@@ -72,7 +72,7 @@ export async function exportToMp4(
   onProgress?.({ stage: 'encoding', percent: 95, message: 'Finalising...' });
 
   const data = await ffmpeg.readFile('output.mp4');
-  const blob = new Blob([data], { type: 'video/mp4' });
+  const blob = new Blob([data as Uint8Array<ArrayBuffer>], { type: 'video/mp4' });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { AuthBar, EcosystemNav } from 'vegvisr-ui-kit';
 import { readStoredUser, type AuthUser, setMockUser, DEV_MODE, clearStoredUser } from './lib/auth';
 import { Login } from './components/Login';
@@ -43,7 +43,7 @@ function App() {
       ) : (
         <div className="min-h-screen bg-slate-950">
           <AuthBar
-            userEmail={user.email}
+            user={{ email: user.email, displayName: user.displayName ?? undefined }}
             onLogout={() => {
               clearStoredUser();
               setUser(null);

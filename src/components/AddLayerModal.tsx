@@ -79,6 +79,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   onAdd, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
 }) => {
   const isEditing = !!editingLayer;
+  const isKgShape = editingLayer?.type === 'kg-shape';
   const [tab, setTab] = useState<'manual' | 'ai' | 'shapes'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgLoading, setKgLoading] = useState(false);
@@ -105,12 +106,32 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [posX, setPosX] = useState(editingLayer?.position.x ?? Math.floor((compositionWidth - 600) / 2));
   const [posY, setPosY] = useState(editingLayer?.position.y ?? Math.floor((compositionHeight - 80) / 2));
   const [preset, setPreset] = useState<AnimationPreset>('fade-in');
+  const [shapePreset, setShapePreset] = useState<AnimationPreset>('fade-in');
   const [align, setAlign] = useState<'left' | 'center' | 'right'>((editingLayer?.properties.align as 'left' | 'center' | 'right') ?? 'center');
+  const [kgColor, setKgColor] = useState((editingLayer?.properties.color as string) ?? '#ffffff');
+  const [kgPosX, setKgPosX] = useState(editingLayer?.position.x ?? 0);
+  const [kgPosY, setKgPosY] = useState(editingLayer?.position.y ?? 0);
+  const [kgWidth, setKgWidth] = useState(editingLayer?.size.width ?? 200);
+  const [kgHeight, setKgHeight] = useState(editingLayer?.size.height ?? 200);
+  const [kgPreset, setKgPreset] = useState<AnimationPreset>('fade-in');
 
   // AI prompt
   const [prompt, setPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+
+  const handleSaveKgShape = () => {
+    if (!editingLayer || !isKgShape) return;
+    const animation = buildAnimation(kgPreset, compositionDuration, compositionWidth, compositionHeight, kgWidth, kgHeight);
+    onAdd({
+      ...editingLayer,
+      position: { x: kgPosX, y: kgPosY },
+      size: { width: kgWidth, height: kgHeight },
+      animation,
+      properties: { ...editingLayer.properties, color: kgColor },
+    });
+    onClose();
+  };
 
   const handleAdd = () => {
     const animation = isEditing
@@ -200,9 +221,57 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         )}
 
         <div className="p-6 space-y-4">
-          {tab === 'shapes' ? (
+          {isKgShape ? (
+            <>
+              <div className="flex justify-center py-2">
+                <svg viewBox={(editingLayer.properties.viewBox as string) ?? '0 0 24 24'} className="w-16 h-16">
+                  <path d={editingLayer.properties.svgPath as string} fill={kgColor} />
+                </svg>
+              </div>
+              <label className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Color</span>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={kgColor} onChange={e => setKgColor(e.target.value)}
+                    className="w-10 h-10 rounded cursor-pointer border border-slate-600 bg-transparent" />
+                  <input value={kgColor} onChange={e => setKgColor(e.target.value)}
+                    className="w-28 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-400 mb-1 block">Position X</label>
+                  <input type="number" value={kgPosX} onChange={e => setKgPosX(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
+                  <input type="number" value={kgPosY} onChange={e => setKgPosY(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Width</label>
+                  <input type="number" value={kgWidth} onChange={e => setKgWidth(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Height</label>
+                  <input type="number" value={kgHeight} onChange={e => setKgHeight(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+              </div>
+              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <select value={kgPreset} onChange={e => setKgPreset(e.target.value as AnimationPreset)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+              <button onClick={handleSaveKgShape}
+                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                Save Changes
+              </button>
+            </>
+          ) : tab === 'shapes' ? (
             <>
               <p className="text-xs text-slate-400">Pick a shape from the <span className="text-sky-400">vemotion-shapes</span> graph. It will be snapshotted into your composition.</p>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <select value={shapePreset} onChange={e => setShapePreset(e.target.value as AnimationPreset)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
               {kgLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
               {kgError && <p className="text-red-400 text-sm">{kgError}</p>}
               <div className="grid grid-cols-3 gap-3">
@@ -212,11 +281,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     className="flex flex-col items-center gap-2 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-sky-500 rounded-xl transition group"
                     onClick={() => {
                       const viewBox = shape.metadata?.viewBox ?? '0 0 24 24';
+                      const animation = buildAnimation(shapePreset, compositionDuration, compositionWidth, compositionHeight, 200, 200);
                       const layer: Layer = {
                         id: generateId(),
                         type: 'kg-shape',
                         position: { x: Math.floor((compositionWidth - 200) / 2), y: Math.floor((compositionHeight - 200) / 2) },
                         size: { width: 200, height: 200 },
+                        animation,
                         properties: {
                           svgPath: shape.info,
                           viewBox,

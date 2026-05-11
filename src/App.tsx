@@ -1,60 +1,189 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { AuthBar, EcosystemNav } from 'vegvisr-ui-kit';
-import { readStoredUser, type AuthUser, setMockUser, DEV_MODE, clearStoredUser } from './lib/auth';
+import { readStoredUser, type AuthUser } from './lib/auth';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 
-const AuthContext = createContext<AuthUser | null>(null);
+const MAGIC_BASE = 'https://cookie.vegvisr.org';
+const DASHBOARD_BASE = 'https://dashboard.vegvisr.org';
 
-export const useAuth = () => {
-  const auth = useContext(AuthContext);
-  if (auth === null) return null;
-  return auth;
-};
+const AuthContext = createContext<AuthUser | null>(null);
+export const useAuth = () => useContext(AuthContext);
 
 function App() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authStatus, setAuthStatus] = useState<'checking' | 'authed' | 'anonymous'>('checking');
 
-  useEffect(() => {
-    const stored = readStoredUser();
-    setUser(stored);
-    setIsLoading(false);
-  }, []);
-
-  const handleDevLogin = () => {
-    setMockUser();
-    const stored = readStoredUser();
-    setUser(stored);
+  const setAuthCookie = (token: string) => {
+    if (!token) return;
+    const isVegvisr = window.location.hostname.endsWith('vegvisr.org');
+    const domain = isVegvisr ? '; Domain=.vegvisr.org' : '';
+    const maxAge = 60 * 60 * 24 * 30;
+    document.cookie = `vegvisr_token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure${domain}`;
   };
 
-  if (isLoading) {
+  const persistUser = (user: {
+    email: string;
+    role: string;
+    user_id: string | null;
+    emailVerificationToken: string | null;
+    oauth_id?: string | null;
+    displayName?: string | null;
+  }) => {
+    const payload = {
+      email: user.email,
+      role: user.role,
+      user_id: user.user_id,
+      oauth_id: user.oauth_id || user.user_id || null,
+      emailVerificationToken: user.emailVerificationToken,
+      displayName: user.displayName || null,
+    };
+    localStorage.setItem('user', JSON.stringify(payload));
+    if (user.emailVerificationToken) setAuthCookie(user.emailVerificationToken);
+    sessionStorage.setItem('email_session_verified', '1');
+    setAuthUser({
+      userId: payload.user_id || payload.oauth_id || '',
+      email: payload.email,
+      role: payload.role || null,
+      displayName: payload.displayName,
+    });
+  };
+
+  const fetchUserContext = async (targetEmail: string) => {
+    const roleRes = await fetch(`${DASHBOARD_BASE}/get-role?email=${encodeURIComponent(targetEmail)}`);
+    if (!roleRes.ok) throw new Error(`User role unavailable (status: ${roleRes.status})`);
+    const roleData = await roleRes.json();
+    if (!roleData?.role) throw new Error('Unable to retrieve user role.');
+    const userDataRes = await fetch(`${DASHBOARD_BASE}/userdata?email=${encodeURIComponent(targetEmail)}`);
+    if (!userDataRes.ok) throw new Error(`Unable to fetch user data (status: ${userDataRes.status})`);
+    const userData = await userDataRes.json();
+    return {
+      email: targetEmail,
+      role: roleData.role,
+      user_id: userData.user_id,
+      emailVerificationToken: userData.emailVerificationToken,
+      oauth_id: userData.oauth_id,
+    };
+  };
+
+  const verifyMagicToken = async (token: string) => {
+    const res = await fetch(`${MAGIC_BASE}/login/magic/verify?token=${encodeURIComponent(token)}`);
+    const data = await res.json();
+    if (!res.ok || !data.success || !data.email) throw new Error(data.error || 'Invalid or expired magic link.');
+    try {
+      const userContext = await fetchUserContext(data.email);
+      persistUser(userContext);
+    } catch {
+      try {
+        await fetch(`${DASHBOARD_BASE}/register-realtime-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: data.email }),
+        });
+        const userContext = await fetchUserContext(data.email);
+        persistUser(userContext);
+      } catch {
+        persistUser({ email: data.email, role: 'user', user_id: data.email, emailVerificationToken: null });
+      }
+    }
+  };
+
+  const clearAuthCookie = () => {
+    const base = 'vegvisr_token=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+    document.cookie = base;
+    if (window.location.hostname.endsWith('vegvisr.org')) {
+      document.cookie = `${base}; Domain=.vegvisr.org`;
+    }
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('user');
+      sessionStorage.removeItem('email_session_verified');
+    } catch { /* ignore */ }
+    clearAuthCookie();
+    setAuthUser(null);
+    setAuthStatus('anonymous');
+  };
+
+  // Handle magic link token in URL
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const magic = url.searchParams.get('magic');
+    if (!magic) return;
+    setAuthStatus('checking');
+    verifyMagicToken(magic)
+      .then(() => {
+        url.searchParams.delete('magic');
+        window.history.replaceState({}, '', url.toString());
+        setAuthStatus('authed');
+      })
+      .catch(() => setAuthStatus('anonymous'));
+  }, []);
+
+  // Validate stored user on load
+  useEffect(() => {
+    let isMounted = true;
+    const stored = readStoredUser();
+    if (stored?.email) {
+      fetch(`${DASHBOARD_BASE}/get-role?email=${encodeURIComponent(stored.email)}`)
+        .then(async res => {
+          if (!isMounted) return;
+          if (res.ok) {
+            const roleData = await res.json().catch(() => null);
+            const nextRole = typeof roleData?.role === 'string' ? roleData.role : stored.role || null;
+            try {
+              localStorage.setItem('user', JSON.stringify({
+                ...JSON.parse(localStorage.getItem('user') || '{}'),
+                role: nextRole,
+              }));
+            } catch { /* ignore */ }
+            setAuthUser({ ...stored, role: nextRole });
+            setAuthStatus('authed');
+          } else {
+            try { localStorage.removeItem('user'); } catch { /* ignore */ }
+            setAuthUser(null);
+            setAuthStatus('anonymous');
+          }
+        })
+        .catch(() => {
+          if (!isMounted) return;
+          setAuthUser(stored);
+          setAuthStatus('authed');
+        });
+    } else if (isMounted) {
+      setAuthStatus('anonymous');
+    }
+    return () => { isMounted = false; };
+  }, []);
+
+  if (authStatus === 'checking') {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-950">
-        <div className="animate-pulse text-slate-400">Loading...</div>
+        <div className="animate-pulse text-slate-400">Loading…</div>
       </div>
     );
   }
 
+  if (authStatus === 'anonymous') {
+    return <Login />;
+  }
+
   return (
-    <AuthContext.Provider value={user}>
-      {!user ? (
-        <Login onDevLogin={DEV_MODE ? handleDevLogin : undefined} />
-      ) : (
-        <div className="min-h-screen bg-slate-950">
-          <AuthBar
-            user={{ email: user.email, displayName: user.displayName ?? undefined }}
-            onLogout={() => {
-              clearStoredUser();
-              setUser(null);
-            }}
-          />
-          <EcosystemNav />
-          <main className="container mx-auto px-4 py-8">
-            <Dashboard />
-          </main>
-        </div>
-      )}
+    <AuthContext.Provider value={authUser}>
+      <div className="min-h-screen bg-slate-950">
+        <AuthBar
+          userEmail={authUser?.email}
+          badgeLabel="Vemotion"
+          signInLabel="Sign in"
+          logoutLabel="Log out"
+          onLogout={handleLogout}
+        />
+        <EcosystemNav />
+        <main className="container mx-auto px-4 py-8">
+          <Dashboard />
+        </main>
+      </div>
     </AuthContext.Provider>
   );
 }

@@ -2,7 +2,10 @@ declare module 'vegvisr-ui-kit' {
   import { FC, ReactNode } from 'react';
 
   export const AuthBar: FC<{
-    user: { email: string; displayName?: string };
+    userEmail?: string;
+    badgeLabel?: string;
+    signInLabel?: string;
+    logoutLabel?: string;
     onLogout: () => void;
   }>;
 

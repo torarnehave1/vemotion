@@ -1,0 +1,21 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+*.log
+*.lock
+.DS_Store
+._*
+.vscode
+.idea
+*.swp
+*.swo
+build/
+coverage/
+.wrangler/
+.cloudflare/
+
+# Wrangler configuration with secrets
+wrangler.toml
+wrangler.production.toml

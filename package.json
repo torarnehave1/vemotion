@@ -1,0 +1,45 @@
+{
+  "name": "video-generator",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3002",
+    "dev:worker": "wrangler dev --port=8790",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:worker\"",
+    "build": "tsc && vite build",
+    "build:worker": "wrangler deploy --dry-run",
+    "preview": "vite preview",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "clsx": "^2.1.1",
+    "hono": "^4.7.4",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.5.0",
+    "vegvisr-ui-kit": "^1.4.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250122.0",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.0.24",
+    "@types/react-dom": "^18.0.8",
+    "@vitejs/plugin-react": "^2.2.0",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.39.1",
+    "postcss": "^8.4.30",
+    "tailwindcss": "^3.3.3",
+    "typescript": "^4.6.4",
+    "vite": "^3.2.3",
+    "wrangler": "^4.64.0"
+  },
+  "engines": {
+    "node": "20.11.1"
+  }
+}

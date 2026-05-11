@@ -1,0 +1,157 @@
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Play, Pause, Square, Download } from 'lucide-react';
+import { CanvasRenderer, PlaybackController } from '../lib/renderer';
+import type { CompositionData } from '../lib/api';
+
+interface VideoPreviewProps {
+  composition: CompositionData;
+  onFrameChange?: (frame: number) => void;
+  externalSeekFrame?: number;
+}
+
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rendererRef = useRef<CanvasRenderer | null>(null);
+  const controllerRef = useRef<PlaybackController | null>(null);
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentFrame, setCurrentFrame] = useState(0);
+
+  const totalFrames = Math.floor(composition.duration * composition.fps);
+
+  // Initialise renderer when canvas is ready
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const renderer = new CanvasRenderer(canvas);
+    const controller = new PlaybackController(renderer, composition);
+
+    controller.onFrameChange = (frame) => {
+      setCurrentFrame(frame);
+      onFrameChange?.(frame);
+    };
+    controller.onEnd = () => setIsPlaying(false);
+
+    rendererRef.current = renderer;
+    controllerRef.current = controller;
+
+    // Render first frame immediately
+    renderer.renderFrame(composition, 0);
+    setCurrentFrame(0);
+
+    return () => controller.pause();
+  }, [composition]);
+
+  // Seek when timeline sends a frame
+  useEffect(() => {
+    if (externalSeekFrame === undefined) return;
+    controllerRef.current?.pause();
+    controllerRef.current?.seekToFrame(externalSeekFrame);
+    setIsPlaying(false);
+    setCurrentFrame(externalSeekFrame);
+  }, [externalSeekFrame]);
+
+  const handlePlay = useCallback(() => {
+    controllerRef.current?.play();
+    setIsPlaying(true);
+  }, []);
+
+  const handlePause = useCallback(() => {
+    controllerRef.current?.pause();
+    setIsPlaying(false);
+  }, []);
+
+  const handleStop = useCallback(() => {
+    controllerRef.current?.stop();
+    setIsPlaying(false);
+    setCurrentFrame(0);
+  }, []);
+
+  const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const frame = parseInt(e.target.value);
+    controllerRef.current?.pause();
+    controllerRef.current?.seekToFrame(frame);
+    setIsPlaying(false);
+    setCurrentFrame(frame);
+  }, []);
+
+  const currentTime = (currentFrame / composition.fps).toFixed(2);
+  const totalTime = composition.duration.toFixed(2);
+  const progressPct = totalFrames > 0 ? (currentFrame / totalFrames) * 100 : 0;
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+
+      {/* Canvas */}
+      <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: `${composition.width}/${composition.height}` }}>
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full"
+        />
+      </div>
+
+      {/* Scrubber */}
+      <div className="space-y-2">
+        <input
+          type="range"
+          min={0}
+          max={totalFrames - 1}
+          value={currentFrame}
+          onChange={handleScrub}
+          className="w-full accent-sky-500"
+        />
+        <div className="flex justify-between text-xs text-slate-400">
+          <span>Frame {currentFrame} / {totalFrames}</span>
+          <span>{currentTime}s / {totalTime}s</span>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full bg-slate-800 rounded-full h-1">
+        <div
+          className="bg-sky-600 h-1 rounded-full transition-all"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+
+      {/* Controls */}
+      <div className="flex items-center gap-3">
+        {isPlaying ? (
+          <button
+            onClick={handlePause}
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition"
+          >
+            <Pause className="w-4 h-4" /> Pause
+          </button>
+        ) : (
+          <button
+            onClick={handlePlay}
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition"
+          >
+            <Play className="w-4 h-4" /> Play
+          </button>
+        )}
+        <button
+          onClick={handleStop}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition"
+        >
+          <Square className="w-4 h-4" /> Stop
+        </button>
+        <div className="ml-auto">
+          <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition">
+            <Download className="w-4 h-4" /> Export MP4
+          </button>
+        </div>
+      </div>
+
+      {/* Composition info */}
+      <div className="flex gap-4 text-xs text-slate-500 pt-2 border-t border-slate-800">
+        <span>{composition.width}×{composition.height}</span>
+        <span>{composition.fps} fps</span>
+        <span>{composition.duration}s</span>
+        <span>{composition.layers.length} layer{composition.layers.length !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  );
+};

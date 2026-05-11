@@ -1,0 +1,37 @@
+name = "video-generator-worker"
+main = "worker/index.ts"
+compatibility_date = "2025-02-14"
+workers_dev = true
+account_id = "YOUR_ACCOUNT_ID_HERE"
+
+[env.production]
+routes = [
+  { pattern = "api.yourdomain.com/api/video/*", zone_name = "yourdomain.com" }
+]
+
+[[kv_namespaces]]
+binding = "VIDEO_CACHE"
+id = "YOUR_KV_NAMESPACE_ID"
+preview_id = "YOUR_KV_PREVIEW_ID"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "video_generator"
+database_id = "YOUR_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "VIDEOS"
+bucket_name = "video-files"
+preview_bucket_name = "video-files-preview"
+
+[vars]
+MAX_DURATION = "300"
+FRAME_RATE = "30"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1

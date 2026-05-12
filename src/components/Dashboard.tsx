@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { CompositionEditor } from './CompositionEditor';
@@ -6,6 +6,10 @@ import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
+
+const DEFAULT_SIDEBAR_WIDTH = 320;
+const MIN_SIDEBAR_WIDTH = 240;
+const MAX_SIDEBAR_WIDTH = 560;
 
 const defaultComposition: CompositionData = {
   duration: 5,
@@ -57,16 +61,42 @@ export const Dashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const isResizing = useRef(false);
 
   const handleTimelineSeek = (frame: number) => {
     setSeekFrame(frame);
     setCurrentFrame(frame);
   };
 
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      setSidebarWidth(Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, e.clientX)));
+    };
+
+    const onUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, []);
+
   return (
-    <div className="flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex flex-col h-full">
+
+      {/* Header bar — full width */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setSidebarOpen(v => !v)}
@@ -87,8 +117,8 @@ export const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Body */}
-      <div className="flex gap-4 items-start relative">
+      {/* Body — sidebar + content */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Mobile backdrop */}
         {sidebarOpen && (
@@ -98,39 +128,55 @@ export const Dashboard: React.FC = () => {
           />
         )}
 
-        {/* Sidebar — fixed drawer on mobile, layout panel on desktop */}
+        {/* Sidebar */}
         <aside
           className={[
-            // Mobile: fixed drawer sliding in from left
-            'fixed inset-y-0 left-0 z-40 w-80 overflow-y-auto bg-slate-950 px-4 py-6',
+            // Mobile: fixed drawer
+            'fixed inset-y-0 left-0 z-40 bg-slate-900 overflow-y-auto',
             'transition-transform duration-300 ease-in-out',
             sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-            // Desktop: static panel in the flex layout, collapses via width
-            'lg:static lg:inset-auto lg:z-auto lg:bg-transparent lg:p-0',
-            'lg:translate-x-0 lg:transition-all lg:duration-300 lg:overflow-hidden lg:flex-shrink-0',
-            sidebarOpen ? 'lg:w-80' : 'lg:w-0',
+            // Desktop: layout panel, no transition on width (resize is instant)
+            'lg:static lg:inset-auto lg:z-auto lg:translate-x-0',
+            'lg:border-r lg:border-slate-800 lg:flex-shrink-0 lg:overflow-y-auto',
+            !sidebarOpen && 'lg:hidden',
           ].join(' ')}
+          style={{ width: sidebarWidth }}
         >
-          {/* Inner wrapper keeps CompositionEditor at full width during collapse animation */}
-          <div className="w-80">
+          <div className="p-4" style={{ width: sidebarWidth }}>
             <CompositionEditor composition={composition} onChange={setComposition} />
           </div>
         </aside>
 
-        {/* Canvas + Timeline */}
-        <div className="flex-1 min-w-0 space-y-4 w-full">
-          <VideoPreview
-            composition={composition}
-            onFrameChange={setCurrentFrame}
-            externalSeekFrame={seekFrame}
-          />
-          <TimelineEditor
-            composition={composition}
-            currentFrame={currentFrame}
-            onSeek={handleTimelineSeek}
-            onChange={setComposition}
-          />
+        {/* Resize handle — desktop only, visible when sidebar is open */}
+        {sidebarOpen && (
+          <div
+            className="hidden lg:flex w-1.5 flex-shrink-0 cursor-col-resize bg-slate-800 hover:bg-sky-500 active:bg-sky-400 transition-colors duration-150 items-center justify-center group"
+            onMouseDown={startResize}
+            title="Drag to resize"
+          >
+            <div className="w-0.5 h-8 rounded-full bg-slate-600 group-hover:bg-sky-300 transition-colors" />
+          </div>
+        )}
+
+        {/* Main content: canvas + timeline */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 p-4 pb-2">
+            <VideoPreview
+              composition={composition}
+              onFrameChange={setCurrentFrame}
+              externalSeekFrame={seekFrame}
+            />
+          </div>
+          <div className="flex-shrink-0 px-4 pb-4">
+            <TimelineEditor
+              composition={composition}
+              currentFrame={currentFrame}
+              onSeek={handleTimelineSeek}
+              onChange={setComposition}
+            />
+          </div>
         </div>
+
       </div>
     </div>
   );

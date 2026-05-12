@@ -171,7 +171,7 @@ function App() {
 
   return (
     <AuthContext.Provider value={authUser}>
-      <div className="min-h-screen bg-slate-950">
+      <div className="h-screen bg-slate-950 flex flex-col overflow-hidden">
         <AuthBar
           userEmail={authUser?.email}
           badgeLabel="Vemotion"
@@ -180,7 +180,7 @@ function App() {
           onLogout={handleLogout}
         />
         <EcosystemNav />
-        <main className="container mx-auto px-4 py-8">
+        <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <Dashboard />
         </main>
       </div>

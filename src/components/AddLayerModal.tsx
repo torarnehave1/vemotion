@@ -179,7 +179,19 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const _ea = isImgLayer ? editingLayer?.animation : undefined;
   const _px = editingLayer?.position.x ?? 0;
   const _py = editingLayer?.position.y ?? 0;
-  const [imgAnimEnabled, setImgAnimEnabled] = useState(!!_ea);
+
+  type ImgAnimType = 'none' | 'fade-in' | 'fade-out' | 'fade-in-out' | 'slide';
+  const _detectType = (anim: Layer['animation']): ImgAnimType => {
+    if (!anim) return 'none';
+    if (anim.property === 'offsetX' || anim.property === 'offsetY') return 'slide';
+    if (anim.property === 'opacity') {
+      if (anim.keyframes.length >= 3) return 'fade-in-out';
+      return (anim.keyframes[0].value as number) === 0 ? 'fade-in' : 'fade-out';
+    }
+    return 'none';
+  };
+
+  const [imgAnimType, setImgAnimType] = useState<ImgAnimType>(() => _detectType(_ea));
   const [animStartX, setAnimStartX] = useState(() =>
     _ea?.property === 'offsetX' ? _px + (_ea.keyframes[0].value as number) : _px
   );
@@ -200,25 +212,23 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const handleSaveImage = () => {
     if (!editingLayer || !isImgLayer) return;
     let animation: Layer['animation'] = undefined;
-    if (imgAnimEnabled) {
+    const st = animStartTime;
+    const et = animEndTime;
+    if (imgAnimType === 'fade-in') {
+      animation = { property: 'opacity', keyframes: [{ time: st, value: 0 }, { time: et, value: 1 }] };
+    } else if (imgAnimType === 'fade-out') {
+      animation = { property: 'opacity', keyframes: [{ time: st, value: 1 }, { time: et, value: 0 }] };
+    } else if (imgAnimType === 'fade-in-out') {
+      const m1 = st + (et - st) * 0.2;
+      const m2 = st + (et - st) * 0.8;
+      animation = { property: 'opacity', keyframes: [{ time: st, value: 0 }, { time: m1, value: 1 }, { time: m2, value: 1 }, { time: et, value: 0 }] };
+    } else if (imgAnimType === 'slide') {
       const dX = Math.abs(animEndX - animStartX);
       const dY = Math.abs(animEndY - animStartY);
       if (dX >= dY) {
-        animation = {
-          property: 'offsetX',
-          keyframes: [
-            { time: animStartTime, value: animStartX - imgPosX },
-            { time: animEndTime,   value: animEndX   - imgPosX },
-          ],
-        };
+        animation = { property: 'offsetX', keyframes: [{ time: st, value: animStartX - imgPosX }, { time: et, value: animEndX - imgPosX }] };
       } else {
-        animation = {
-          property: 'offsetY',
-          keyframes: [
-            { time: animStartTime, value: animStartY - imgPosY },
-            { time: animEndTime,   value: animEndY   - imgPosY },
-          ],
-        };
+        animation = { property: 'offsetY', keyframes: [{ time: st, value: animStartY - imgPosY }, { time: et, value: animEndY - imgPosY }] };
       }
     }
     onAdd({
@@ -517,30 +527,38 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {/* Animation */}
               <div>
                 <label className="text-xs text-slate-400 mb-2 block">Animation</label>
-                <div className="flex gap-2 mb-3">
-                  {(['None', 'Slide'] as const).map(opt => (
-                    <button key={opt} onClick={() => setImgAnimEnabled(opt === 'Slide')}
-                      className={`flex-1 py-2 rounded-lg text-sm transition ${imgAnimEnabled === (opt === 'Slide') ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
-                      {opt}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {([
+                    { value: 'none',        label: 'None' },
+                    { value: 'fade-in',     label: 'Fade In' },
+                    { value: 'fade-out',    label: 'Fade Out' },
+                    { value: 'fade-in-out', label: 'Fade In/Out' },
+                    { value: 'slide',       label: 'Slide' },
+                  ] as { value: ImgAnimType; label: string }[]).map(opt => (
+                    <button key={opt.value} onClick={() => setImgAnimType(opt.value)}
+                      className={`py-2 rounded-lg text-sm transition ${imgAnimType === opt.value ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                      {opt.label}
                     </button>
                   ))}
                 </div>
-                {imgAnimEnabled && (
+                {imgAnimType !== 'none' && (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className="text-xs text-slate-400 mb-1 block">Start X</label>
-                        <input type="number" value={animStartX} onChange={e => setAnimStartX(parseInt(e.target.value))}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                      <div><label className="text-xs text-slate-400 mb-1 block">Start Y</label>
-                        <input type="number" value={animStartY} onChange={e => setAnimStartY(parseInt(e.target.value))}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                      <div><label className="text-xs text-slate-400 mb-1 block">End X</label>
-                        <input type="number" value={animEndX} onChange={e => setAnimEndX(parseInt(e.target.value))}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                      <div><label className="text-xs text-slate-400 mb-1 block">End Y</label>
-                        <input type="number" value={animEndY} onChange={e => setAnimEndY(parseInt(e.target.value))}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                    </div>
+                    {imgAnimType === 'slide' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="text-xs text-slate-400 mb-1 block">Start X</label>
+                          <input type="number" value={animStartX} onChange={e => setAnimStartX(parseInt(e.target.value))}
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                        <div><label className="text-xs text-slate-400 mb-1 block">Start Y</label>
+                          <input type="number" value={animStartY} onChange={e => setAnimStartY(parseInt(e.target.value))}
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                        <div><label className="text-xs text-slate-400 mb-1 block">End X</label>
+                          <input type="number" value={animEndX} onChange={e => setAnimEndX(parseInt(e.target.value))}
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                        <div><label className="text-xs text-slate-400 mb-1 block">End Y</label>
+                          <input type="number" value={animEndY} onChange={e => setAnimEndY(parseInt(e.target.value))}
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div><label className="text-xs text-slate-400 mb-1 block">Start time (s)</label>
                         <input type="number" step="0.1" min="0" value={animStartTime} onChange={e => setAnimStartTime(parseFloat(e.target.value))}
@@ -549,7 +567,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                         <input type="number" step="0.1" min="0" value={animEndTime} onChange={e => setAnimEndTime(parseFloat(e.target.value))}
                           className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
                     </div>
-                    <p className="text-xs text-slate-500">Canvas: {compositionWidth} × {compositionHeight}. Use negative values to start off-screen.</p>
+                    {imgAnimType === 'slide' && (
+                      <p className="text-xs text-slate-500">Canvas: {compositionWidth} × {compositionHeight}. Use negative values to start off-screen.</p>
+                    )}
                   </div>
                 )}
               </div>

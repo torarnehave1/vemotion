@@ -78,8 +78,8 @@ interface KgAnimNode {
   id: string;
   label: string;
   color: string;
-  info: string;
-  metadata?: { cssAnim?: string; duration?: string };
+  cssAnim: string;
+  duration: string;
 }
 
 const PRESETS: { value: AnimationPreset; label: string }[] = [
@@ -145,9 +145,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [kgLoading, setKgLoading] = useState(false);
   const [kgError, setKgError] = useState('');
   const [animPickerOpen, setAnimPickerOpen] = useState(false);
+  const [manualAnimPickerOpen, setManualAnimPickerOpen] = useState(false);
+
+  const anyAnimPickerOpen = animPickerOpen || manualAnimPickerOpen;
 
   useEffect(() => {
-    if (!animPickerOpen || kgAnims.length > 0) return;
+    if (!anyAnimPickerOpen || kgAnims.length > 0) return;
     fetch(`${KG_BASE}/getknowgraph?id=vemotion-animations`)
       .then(r => r.json())
       .then(data => {
@@ -157,7 +160,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         setKgAnims(anims);
       })
       .catch(() => {});
-  }, [animPickerOpen]);
+  }, [anyAnimPickerOpen]);
 
   useEffect(() => {
     if (tab !== 'shapes' || kgShapes.length > 0) return;
@@ -582,13 +585,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     <div className="grid grid-cols-3 gap-2">
                       {kgAnims.map(anim => {
                         const styleId = `kg-anim-${anim.id}`;
-                        const css = anim.metadata?.cssAnim ?? '';
-                        const dur = anim.metadata?.duration ?? '2s';
+                        const css = anim.cssAnim ?? '';
+                        const dur = anim.duration ?? '2s';
                         return (
                           <button
                             key={anim.id}
                             onClick={() => {
-                              setImgAnimType(anim.info as ImgAnimType);
+                              setImgAnimType(anim.id as ImgAnimType);
                               setAnimPickerOpen(false);
                             }}
                             className="flex flex-col items-center gap-1 p-2 rounded-xl border border-slate-700 hover:border-sky-500 bg-slate-900 hover:bg-slate-800 transition group"
@@ -1004,7 +1007,43 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
               {/* Animation preset */}
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-slate-400">Animation</label>
+                  <button
+                    onClick={() => setManualAnimPickerOpen(v => !v)}
+                    className="text-xs text-sky-400 hover:text-sky-300 transition"
+                  >
+                    {manualAnimPickerOpen ? 'Hide library ↑' : 'Browse library ↓'}
+                  </button>
+                </div>
+                {manualAnimPickerOpen && (
+                  <div className="mb-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700">
+                    {kgAnims.length === 0 && <div className="text-xs text-slate-500 text-center py-2">Loading...</div>}
+                    <div className="grid grid-cols-3 gap-2">
+                      {kgAnims.map(anim => {
+                        const styleId = `kg-manim-${anim.id}`;
+                        const css = anim.cssAnim ?? '';
+                        const dur = anim.duration ?? '2s';
+                        return (
+                          <button
+                            key={anim.id}
+                            onClick={() => {
+                              setPreset(anim.id as AnimationPreset);
+                              setManualAnimPickerOpen(false);
+                            }}
+                            className="flex flex-col items-center gap-1 p-2 rounded-xl border border-slate-700 hover:border-sky-500 bg-slate-900 hover:bg-slate-800 transition group"
+                          >
+                            <style>{`@keyframes ${styleId} { ${css} } .${styleId} { animation: ${styleId} ${dur} ease-in-out infinite; transform-origin: center; }`}</style>
+                            <svg width="80" height="48" viewBox="0 0 80 48" style={{overflow:'hidden'}}>
+                              <rect className={styleId} x="15" y="8" width="50" height="32" rx="6" fill={anim.color}/>
+                            </svg>
+                            <span className="text-[10px] text-slate-400 group-hover:text-white text-center leading-tight">{anim.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <select value={preset} onChange={e => setPreset(e.target.value as AnimationPreset)}
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}

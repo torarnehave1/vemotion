@@ -72,7 +72,8 @@ type AnimationPreset =
   | 'slide-top'
   | 'slide-bottom'
   | 'bounce'
-  | 'scale-up';
+  | 'scale-up'
+  | 'staggered-reveal';
 
 interface KgAnimNode {
   id: string;
@@ -121,6 +122,8 @@ function buildAnimation(
     }
     case 'scale-up':
       return { property: 'scale', keyframes: [{ time: 0, value: 0.05 }, { time: Math.min(1, duration * 0.4), value: 1 }] };
+    case 'staggered-reveal':
+      return { property: 'opacity', keyframes: [{ time: 0, value: 0 }, { time: 0.2, value: 0 }, { time: 0.8, value: 1 }, { time: Math.min(2.1, duration), value: 1 }] };
     default:
       return undefined;
   }

@@ -24,6 +24,11 @@
 - `patchNode` requires `expectedVersion` — node `.version` in `getknowgraph` response is always `null`; instead call `patchNode` with `expectedVersion: 0` first — if there's a version mismatch, the error response includes `"currentVersion": N`; use that N as `expectedVersion` and retry
 - For complex JSON payloads (mermaid diagrams etc), write to a temp file and use `curl --data-binary @file` to avoid shell escaping issues
 
+## KG Graph Creation/Updates — MANDATORY
+- To create or update a KG graph, ALWAYS use `POST https://knowledge.vegvisr.org/saveGraphWithHistory` with body `{ "id": "<graphId>", "nodes": [...], "edges": [...], "override": true }`
+- Do NOT use `saveknowgraph` (causes UNIQUE constraint errors), `updateknowgraph` (requires both id and graph data or errors), or `addNode` (adds to wrong graph context)
+- `saveGraphWithHistory` is the single correct endpoint for all graph creation and updates
+
 ## Self-updating rule
 - When a command fails due to a missing tool, wrong path, expired credential, or wrong assumption about the environment, add a note to this file immediately so the same mistake is not repeated.
 

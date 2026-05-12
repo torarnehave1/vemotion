@@ -150,7 +150,11 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     if (!animPickerOpen || kgAnims.length > 0) return;
     fetch(`${KG_BASE}/getknowgraph?id=vemotion-animations`)
       .then(r => r.json())
-      .then(data => setKgAnims((data.nodes ?? []).filter((n: KgAnimNode) => n.info)))
+      .then(data => {
+        const libraryNode = (data.nodes ?? []).find((n: { type?: string }) => n.type === 'animation-library');
+        const anims = libraryNode?.metadata?.animations ?? [];
+        setKgAnims(anims);
+      })
       .catch(() => {});
   }, [animPickerOpen]);
 

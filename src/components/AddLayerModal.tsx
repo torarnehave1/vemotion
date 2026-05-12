@@ -111,27 +111,6 @@ function buildAnimation(
   }
 }
 
-function detectPreset(animation: Layer['animation']): AnimationPreset {
-  if (!animation) return 'none';
-  const { property, keyframes: kf } = animation;
-  const first = kf[0].value as number;
-  const last = (kf[kf.length - 1].value) as number;
-  if (property === 'opacity') {
-    if (kf.length === 2 && first === 0 && last === 1) return 'fade-in';
-    if (kf.length === 2 && first === 1 && last === 0) return 'fade-out';
-    if (kf.length >= 3) return 'fade-in-out';
-  }
-  if (property === 'offsetX') {
-    if (first < 0) return 'slide-left';
-    if (first > 0) return 'slide-right';
-  }
-  if (property === 'offsetY') {
-    if (first < 0) return 'slide-top';
-    if (first > 0) return 'slide-bottom';
-  }
-  return 'none';
-}
-
 function generateId() {
   return `layer-${Date.now().toString(36)}`;
 }
@@ -195,14 +174,53 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [imgWidth,  setImgWidth]  = useState(editingLayer?.size.width ?? 400);
   const [imgHeight, setImgHeight] = useState(editingLayer?.size.height ?? 400);
   const [imgFit,    setImgFit]    = useState((editingLayer?.properties.fit as string) ?? 'cover');
-  const [imgPreset, setImgPreset] = useState<AnimationPreset>(() => detectPreset(editingLayer?.animation));
+
+  // Animation — canvas coordinate based
+  const _ea = isImgLayer ? editingLayer?.animation : undefined;
+  const _px = editingLayer?.position.x ?? 0;
+  const _py = editingLayer?.position.y ?? 0;
+  const [imgAnimEnabled, setImgAnimEnabled] = useState(!!_ea);
+  const [animStartX, setAnimStartX] = useState(() =>
+    _ea?.property === 'offsetX' ? _px + (_ea.keyframes[0].value as number) : _px
+  );
+  const [animStartY, setAnimStartY] = useState(() =>
+    _ea?.property === 'offsetY' ? _py + (_ea.keyframes[0].value as number) : _py
+  );
+  const [animEndX, setAnimEndX] = useState(() =>
+    _ea?.property === 'offsetX' ? _px + (_ea.keyframes[_ea.keyframes.length - 1].value as number) : _px
+  );
+  const [animEndY, setAnimEndY] = useState(() =>
+    _ea?.property === 'offsetY' ? _py + (_ea.keyframes[_ea.keyframes.length - 1].value as number) : _py
+  );
+  const [animStartTime, setAnimStartTime] = useState(() => _ea?.keyframes[0].time ?? 0);
+  const [animEndTime,   setAnimEndTime]   = useState(() =>
+    _ea ? _ea.keyframes[_ea.keyframes.length - 1].time : Math.min(2, compositionDuration)
+  );
 
   const handleSaveImage = () => {
     if (!editingLayer || !isImgLayer) return;
-    const detectedOriginal = detectPreset(editingLayer.animation);
-    const animation = imgPreset === detectedOriginal
-      ? editingLayer.animation  // unchanged — preserve exact keyframes
-      : buildAnimation(imgPreset, compositionDuration, compositionWidth, compositionHeight, imgWidth, imgHeight);
+    let animation: Layer['animation'] = undefined;
+    if (imgAnimEnabled) {
+      const dX = Math.abs(animEndX - animStartX);
+      const dY = Math.abs(animEndY - animStartY);
+      if (dX >= dY) {
+        animation = {
+          property: 'offsetX',
+          keyframes: [
+            { time: animStartTime, value: animStartX - imgPosX },
+            { time: animEndTime,   value: animEndX   - imgPosX },
+          ],
+        };
+      } else {
+        animation = {
+          property: 'offsetY',
+          keyframes: [
+            { time: animStartTime, value: animStartY - imgPosY },
+            { time: animEndTime,   value: animEndY   - imgPosY },
+          ],
+        };
+      }
+    }
     onAdd({
       ...editingLayer,
       position: { x: imgPosX, y: imgPosY },
@@ -497,11 +515,43 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               </div>
 
               {/* Animation */}
-              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
-                <select value={imgPreset} onChange={e => setImgPreset(e.target.value as AnimationPreset)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
-                  {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
+              <div>
+                <label className="text-xs text-slate-400 mb-2 block">Animation</label>
+                <div className="flex gap-2 mb-3">
+                  {(['None', 'Slide'] as const).map(opt => (
+                    <button key={opt} onClick={() => setImgAnimEnabled(opt === 'Slide')}
+                      className={`flex-1 py-2 rounded-lg text-sm transition ${imgAnimEnabled === (opt === 'Slide') ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                {imgAnimEnabled && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-xs text-slate-400 mb-1 block">Start X</label>
+                        <input type="number" value={animStartX} onChange={e => setAnimStartX(parseInt(e.target.value))}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                      <div><label className="text-xs text-slate-400 mb-1 block">Start Y</label>
+                        <input type="number" value={animStartY} onChange={e => setAnimStartY(parseInt(e.target.value))}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                      <div><label className="text-xs text-slate-400 mb-1 block">End X</label>
+                        <input type="number" value={animEndX} onChange={e => setAnimEndX(parseInt(e.target.value))}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                      <div><label className="text-xs text-slate-400 mb-1 block">End Y</label>
+                        <input type="number" value={animEndY} onChange={e => setAnimEndY(parseInt(e.target.value))}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-xs text-slate-400 mb-1 block">Start time (s)</label>
+                        <input type="number" step="0.1" min="0" value={animStartTime} onChange={e => setAnimStartTime(parseFloat(e.target.value))}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                      <div><label className="text-xs text-slate-400 mb-1 block">End time (s)</label>
+                        <input type="number" step="0.1" min="0" value={animEndTime} onChange={e => setAnimEndTime(parseFloat(e.target.value))}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                    </div>
+                    <p className="text-xs text-slate-500">Canvas: {compositionWidth} × {compositionHeight}. Use negative values to start off-screen.</p>
+                  </div>
+                )}
               </div>
 
               <button onClick={handleSaveImage}

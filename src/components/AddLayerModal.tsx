@@ -118,9 +118,10 @@ function generateId() {
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   onAdd, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
 }) => {
-  const isEditing = !!editingLayer;
-  const isKgShape = editingLayer?.type === 'kg-shape';
-  const isKgCard  = editingLayer?.type === 'card';
+  const isEditing  = !!editingLayer;
+  const isKgShape  = editingLayer?.type === 'kg-shape';
+  const isKgCard   = editingLayer?.type === 'card';
+  const isImgLayer = editingLayer?.type === 'image';
   const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
@@ -166,6 +167,27 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [kgWidth, setKgWidth] = useState(editingLayer?.size.width ?? 200);
   const [kgHeight, setKgHeight] = useState(editingLayer?.size.height ?? 200);
   const [kgPreset, setKgPreset] = useState<AnimationPreset>('fade-in');
+
+  // Image layer edit state
+  const [imgPosX,   setImgPosX]   = useState(editingLayer?.position.x ?? 0);
+  const [imgPosY,   setImgPosY]   = useState(editingLayer?.position.y ?? 0);
+  const [imgWidth,  setImgWidth]  = useState(editingLayer?.size.width ?? 400);
+  const [imgHeight, setImgHeight] = useState(editingLayer?.size.height ?? 400);
+  const [imgFit,    setImgFit]    = useState((editingLayer?.properties.fit as string) ?? 'cover');
+  const [imgPreset, setImgPreset] = useState<AnimationPreset>('none');
+
+  const handleSaveImage = () => {
+    if (!editingLayer || !isImgLayer) return;
+    const animation = buildAnimation(imgPreset, compositionDuration, compositionWidth, compositionHeight, imgWidth, imgHeight);
+    onAdd({
+      ...editingLayer,
+      position: { x: imgPosX, y: imgPosY },
+      size: { width: imgWidth, height: imgHeight },
+      animation,
+      properties: { ...editingLayer.properties, fit: imgFit },
+    });
+    onClose();
+  };
 
   // Font override
   const [fontFamily, setFontFamily] = useState((editingLayer?.properties.fontFamily as string) ?? '');
@@ -407,7 +429,63 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         )}
 
         <div className="p-6 space-y-4">
-          {isKgCard ? (
+          {isImgLayer ? (
+            <>
+              {/* Image preview */}
+              <div className="flex justify-center py-2">
+                <div className="w-40 h-28 bg-slate-800 rounded-lg overflow-hidden flex items-center justify-center border border-slate-700">
+                  <img
+                    src={editingLayer.properties.src as string}
+                    alt=""
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 text-center truncate">{editingLayer.properties.src as string}</p>
+
+              {/* Fit mode */}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Fit</label>
+                <div className="flex gap-2">
+                  {(['cover', 'contain', 'fill'] as const).map(f => (
+                    <button key={f} onClick={() => setImgFit(f)}
+                      className={`flex-1 py-2 rounded-lg text-sm capitalize transition ${imgFit === f ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Position & size */}
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-400 mb-1 block">Position X</label>
+                  <input type="number" value={imgPosX} onChange={e => setImgPosX(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
+                  <input type="number" value={imgPosY} onChange={e => setImgPosY(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Width</label>
+                  <input type="number" value={imgWidth} onChange={e => setImgWidth(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-400 mb-1 block">Height</label>
+                  <input type="number" value={imgHeight} onChange={e => setImgHeight(parseInt(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+              </div>
+
+              {/* Animation */}
+              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <select value={imgPreset} onChange={e => setImgPreset(e.target.value as AnimationPreset)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+
+              <button onClick={handleSaveImage}
+                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                Save Changes
+              </button>
+            </>
+          ) : isKgCard ? (
             <>
               <div className="flex justify-center py-2">
                 <div className="rounded-xl px-4 py-3 text-center w-48"

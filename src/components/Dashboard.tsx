@@ -96,28 +96,28 @@ export const Dashboard: React.FC = () => {
     <div className="flex flex-col flex-1">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSidebarOpen(v => !v)}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            title={sidebarOpen ? 'Close panel' : 'Open panel'}
-          >
-            {sidebarOpen
-              ? <ChevronLeft className="w-5 h-5" />
-              : <ChevronRight className="w-5 h-5" />}
-          </button>
-          <h1 className="text-lg font-semibold text-slate-200">Vemotion</h1>
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide">
-            Research Preview
-          </span>
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-800">
+        <button
+          onClick={() => setSidebarOpen(v => !v)}
+          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition flex-shrink-0"
+          title={sidebarOpen ? 'Close panel' : 'Open panel'}
+        >
+          {sidebarOpen
+            ? <ChevronLeft className="w-5 h-5" />
+            : <ChevronRight className="w-5 h-5" />}
+        </button>
+        <h1 className="text-lg font-semibold text-slate-200 flex-shrink-0">Vemotion</h1>
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
+          Research Preview
+        </span>
+        <div className="ml-auto flex-shrink-0">
+          <FileMenu
+            composition={composition}
+            userEmail={auth?.email}
+            onLoad={c => { setComposition(c); setCurrentFrame(0); setSeekFrame(0); }}
+            onNew={() => { setComposition(defaultComposition); setCurrentFrame(0); setSeekFrame(0); }}
+          />
         </div>
-        <FileMenu
-          composition={composition}
-          userEmail={auth?.email}
-          onLoad={c => { setComposition(c); setCurrentFrame(0); setSeekFrame(0); }}
-          onNew={() => { setComposition(defaultComposition); setCurrentFrame(0); setSeekFrame(0); }}
-        />
       </div>
 
       {/* Body: sidebar + main */}

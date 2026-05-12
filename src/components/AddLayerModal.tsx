@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload } from 'lucide-react';
 import type { Layer } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
@@ -476,7 +477,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl">
 
@@ -1036,6 +1037,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

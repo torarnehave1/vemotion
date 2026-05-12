@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Square, Download } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
-import type { CompositionData, Layer } from '../lib/api';
+import type { CompositionData } from '../lib/api';
 
 interface VideoPreviewProps {
   composition: CompositionData;
@@ -79,9 +79,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   const currentTime = (currentFrame / composition.fps).toFixed(2);
   const totalTime = composition.duration.toFixed(2);
   const progressPct = totalFrames > 0 ? (currentFrame / totalFrames) * 100 : 0;
-  const currentTimeSeconds = currentFrame / composition.fps;
-  const svgLayers = composition.layers.filter((layer) => layer.type === 'svg-animation');
-
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
 
@@ -96,16 +93,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           }}
         >
           <canvas ref={canvasRef} className="w-full h-full" />
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {svgLayers.map((layer) => (
-              <LiveSvgLayer
-                key={layer.id}
-                layer={layer}
-                composition={composition}
-                currentTime={currentTimeSeconds}
-              />
-            ))}
-          </div>
         </div>
       </div>
 
@@ -173,96 +160,3 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     </div>
   );
 };
-
-const LiveSvgLayer: React.FC<{
-  layer: Layer;
-  composition: CompositionData;
-  currentTime: number;
-}> = ({ layer, composition, currentTime }) => {
-  const startTime = layer.startTime ?? 0;
-  const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
-  const localTime = currentTime - startTime;
-
-  if (localTime < 0 || localTime > layerDuration) return null;
-
-  const svg = (layer.properties.svg as string) ?? '';
-  if (!svg) return null;
-
-  const duration = typeof layer.properties.duration === 'number'
-    ? (layer.properties.duration as number)
-    : layerDuration;
-
-  const opacity = resolveAnimatedNumber(layer, currentTime, 'opacity', 1);
-  const scale = resolveAnimatedNumber(layer, currentTime, 'scale', 1);
-  const offsetX = resolveAnimatedNumber(layer, currentTime, 'offsetX', 0);
-  const offsetY = resolveAnimatedNumber(layer, currentTime, 'offsetY', 0);
-
-  const loopedTime = duration > 0 ? ((localTime % duration) + duration) % duration : localTime;
-  const html = svg
-    .replace(/<svg\b/, `<svg data-ve-time="${loopedTime.toFixed(4)}"`)
-    .replace(/(<svg\b[^>]*)(>)/, `$1 style="width:100%;height:100%;display:block;"$2`);
-
-  return (
-    <div
-      className="absolute"
-      style={{
-        left: `${(layer.position.x / composition.width) * 100}%`,
-        top: `${(layer.position.y / composition.height) * 100}%`,
-        width: `${(layer.size.width / composition.width) * 100}%`,
-        height: `${(layer.size.height / composition.height) * 100}%`,
-        opacity,
-        transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
-        transformOrigin: 'center center',
-      }}
-    >
-      <div
-        className="w-full h-full"
-        dangerouslySetInnerHTML={{ __html: html }}
-        ref={(node) => {
-          const svgEl = node?.querySelector('svg') as SVGSVGElement | null;
-          if (!svgEl) return;
-          try {
-            svgEl.pauseAnimations?.();
-            svgEl.setCurrentTime?.(loopedTime);
-          } catch {
-            // ignore
-          }
-          try {
-            const animations = svgEl.getAnimations?.({ subtree: true }) ?? [];
-            for (const animation of animations) {
-              animation.pause();
-              animation.currentTime = loopedTime * 1000;
-            }
-          } catch {
-            // ignore
-          }
-        }}
-      />
-    </div>
-  );
-};
-
-function resolveAnimatedNumber(layer: Layer, currentTime: number, property: string, fallback: number): number {
-  const startTime = layer.startTime ?? 0;
-  const localTime = currentTime - startTime;
-  const animations = [
-    ...(layer.animation && layer.animation.property === property ? [layer.animation] : []),
-    ...((layer.animations ?? []).filter((anim) => anim.property === property)),
-  ];
-
-  if (animations.length === 0) return fallback;
-  const keyframes = animations[0].keyframes;
-  if (keyframes.length === 0) return fallback;
-  if (keyframes.length === 1) return Number(keyframes[0].value ?? fallback);
-
-  const sorted = [...keyframes].sort((a, b) => a.time - b.time);
-  if (localTime <= sorted[0].time) return Number(sorted[0].value ?? fallback);
-  if (localTime >= sorted[sorted.length - 1].time) return Number(sorted[sorted.length - 1].value ?? fallback);
-
-  const afterIndex = sorted.findIndex((frame) => frame.time > localTime);
-  if (afterIndex <= 0) return Number(sorted[0].value ?? fallback);
-  const before = sorted[afterIndex - 1];
-  const after = sorted[afterIndex];
-  const progress = (localTime - before.time) / (after.time - before.time);
-  return Number(before.value) + (Number(after.value) - Number(before.value)) * progress;
-}

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
+import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 
 const FONT_PRESETS = [
@@ -29,6 +30,7 @@ interface CompositionEditorProps {
 
 export const CompositionEditor: React.FC<CompositionEditorProps> = ({ composition, onChange }) => {
   const [showModal, setShowModal] = useState(false);
+  const [showAnimModal, setShowAnimModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const set = (patch: Partial<CompositionData>) => onChange({ ...composition, ...patch });
@@ -49,6 +51,10 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
   const addLayer = (layer: Layer) => {
     onChange({ ...composition, layers: [...composition.layers, layer] });
+  };
+
+  const addLayers = (layers: Layer[]) => {
+    onChange({ ...composition, layers: [...composition.layers, ...layers] });
   };
 
   const removeLayer = (id: string) => {
@@ -189,11 +195,27 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           Add Layer
         </button>
 
+        <button
+          onClick={() => setShowAnimModal(true)}
+          className="w-full border border-dashed border-slate-700 hover:border-sky-500 text-slate-400 hover:text-sky-400 font-medium rounded-lg py-2 flex items-center justify-center gap-2 transition text-sm">
+          <Sparkles className="w-4 h-4" />
+          Add Animation
+        </button>
+
         {showModal && (
           <AddLayerModal
             onAdd={addLayer}
             onClose={() => setShowModal(false)}
             compositionDuration={composition.duration}
+            compositionWidth={composition.width}
+            compositionHeight={composition.height}
+          />
+        )}
+
+        {showAnimModal && (
+          <AnimationPortfolioModal
+            onAddLayers={addLayers}
+            onClose={() => setShowAnimModal(false)}
             compositionWidth={composition.width}
             compositionHeight={composition.height}
           />

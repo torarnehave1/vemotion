@@ -7,8 +7,8 @@ import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
 
-const DEFAULT_SIDEBAR_WIDTH = 320;
-const MIN_SIDEBAR_WIDTH = 240;
+const DEFAULT_SIDEBAR_WIDTH = 340;
+const MIN_SIDEBAR_WIDTH = 260;
 const MAX_SIDEBAR_WIDTH = 560;
 
 const defaultComposition: CompositionData = {
@@ -93,10 +93,10 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1">
 
-      {/* Header bar — full width */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 flex-shrink-0">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setSidebarOpen(v => !v)}
@@ -117,8 +117,8 @@ export const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Body — sidebar + content */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Body: sidebar + main */}
+      <div className="flex flex-1 items-start relative">
 
         {/* Mobile backdrop */}
         {sidebarOpen && (
@@ -135,9 +135,9 @@ export const Dashboard: React.FC = () => {
             'fixed inset-y-0 left-0 z-40 bg-slate-900 overflow-y-auto',
             'transition-transform duration-300 ease-in-out',
             sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-            // Desktop: layout panel, no transition on width (resize is instant)
-            'lg:static lg:inset-auto lg:z-auto lg:translate-x-0',
-            'lg:border-r lg:border-slate-800 lg:flex-shrink-0 lg:overflow-y-auto',
+            // Desktop: static sidebar in flow, collapses via width
+            'lg:static lg:inset-auto lg:z-auto lg:translate-x-0 lg:transition-none',
+            'lg:border-r lg:border-slate-800 lg:overflow-y-auto lg:self-stretch',
             !sidebarOpen && 'lg:hidden',
           ].join(' ')}
           style={{ width: sidebarWidth }}
@@ -147,34 +147,29 @@ export const Dashboard: React.FC = () => {
           </div>
         </aside>
 
-        {/* Resize handle — desktop only, visible when sidebar is open */}
+        {/* Resize handle — desktop only */}
         {sidebarOpen && (
           <div
-            className="hidden lg:flex w-1.5 flex-shrink-0 cursor-col-resize bg-slate-800 hover:bg-sky-500 active:bg-sky-400 transition-colors duration-150 items-center justify-center group"
+            className="hidden lg:flex w-1.5 self-stretch flex-shrink-0 cursor-col-resize bg-slate-800 hover:bg-sky-500 active:bg-sky-400 transition-colors items-center justify-center group"
             onMouseDown={startResize}
-            title="Drag to resize"
           >
-            <div className="w-0.5 h-8 rounded-full bg-slate-600 group-hover:bg-sky-300 transition-colors" />
+            <div className="w-0.5 h-8 rounded-full bg-slate-600 group-hover:bg-sky-200 transition-colors" />
           </div>
         )}
 
-        {/* Main content: canvas + timeline */}
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 p-4 pb-2">
-            <VideoPreview
-              composition={composition}
-              onFrameChange={setCurrentFrame}
-              externalSeekFrame={seekFrame}
-            />
-          </div>
-          <div className="flex-shrink-0 px-4 pb-4">
-            <TimelineEditor
-              composition={composition}
-              currentFrame={currentFrame}
-              onSeek={handleTimelineSeek}
-              onChange={setComposition}
-            />
-          </div>
+        {/* Main: canvas + timeline */}
+        <div className="flex-1 min-w-0 flex flex-col gap-4 p-4">
+          <VideoPreview
+            composition={composition}
+            onFrameChange={setCurrentFrame}
+            externalSeekFrame={seekFrame}
+          />
+          <TimelineEditor
+            composition={composition}
+            currentFrame={currentFrame}
+            onSeek={handleTimelineSeek}
+            onChange={setComposition}
+          />
         </div>
 
       </div>

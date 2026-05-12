@@ -261,12 +261,16 @@ export class CanvasRenderer {
     const h = layer.size.height;
     const x = layer.position.x + ((values.offsetX as number) ?? 0);
     const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const borderRadius = (values.borderRadius as number) ?? 0;
 
     this.ctx.fillStyle = color;
 
     if (shape === 'circle') {
       this.ctx.beginPath();
       this.ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+    } else if (borderRadius > 0) {
+      this.roundedRect(x, y, w, h, borderRadius);
       this.ctx.fill();
     } else {
       this.ctx.fillRect(x, y, w, h);

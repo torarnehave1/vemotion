@@ -45,7 +45,7 @@ export async function exportToMp4(
 
   // Render each frame and write to ffmpeg virtual filesystem
   for (let frame = 0; frame < totalFrames; frame++) {
-    renderer.renderFrame(composition, frame);
+    await renderer.renderFrame(composition, frame);
 
     const blob = await new Promise<Blob>((resolve) =>
       canvas.toBlob((b) => resolve(b!), 'image/png')

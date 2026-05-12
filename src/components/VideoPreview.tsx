@@ -37,7 +37,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     controllerRef.current = controller;
 
     // Render first frame immediately
-    renderer.renderFrame(composition, 0);
+    void renderer.renderFrame(composition, 0);
     setCurrentFrame(0);
 
     return () => controller.pause();

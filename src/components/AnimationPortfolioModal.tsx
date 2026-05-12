@@ -174,7 +174,7 @@ function svgToLayer(spec: SvgAnimationInfo, cw: number, ch: number): Layer {
   const h = Math.round(naturalH * scale);
   return {
     id: generateId('svg'),
-    type: 'image' as const,
+    type: 'svg-animation' as const,
     position: { x: Math.round((cw - w) / 2), y: Math.round((ch - h) / 2) },
     size: { width: w, height: h },
     startTime: spec.startTime,
@@ -182,7 +182,10 @@ function svgToLayer(spec: SvgAnimationInfo, cw: number, ch: number): Layer {
     animation: spec.animation,
     animations: spec.animations,
     properties: {
+      svg: spec.svg,
       src: svgToDataUrl(spec.svg),
+      duration: spec.duration,
+      background: spec.background ?? '#000000',
       fit: spec.fit ?? 'contain',
       name: 'SVG animation',
     },

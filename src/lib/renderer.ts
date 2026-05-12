@@ -56,6 +56,7 @@ export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private compositionFont = 'Inter, system-ui, sans-serif';
   private imageCache = new Map<string, HTMLImageElement>();
+  private svgHost: HTMLDivElement | null = null;
 
   onImageLoad?: () => void;
 
@@ -84,7 +85,7 @@ export class CanvasRenderer {
     });
   }
 
-  renderFrame(composition: CompositionData, frameNumber: number): void {
+  async renderFrame(composition: CompositionData, frameNumber: number): Promise<void> {
     const time = frameNumber / composition.fps;
 
     this.compositionFont = composition.fontFamily
@@ -104,11 +105,11 @@ export class CanvasRenderer {
       const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
       if (time < startTime || time > startTime + layerDuration) continue;
       const localTime = time - startTime;
-      this.drawLayer(layer, localTime);
+      await this.drawLayer(layer, localTime);
     }
   }
 
-  private drawLayer(layer: Layer, time: number): void {
+  private async drawLayer(layer: Layer, time: number): Promise<void> {
     const values = resolveLayerValues(layer, time);
     const opacity = typeof values.opacity === 'number' ? values.opacity : 1;
     const scale   = typeof values.scale   === 'number' ? values.scale   : 1;
@@ -134,6 +135,9 @@ export class CanvasRenderer {
       case 'image':
         this.drawImage(layer, values);
         break;
+      case 'svg-animation':
+        await this.drawSvgAnimation(layer, values, time);
+        break;
       case 'kg-shape':
         this.drawKgShape(layer, values);
         break;
@@ -143,6 +147,104 @@ export class CanvasRenderer {
     }
 
     this.ctx.restore();
+  }
+
+  private ensureSvgHost(): HTMLDivElement {
+    if (this.svgHost) return this.svgHost;
+    const host = document.createElement('div');
+    host.style.position = 'fixed';
+    host.style.left = '-100000px';
+    host.style.top = '0';
+    host.style.width = '1px';
+    host.style.height = '1px';
+    host.style.opacity = '0';
+    host.style.pointerEvents = 'none';
+    host.style.overflow = 'hidden';
+    document.body.appendChild(host);
+    this.svgHost = host;
+    return host;
+  }
+
+  private loadAnyImage(src: string): Promise<HTMLImageElement | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  private async rasterizeSvgAtTime(svgMarkup: string, time: number, duration: number): Promise<HTMLImageElement | null> {
+    const host = this.ensureSvgHost();
+    const container = document.createElement('div');
+    container.innerHTML = svgMarkup.trim();
+    const svg = container.querySelector('svg') as SVGSVGElement | null;
+    if (!svg) return null;
+
+    if (!svg.getAttribute('xmlns')) svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    if (!svg.getAttribute('xmlns:xlink')) svg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+    host.appendChild(svg);
+
+    const currentTime = duration > 0 ? time % duration : time;
+
+    try {
+      svg.pauseAnimations?.();
+      svg.setCurrentTime?.(currentTime);
+    } catch {
+      // ignore SVG timing errors
+    }
+
+    try {
+      const animations = svg.getAnimations?.({ subtree: true }) ?? [];
+      for (const animation of animations) {
+        animation.pause();
+        animation.currentTime = currentTime * 1000;
+      }
+    } catch {
+      // ignore CSS animation timing errors
+    }
+
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+
+    const serialized = new XMLSerializer().serializeToString(svg);
+    svg.remove();
+    return this.loadAnyImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`);
+  }
+
+  private async drawSvgAnimation(layer: Layer, values: Record<string, unknown>, time: number): Promise<void> {
+    const svgMarkup = (values.svg as string) ?? '';
+    if (!svgMarkup) return;
+
+    const duration = typeof values.duration === 'number'
+      ? values.duration
+      : (layer.layerDuration ?? 0);
+
+    const img = await this.rasterizeSvgAtTime(svgMarkup, time, duration);
+    if (!img || img.naturalWidth === 0 || img.naturalHeight === 0) return;
+
+    const x = layer.position.x + ((values.offsetX as number) ?? 0);
+    const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const w = layer.size.width;
+    const h = layer.size.height;
+    const fit = (values.fit as string) ?? 'contain';
+
+    if (fit === 'fill') {
+      this.ctx.drawImage(img, x, y, w, h);
+    } else if (fit === 'contain') {
+      const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+      const dw = img.naturalWidth * scale;
+      const dh = img.naturalHeight * scale;
+      this.ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    } else {
+      const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+      const sw = w / scale;
+      const sh = h / scale;
+      const sx = (img.naturalWidth - sw) / 2;
+      const sy = (img.naturalHeight - sh) / 2;
+      this.ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+    }
   }
 
   private drawText(layer: Layer, values: Record<string, unknown>): void {
@@ -455,7 +557,7 @@ export class PlaybackController {
 
   seekToFrame(frame: number): void {
     this.frameNumber = Math.max(0, Math.min(frame, this.totalFrames - 1));
-    this.renderer.renderFrame(this.composition, this.frameNumber);
+    void this.renderer.renderFrame(this.composition, this.frameNumber);
     this.onFrameChange?.(this.frameNumber);
   }
 
@@ -501,7 +603,7 @@ export class PlaybackController {
     }
 
     this.lastTimestamp = timestamp;
-    this.renderer.renderFrame(this.composition, this.frameNumber);
+    void this.renderer.renderFrame(this.composition, this.frameNumber);
     this.onFrameChange?.(this.frameNumber);
 
     this.rafId = requestAnimationFrame(this.tick);

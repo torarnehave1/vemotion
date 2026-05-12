@@ -138,7 +138,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const isKgShape  = editingLayer?.type === 'kg-shape';
   const isKgCard   = editingLayer?.type === 'card';
   const isImgLayer = editingLayer?.type === 'image';
-  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images'>('manual');
+  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images' | 'animations'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
   const [kgAnims,  setKgAnims]  = useState<KgAnimNode[]>([]);
@@ -147,7 +147,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [animPickerOpen, setAnimPickerOpen] = useState(false);
   const [manualAnimPickerOpen, setManualAnimPickerOpen] = useState(false);
 
-  const anyAnimPickerOpen = animPickerOpen || manualAnimPickerOpen;
+  const anyAnimPickerOpen = animPickerOpen || manualAnimPickerOpen || tab === 'animations';
 
   useEffect(() => {
     if (!anyAnimPickerOpen || kgAnims.length > 0) return;
@@ -476,7 +476,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-800">
@@ -512,6 +512,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               className={`flex-1 py-3 text-sm font-medium transition ${tab === 'images' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
             >
               Images
+            </button>
+            <button
+              onClick={() => setTab('animations')}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'animations' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Animations
             </button>
             <button
               onClick={() => setTab('ai')}
@@ -1054,6 +1060,35 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
                 {isEditing ? 'Save Changes' : 'Add Layer'}
               </button>
+            </>
+          ) : tab === 'animations' ? (
+            <>
+              <p className="text-xs text-slate-400 mb-4">Pick an animation from the library. It will be applied to the selected layer, or you can add a new text/shape layer with it.</p>
+              {kgAnims.length === 0 && <div className="text-xs text-slate-500 text-center py-6">Loading animations...</div>}
+              <div className="grid grid-cols-3 gap-3">
+                {kgAnims.map(anim => {
+                  const styleId = `kg-tab-${anim.id}`;
+                  const css = anim.cssAnim ?? '';
+                  const dur = anim.duration ?? '2s';
+                  return (
+                    <button
+                      key={anim.id}
+                      onClick={() => {
+                        setPreset(anim.id as AnimationPreset);
+                        setImgAnimType(anim.id as ImgAnimType);
+                        setTab('manual');
+                      }}
+                      className="flex flex-col items-center gap-2 p-3 rounded-xl border border-slate-700 hover:border-sky-500 bg-slate-800 hover:bg-slate-700 transition group"
+                    >
+                      <style>{`@keyframes ${styleId} { ${css} } .${styleId} { animation: ${styleId} ${dur} ease-in-out infinite; transform-origin: center; }`}</style>
+                      <svg width="120" height="70" viewBox="0 0 120 70" style={{overflow:'hidden'}}>
+                        <rect className={styleId} x="20" y="10" width="80" height="50" rx="8" fill={anim.color}/>
+                      </svg>
+                      <span className="text-xs text-slate-300 group-hover:text-white font-medium text-center">{anim.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </>
           ) : (
             <>

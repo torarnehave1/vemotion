@@ -84,11 +84,17 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
 
       {/* Canvas */}
-      <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: `${composition.width}/${composition.height}` }}>
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full"
-        />
+      <div className="flex justify-center">
+        <div
+          className="relative bg-black rounded-lg overflow-hidden"
+          style={{
+            aspectRatio: `${composition.width}/${composition.height}`,
+            maxHeight: '50vh',
+            width: `min(100%, calc(50vh * ${composition.width} / ${composition.height}))`,
+          }}
+        >
+          <canvas ref={canvasRef} className="w-full h-full" />
+        </div>
       </div>
 
       {/* Scrubber */}

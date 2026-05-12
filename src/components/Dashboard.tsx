@@ -160,17 +160,22 @@ export const Dashboard: React.FC = () => {
 
         {/* Main: canvas + timeline */}
         <div className="flex-1 min-w-0 flex flex-col gap-4 p-4">
-          <VideoPreview
-            composition={composition}
-            onFrameChange={setCurrentFrame}
-            externalSeekFrame={seekFrame}
-          />
-          <TimelineEditor
-            composition={composition}
-            currentFrame={currentFrame}
-            onSeek={handleTimelineSeek}
-            onChange={setComposition}
-          />
+          <div
+            className="flex flex-col gap-4 mx-auto w-full"
+            style={{ maxWidth: `calc(50vh * ${composition.width} / ${composition.height})` }}
+          >
+            <VideoPreview
+              composition={composition}
+              onFrameChange={setCurrentFrame}
+              externalSeekFrame={seekFrame}
+            />
+            <TimelineEditor
+              composition={composition}
+              currentFrame={currentFrame}
+              onSeek={handleTimelineSeek}
+              onChange={setComposition}
+            />
+          </div>
         </div>
 
       </div>

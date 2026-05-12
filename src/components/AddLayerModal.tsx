@@ -111,6 +111,25 @@ function buildAnimation(
   }
 }
 
+function detectPreset(animation: Layer['animation']): AnimationPreset {
+  if (!animation) return 'none';
+  const { property, keyframes: kf } = animation;
+  if (property === 'opacity') {
+    if (kf.length === 2 && kf[0].value === 0 && kf[kf.length - 1].value === 1) return 'fade-in';
+    if (kf.length === 2 && kf[0].value === 1 && kf[kf.length - 1].value === 0) return 'fade-out';
+    if (kf.length >= 3) return 'fade-in-out';
+  }
+  if (property === 'offsetX') {
+    if (kf[0].value < 0) return 'slide-left';
+    if (kf[0].value > 0) return 'slide-right';
+  }
+  if (property === 'offsetY') {
+    if (kf[0].value < 0) return 'slide-top';
+    if (kf[0].value > 0) return 'slide-bottom';
+  }
+  return 'none';
+}
+
 function generateId() {
   return `layer-${Date.now().toString(36)}`;
 }
@@ -174,11 +193,14 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [imgWidth,  setImgWidth]  = useState(editingLayer?.size.width ?? 400);
   const [imgHeight, setImgHeight] = useState(editingLayer?.size.height ?? 400);
   const [imgFit,    setImgFit]    = useState((editingLayer?.properties.fit as string) ?? 'cover');
-  const [imgPreset, setImgPreset] = useState<AnimationPreset>('none');
+  const [imgPreset, setImgPreset] = useState<AnimationPreset>(() => detectPreset(editingLayer?.animation));
 
   const handleSaveImage = () => {
     if (!editingLayer || !isImgLayer) return;
-    const animation = buildAnimation(imgPreset, compositionDuration, compositionWidth, compositionHeight, imgWidth, imgHeight);
+    const detectedOriginal = detectPreset(editingLayer.animation);
+    const animation = imgPreset === detectedOriginal
+      ? editingLayer.animation  // unchanged — preserve exact keyframes
+      : buildAnimation(imgPreset, compositionDuration, compositionWidth, compositionHeight, imgWidth, imgHeight);
     onAdd({
       ...editingLayer,
       position: { x: imgPosX, y: imgPosY },

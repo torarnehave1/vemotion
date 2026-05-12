@@ -152,7 +152,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       .then(r => r.json())
       .then(data => {
         const libraryNode = (data.nodes ?? []).find((n: { type?: string }) => n.type === 'animation-library');
-        const anims = libraryNode?.metadata?.animations ?? [];
+        let anims: KgAnimNode[] = [];
+        try { anims = JSON.parse(libraryNode?.info ?? '[]'); } catch { anims = []; }
         setKgAnims(anims);
       })
       .catch(() => {});

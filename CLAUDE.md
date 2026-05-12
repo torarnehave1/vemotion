@@ -27,6 +27,10 @@
 ## Self-updating rule
 - When a command fails due to a missing tool, wrong path, expired credential, or wrong assumption about the environment, add a note to this file immediately so the same mistake is not repeated.
 
+## Build before pushing — MANDATORY
+Always run `npm run build` from `/Volumes/T7/video-generator` before every `git push`.
+Fix all TypeScript and build errors before pushing. Never push a broken build.
+
 ## Commit, push, and report — MANDATORY
 After every completed code change, immediately:
 1. `git add` the changed files

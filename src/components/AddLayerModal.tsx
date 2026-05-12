@@ -114,18 +114,20 @@ function buildAnimation(
 function detectPreset(animation: Layer['animation']): AnimationPreset {
   if (!animation) return 'none';
   const { property, keyframes: kf } = animation;
+  const first = kf[0].value as number;
+  const last = (kf[kf.length - 1].value) as number;
   if (property === 'opacity') {
-    if (kf.length === 2 && kf[0].value === 0 && kf[kf.length - 1].value === 1) return 'fade-in';
-    if (kf.length === 2 && kf[0].value === 1 && kf[kf.length - 1].value === 0) return 'fade-out';
+    if (kf.length === 2 && first === 0 && last === 1) return 'fade-in';
+    if (kf.length === 2 && first === 1 && last === 0) return 'fade-out';
     if (kf.length >= 3) return 'fade-in-out';
   }
   if (property === 'offsetX') {
-    if (kf[0].value < 0) return 'slide-left';
-    if (kf[0].value > 0) return 'slide-right';
+    if (first < 0) return 'slide-left';
+    if (first > 0) return 'slide-right';
   }
   if (property === 'offsetY') {
-    if (kf[0].value < 0) return 'slide-top';
-    if (kf[0].value > 0) return 'slide-bottom';
+    if (first < 0) return 'slide-top';
+    if (first > 0) return 'slide-bottom';
   }
   return 'none';
 }

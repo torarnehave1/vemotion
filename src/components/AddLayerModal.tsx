@@ -70,7 +70,17 @@ type AnimationPreset =
   | 'slide-left'
   | 'slide-right'
   | 'slide-top'
-  | 'slide-bottom';
+  | 'slide-bottom'
+  | 'bounce'
+  | 'scale-up';
+
+interface KgAnimNode {
+  id: string;
+  label: string;
+  color: string;
+  info: string;
+  metadata?: { cssAnim?: string; duration?: string };
+}
 
 const PRESETS: { value: AnimationPreset; label: string }[] = [
   { value: 'none', label: 'No animation' },
@@ -106,6 +116,12 @@ function buildAnimation(
       return { property: 'offsetY', keyframes: [{ time: 0, value: -(layerHeight + 100) }, { time: Math.min(1, duration * 0.4), value: 0 }] };
     case 'slide-bottom':
       return { property: 'offsetY', keyframes: [{ time: 0, value: height + 100 }, { time: Math.min(1, duration * 0.4), value: 0 }] };
+    case 'bounce': {
+      const t = Math.min(1.2, duration);
+      return { property: 'offsetY', keyframes: [{ time: 0, value: -(layerHeight + 60) }, { time: t * 0.5, value: 10 }, { time: t * 0.7, value: -20 }, { time: t * 0.85, value: 5 }, { time: t, value: 0 }] };
+    }
+    case 'scale-up':
+      return { property: 'scale', keyframes: [{ time: 0, value: 0.05 }, { time: Math.min(1, duration * 0.4), value: 1 }] };
     default:
       return undefined;
   }
@@ -125,8 +141,18 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
+  const [kgAnims,  setKgAnims]  = useState<KgAnimNode[]>([]);
   const [kgLoading, setKgLoading] = useState(false);
   const [kgError, setKgError] = useState('');
+  const [animPickerOpen, setAnimPickerOpen] = useState(false);
+
+  useEffect(() => {
+    if (!animPickerOpen || kgAnims.length > 0) return;
+    fetch(`${KG_BASE}/getknowgraph?id=vemotion-animations`)
+      .then(r => r.json())
+      .then(data => setKgAnims((data.nodes ?? []).filter((n: KgAnimNode) => n.info)))
+      .catch(() => {});
+  }, [animPickerOpen]);
 
   useEffect(() => {
     if (tab !== 'shapes' || kgShapes.length > 0) return;
@@ -180,7 +206,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const _px = editingLayer?.position.x ?? 0;
   const _py = editingLayer?.position.y ?? 0;
 
-  type ImgAnimType = 'none' | 'fade-in' | 'fade-out' | 'fade-in-out' | 'slide';
+  type ImgAnimType = 'none' | 'fade-in' | 'fade-out' | 'fade-in-out' | 'slide' | 'bounce' | 'scale-up' | string;
   const _detectType = (anim: Layer['animation']): ImgAnimType => {
     if (!anim) return 'none';
     if (anim.property === 'offsetX' || anim.property === 'offsetY') return 'slide';
@@ -223,6 +249,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       const m1 = st + (et - st) * 0.2;
       const m2 = st + (et - st) * 0.8;
       animation = { property: 'opacity', keyframes: [{ time: st, value: 0 }, { time: m1, value: 1 }, { time: m2, value: 1 }, { time: et, value: 0 }] };
+    } else if (imgAnimType === 'bounce' || imgAnimType === 'scale-up' || (imgAnimType !== 'none' && imgAnimType !== 'fade-in' && imgAnimType !== 'fade-out' && imgAnimType !== 'fade-in-out' && imgAnimType !== 'slide')) {
+      animation = buildAnimation(imgAnimType as AnimationPreset, compositionDuration, compositionWidth, compositionHeight, imgWidth, imgHeight);
     } else if (imgAnimType === 'slide') {
       const dX = Math.abs(animEndX - animStartX);
       const dY = Math.abs(animEndY - animStartY);
@@ -532,7 +560,46 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
               {/* Animation */}
               <div>
-                <label className="text-xs text-slate-400 mb-2 block">Animation</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-slate-400">Animation</label>
+                  <button
+                    onClick={() => setAnimPickerOpen(v => !v)}
+                    className="text-xs text-sky-400 hover:text-sky-300 transition"
+                  >
+                    {animPickerOpen ? 'Hide library ↑' : 'Browse library ↓'}
+                  </button>
+                </div>
+
+                {/* KG Animation Library */}
+                {animPickerOpen && (
+                  <div className="mb-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700">
+                    {kgAnims.length === 0 && <div className="text-xs text-slate-500 text-center py-2">Loading...</div>}
+                    <div className="grid grid-cols-3 gap-2">
+                      {kgAnims.map(anim => {
+                        const styleId = `kg-anim-${anim.id}`;
+                        const css = anim.metadata?.cssAnim ?? '';
+                        const dur = anim.metadata?.duration ?? '2s';
+                        return (
+                          <button
+                            key={anim.id}
+                            onClick={() => {
+                              setImgAnimType(anim.info as ImgAnimType);
+                              setAnimPickerOpen(false);
+                            }}
+                            className="flex flex-col items-center gap-1 p-2 rounded-xl border border-slate-700 hover:border-sky-500 bg-slate-900 hover:bg-slate-800 transition group"
+                          >
+                            <style>{`@keyframes ${styleId} { ${css} } .${styleId} { animation: ${styleId} ${dur} ease-in-out infinite; transform-origin: center; }`}</style>
+                            <svg width="80" height="48" viewBox="0 0 80 48" style={{overflow:'hidden'}}>
+                              <rect className={styleId} x="15" y="8" width="50" height="32" rx="6" fill={anim.color}/>
+                            </svg>
+                            <span className="text-[10px] text-slate-400 group-hover:text-white text-center leading-tight">{anim.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   {([
                     { value: 'none',        label: 'None' },
@@ -540,6 +607,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     { value: 'fade-out',    label: 'Fade Out' },
                     { value: 'fade-in-out', label: 'Fade In/Out' },
                     { value: 'slide',       label: 'Slide' },
+                    { value: 'bounce',      label: 'Bounce' },
                   ] as { value: ImgAnimType; label: string }[]).map(opt => (
                     <button key={opt.value} onClick={() => setImgAnimType(opt.value)}
                       className={`py-2 rounded-lg text-sm transition ${imgAnimType === opt.value ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>

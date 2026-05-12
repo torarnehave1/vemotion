@@ -111,9 +111,18 @@ export class CanvasRenderer {
   private drawLayer(layer: Layer, time: number): void {
     const values = resolveLayerValues(layer, time);
     const opacity = typeof values.opacity === 'number' ? values.opacity : 1;
+    const scale   = typeof values.scale   === 'number' ? values.scale   : 1;
 
     this.ctx.save();
     this.ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+
+    if (scale !== 1) {
+      const cx = layer.position.x + layer.size.width  / 2;
+      const cy = layer.position.y + layer.size.height / 2;
+      this.ctx.translate(cx, cy);
+      this.ctx.scale(scale, scale);
+      this.ctx.translate(-cx, -cy);
+    }
 
     switch (layer.type) {
       case 'text':

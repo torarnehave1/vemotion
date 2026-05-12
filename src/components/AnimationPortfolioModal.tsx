@@ -42,9 +42,24 @@ interface CssAnimSpec {
   duration: string;
 }
 
+interface SvgAnimationInfo {
+  type: 'svg-animation';
+  svg: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  background?: string;
+  fit?: 'contain' | 'cover' | 'fill';
+  animation?: Layer['animation'];
+  animations?: Layer['animations'];
+  startTime?: number;
+  layerDuration?: number;
+}
+
 type ParsedAnimation =
   | { kind: 'scene'; nodeId: string; label: string; color: string; scene: SceneInfo }
-  | { kind: 'css';   nodeId: string; label: string; color: string; spec: CssAnimSpec };
+  | { kind: 'css';   nodeId: string; label: string; color: string; spec: CssAnimSpec }
+  | { kind: 'svg';   nodeId: string; label: string; color: string; svg: SvgAnimationInfo };
 
 interface AnimationPortfolioModalProps {
   onAddLayers: (layers: Layer[]) => void;
@@ -71,12 +86,22 @@ function parseNodeInfo(node: { id: string; label: string; color: string; info: s
   if (parsed && typeof parsed === 'object' && (parsed as SceneInfo).type === 'scene') {
     return [{ kind: 'scene', nodeId: node.id, label: node.label, color: node.color, scene: parsed as SceneInfo }];
   }
+  if (parsed && typeof parsed === 'object' && (parsed as SvgAnimationInfo).type === 'svg-animation') {
+    const svgAnim = parsed as SvgAnimationInfo;
+    if (typeof svgAnim.svg === 'string' && svgAnim.svg.trim()) {
+      return [{ kind: 'svg', nodeId: node.id, label: node.label, color: node.color, svg: svgAnim }];
+    }
+  }
   if (Array.isArray(parsed)) {
     return (parsed as CssAnimSpec[])
       .filter(s => s && s.cssAnim && s.id && s.label)
       .map(s => ({ kind: 'css' as const, nodeId: node.id, label: s.label, color: s.color || node.color, spec: s }));
   }
   return [];
+}
+
+function svgToDataUrl(svg: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function sceneToLayers(scene: SceneInfo, cw: number, ch: number): Layer[] {
@@ -138,6 +163,29 @@ function cssToLayer(spec: CssAnimSpec, cw: number, ch: number): Layer {
     size: { width: w, height: h },
     animation: { property: 'opacity', keyframes: [{ time: 0, value: 0 }, { time: 0.8, value: 1 }] },
     properties: { shape: 'circle', color: spec.color },
+  };
+}
+
+function svgToLayer(spec: SvgAnimationInfo, cw: number, ch: number): Layer {
+  const naturalW = Math.max(1, spec.width ?? 512);
+  const naturalH = Math.max(1, spec.height ?? 512);
+  const scale = Math.min((cw * 0.45) / naturalW, (ch * 0.45) / naturalH, 1);
+  const w = Math.round(naturalW * scale);
+  const h = Math.round(naturalH * scale);
+  return {
+    id: generateId('svg'),
+    type: 'image' as const,
+    position: { x: Math.round((cw - w) / 2), y: Math.round((ch - h) / 2) },
+    size: { width: w, height: h },
+    startTime: spec.startTime,
+    layerDuration: spec.layerDuration ?? spec.duration,
+    animation: spec.animation,
+    animations: spec.animations,
+    properties: {
+      src: svgToDataUrl(spec.svg),
+      fit: spec.fit ?? 'contain',
+      name: 'SVG animation',
+    },
   };
 }
 
@@ -223,6 +271,20 @@ const CssAnimPreview: React.FC<{ spec: CssAnimSpec }> = ({ spec }) => {
   );
 };
 
+const SvgAnimPreview: React.FC<{ spec: SvgAnimationInfo }> = ({ spec }) => {
+  return (
+    <div
+      className="relative rounded-lg overflow-hidden flex items-center justify-center"
+      style={{ width: PREVIEW_W, height: PREVIEW_H, background: spec.background ?? '#0f172a' }}
+    >
+      <div
+        className="w-full h-full flex items-center justify-center"
+        dangerouslySetInnerHTML={{ __html: spec.svg }}
+      />
+    </div>
+  );
+};
+
 export const AnimationPortfolioModal: React.FC<AnimationPortfolioModalProps> = ({
   onAddLayers, onClose, compositionWidth, compositionHeight,
 }) => {
@@ -245,6 +307,8 @@ export const AnimationPortfolioModal: React.FC<AnimationPortfolioModalProps> = (
   const handlePick = (anim: ParsedAnimation) => {
     if (anim.kind === 'scene') {
       onAddLayers(sceneToLayers(anim.scene, compositionWidth, compositionHeight));
+    } else if (anim.kind === 'svg') {
+      onAddLayers([svgToLayer(anim.svg, compositionWidth, compositionHeight)]);
     } else {
       onAddLayers([cssToLayer(anim.spec, compositionWidth, compositionHeight)]);
     }
@@ -277,7 +341,9 @@ export const AnimationPortfolioModal: React.FC<AnimationPortfolioModalProps> = (
               >
                 {anim.kind === 'scene'
                   ? <ScenePreview scene={anim.scene} />
-                  : <CssAnimPreview spec={anim.spec} />}
+                  : anim.kind === 'svg'
+                    ? <SvgAnimPreview spec={anim.svg} />
+                    : <CssAnimPreview spec={anim.spec} />}
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-sm text-slate-300 group-hover:text-white font-medium truncate">
                     {anim.label}

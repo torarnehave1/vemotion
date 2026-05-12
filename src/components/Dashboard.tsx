@@ -110,14 +110,12 @@ export const Dashboard: React.FC = () => {
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview
         </span>
-        <div className="ml-auto flex-shrink-0">
-          <FileMenu
-            composition={composition}
-            userEmail={auth?.email}
-            onLoad={c => { setComposition(c); setCurrentFrame(0); setSeekFrame(0); }}
-            onNew={() => { setComposition(defaultComposition); setCurrentFrame(0); setSeekFrame(0); }}
-          />
-        </div>
+        <FileMenu
+          composition={composition}
+          userEmail={auth?.email}
+          onLoad={c => { setComposition(c); setCurrentFrame(0); setSeekFrame(0); }}
+          onNew={() => { setComposition(defaultComposition); setCurrentFrame(0); setSeekFrame(0); }}
+        />
       </div>
 
       {/* Body: sidebar + main */}

@@ -15,6 +15,7 @@ export type Layer = {
   startTime?: number;
   layerDuration?: number;
   animation?: Animation;
+  animations?: Animation[];
   properties: Record<string, unknown>;
 };
 

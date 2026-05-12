@@ -42,6 +42,9 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
   if (layer.animation) {
     values[layer.animation.property] = interpolate(layer.animation.keyframes, time);
   }
+  for (const anim of layer.animations ?? []) {
+    values[anim.property] = interpolate(anim.keyframes, time);
+  }
 
   return values;
 }

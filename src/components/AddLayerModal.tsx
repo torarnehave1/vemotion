@@ -212,6 +212,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const handleSaveImage = () => {
     if (!editingLayer || !isImgLayer) return;
     let animation: Layer['animation'] = undefined;
+    let extraAnimations: Layer['animations'] = undefined;
     const st = animStartTime;
     const et = animEndTime;
     if (imgAnimType === 'fade-in') {
@@ -225,7 +226,11 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     } else if (imgAnimType === 'slide') {
       const dX = Math.abs(animEndX - animStartX);
       const dY = Math.abs(animEndY - animStartY);
-      if (dX >= dY) {
+      if (dX > 0 && dY > 0) {
+        // diagonal — animate both axes
+        animation = { property: 'offsetX', keyframes: [{ time: st, value: animStartX - imgPosX }, { time: et, value: animEndX - imgPosX }] };
+        extraAnimations = [{ property: 'offsetY', keyframes: [{ time: st, value: animStartY - imgPosY }, { time: et, value: animEndY - imgPosY }] }];
+      } else if (dX > 0) {
         animation = { property: 'offsetX', keyframes: [{ time: st, value: animStartX - imgPosX }, { time: et, value: animEndX - imgPosX }] };
       } else {
         animation = { property: 'offsetY', keyframes: [{ time: st, value: animStartY - imgPosY }, { time: et, value: animEndY - imgPosY }] };
@@ -236,6 +241,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       position: { x: imgPosX, y: imgPosY },
       size: { width: imgWidth, height: imgHeight },
       animation,
+      animations: extraAnimations,
       properties: { ...editingLayer.properties, fit: imgFit },
     });
     onClose();

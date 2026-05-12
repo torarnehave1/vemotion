@@ -27,12 +27,14 @@
 ## Self-updating rule
 - When a command fails due to a missing tool, wrong path, expired credential, or wrong assumption about the environment, add a note to this file immediately so the same mistake is not repeated.
 
-## Reporting deployments — MANDATORY
-After every `git push` or `npx wrangler deploy`, always report back to the user with:
-- What was pushed/deployed (repo or worker name)
-- The commit message or a one-line summary of what changed
-- The target (e.g. `github.com/torarnehave1/vemotion → main`, or `api.vegvisr.org/vemotion/*`)
-Never silently push or deploy without telling the user what happened.
+## Commit, push, and report — MANDATORY
+After every completed code change, immediately:
+1. `git add` the changed files
+2. `git commit` with a descriptive message
+3. `git push origin main`
+4. Report back to the user with: what was pushed, the commit message, and the target (`github.com/torarnehave1/vemotion → main`)
+
+Do NOT wait for the user to ask. Never silently push without reporting. Never complete a task without committing.
 
 ## General
 - Keep components consistent with the existing dark slate design system.

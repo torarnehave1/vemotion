@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { X, Sparkles, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Sparkles, Loader2, Upload } from 'lucide-react';
 import type { Layer } from '../lib/api';
+import { readStoredUser } from '../lib/auth';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
 const KG_CARDS_GRAPH  = 'vemotion-cards';
 const KG_BASE = 'https://knowledge.vegvisr.org';
+const PHOTOS_API = 'https://photos-api.vegvisr.org';
+const DEFAULT_ALBUM = 'VEmotion';
 
 const FONT_OPTIONS = [
   { label: 'Composition default', value: '' },
@@ -40,6 +43,14 @@ interface KgCardNode {
     defaultWidth?: number;
     defaultHeight?: number;
   };
+}
+
+interface AlbumImage {
+  key: string;
+  url: string;
+  name?: string;
+  displayName?: string;
+  tags?: string[];
 }
 
 interface AddLayerModalProps {
@@ -110,7 +121,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const isEditing = !!editingLayer;
   const isKgShape = editingLayer?.type === 'kg-shape';
   const isKgCard  = editingLayer?.type === 'card';
-  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards'>('manual');
+  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
   const [kgLoading, setKgLoading] = useState(false);
@@ -169,6 +180,101 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [cardHeight,   setCardHeight]   = useState(editingLayer?.size.height ?? 250);
   const [cardPreset,   setCardPreset]   = useState<AnimationPreset>('fade-in');
   const [cardPickPreset, setCardPickPreset] = useState<AnimationPreset>('fade-in');
+
+  // Image assets
+  const [albumName, setAlbumName] = useState(DEFAULT_ALBUM);
+  const [albumImages, setAlbumImages] = useState<AlbumImage[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesError, setImagesError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (tab !== 'images') return;
+    fetchAlbum(albumName);
+  }, [tab]);
+
+  const fetchAlbum = (name: string) => {
+    const token = readStoredUser()?.emailVerificationToken;
+    if (!token) { setImagesError('Not authenticated'); return; }
+    setImagesLoading(true);
+    setImagesError('');
+    fetch(`${PHOTOS_API}/list-r2-images?album=${encodeURIComponent(name)}`, {
+      headers: { 'X-API-Token': token },
+    })
+      .then(r => r.json())
+      .then(data => setAlbumImages(data.images ?? []))
+      .catch(() => setImagesError('Failed to load album.'))
+      .finally(() => setImagesLoading(false));
+  };
+
+  const handleImagePick = (img: AlbumImage) => {
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () => {
+      // Clamp to canvas, preserve aspect ratio
+      let w = el.naturalWidth || 400;
+      let h = el.naturalHeight || 400;
+      const scaleW = w > compositionWidth  ? compositionWidth  / w : 1;
+      const scaleH = h > compositionHeight ? compositionHeight / h : 1;
+      const scale  = Math.min(scaleW, scaleH);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+      const x = Math.round((compositionWidth  - w) / 2);
+      const y = Math.round((compositionHeight - h) / 2);
+      const layer: Layer = {
+        id: generateId(),
+        type: 'image',
+        position: { x, y },
+        size: { width: w, height: h },
+        properties: { src: img.url, fit: 'cover', name: img.displayName ?? img.name ?? img.key },
+      };
+      onAdd(layer);
+      onClose();
+    };
+    el.onerror = () => {
+      // Fallback if image can't be measured — use half canvas
+      const w = Math.round(compositionWidth / 2);
+      const h = Math.round(compositionHeight / 2);
+      const layer: Layer = {
+        id: generateId(),
+        type: 'image',
+        position: { x: Math.round(w / 2), y: Math.round(h / 2) },
+        size: { width: w, height: h },
+        properties: { src: img.url, fit: 'cover', name: img.displayName ?? img.name ?? img.key },
+      };
+      onAdd(layer);
+      onClose();
+    };
+    el.src = img.url;
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = readStoredUser()?.emailVerificationToken;
+    const email = readStoredUser()?.email;
+    if (!token || !email) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('album', albumName);
+      fd.append('userEmail', email);
+      const res = await fetch(`${PHOTOS_API}/upload`, {
+        method: 'POST',
+        headers: { 'X-API-Token': token },
+        body: fd,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      await fetchAlbum(albumName);
+    } catch {
+      setImagesError('Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   // AI prompt
   const [prompt, setPrompt] = useState('');
@@ -284,6 +390,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               className={`flex-1 py-3 text-sm font-medium transition ${tab === 'cards' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
             >
               Cards
+            </button>
+            <button
+              onClick={() => setTab('images')}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'images' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Images
             </button>
             <button
               onClick={() => setTab('ai')}
@@ -480,6 +592,61 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     </button>
                   );
                 })}
+              </div>
+            </>
+          ) : tab === 'images' ? (
+            <>
+              {/* Album picker + upload */}
+              <div className="flex gap-2">
+                <input
+                  value={albumName}
+                  onChange={e => setAlbumName(e.target.value)}
+                  onBlur={() => fetchAlbum(albumName)}
+                  onKeyDown={e => e.key === 'Enter' && fetchAlbum(albumName)}
+                  placeholder="Album name"
+                  className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-sm transition"
+                >
+                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Upload
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+              </div>
+
+              {imagesLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+              {imagesError && <p className="text-red-400 text-sm">{imagesError}</p>}
+
+              <div className="grid grid-cols-3 gap-3 max-h-80 overflow-y-auto">
+                {albumImages.map(img => (
+                  <button
+                    key={img.key}
+                    onClick={() => handleImagePick(img)}
+                    className="flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-sky-500 rounded-xl transition group"
+                  >
+                    <div className="w-full aspect-square bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
+                      <img
+                        src={img.url}
+                        alt={img.displayName ?? img.key}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400 group-hover:text-white truncate w-full text-center">
+                      {img.displayName ?? img.name ?? img.key}
+                    </span>
+                    {img.tags && img.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {img.tags.slice(0, 3).map(tag => (
+                          <span key={tag} className="text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             </>
           ) : tab === 'manual' ? (

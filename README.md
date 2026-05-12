@@ -59,7 +59,17 @@ The table below lists every external dependency and how to replace it if you wan
 
 The worker is open source and lives in the [vegvisr-frontend](https://github.com/torarnehave1/vegvisr-frontend) repository under `vemotion-worker/`. Its full OpenAPI spec is available at `https://api.vegvisr.org/vemotion/openapi.json`.
 
-### 3. Shapes and Cards (Knowledge Graph)
+### 3. Image Assets (Photos API)
+
+| Dependency | What it does | How to replace |
+|---|---|---|
+| `photos-api.vegvisr.org/list-r2-images` | Lists images in an album with metadata | Deploy the open source photos-worker, or replace with any endpoint returning `{ images: [{ key, url, name?, tags? }] }` |
+| `photos-api.vegvisr.org/upload` | Uploads a new image to an album | Replace with any file upload endpoint, or remove the upload button |
+| `vegvisr.imgix.net` | Serves the images via CDN | Replace with your own Cloudflare R2 public URL or any image CDN |
+
+> Image URLs are stored directly in the composition JSON (`properties.src`). The renderer loads them at runtime via the browser's image cache.
+
+### 4. Shapes and Cards (Knowledge Graph)
 
 | Dependency | What it does | How to replace |
 |---|---|---|
@@ -67,7 +77,7 @@ The worker is open source and lives in the [vegvisr-frontend](https://github.com
 
 > Shapes and cards are **snapshotted into the composition at add-time**. The running composition is self-contained and does not call the Knowledge Graph at runtime.
 
-### 4. Assets and Fonts
+### 5. Assets and Fonts
 
 | Dependency | How to replace |
 |---|---|
@@ -268,9 +278,9 @@ A composition is self-contained plain JSON — no external references at runtime
 |---|---|
 | `text` | Rendered text with word-wrap, alignment, font, color, and drop shadow |
 | `shape` | Rectangle or circle filled with a solid colour |
+| `image` | Image from URL (Imgix, R2, or any CORS-accessible URL). Supports `fit: cover \| contain \| fill` |
 | `kg-shape` | SVG path snapshotted from the shape picker |
 | `card` | Rounded box with title, body text, and styled background |
-| `image` | *(planned)* Image URL rendered to canvas |
 
 ### Animatable properties
 

@@ -52,10 +52,33 @@ export class CanvasRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private compositionFont = 'Inter, system-ui, sans-serif';
+  private imageCache = new Map<string, HTMLImageElement>();
+
+  onImageLoad?: () => void;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
+  }
+
+  async preloadImages(composition: CompositionData): Promise<void> {
+    const urls = composition.layers
+      .filter(l => l.type === 'image')
+      .map(l => l.properties.src as string)
+      .filter(Boolean);
+
+    await Promise.all(urls.map(src => this.loadImageAsync(src)));
+  }
+
+  private loadImageAsync(src: string): Promise<void> {
+    if (this.imageCache.get(src)?.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => { this.imageCache.set(src, img); resolve(); };
+      img.onerror = () => resolve();
+      img.src = src;
+    });
   }
 
   renderFrame(composition: CompositionData, frameNumber: number): void {
@@ -97,7 +120,7 @@ export class CanvasRenderer {
         this.drawShape(layer, values);
         break;
       case 'image':
-        // Image rendering requires async — handled separately
+        this.drawImage(layer, values);
         break;
       case 'kg-shape':
         this.drawKgShape(layer, values);
@@ -321,6 +344,52 @@ export class CanvasRenderer {
     }
 
     this.ctx.restore();
+  }
+
+  private drawImage(layer: Layer, values: Record<string, unknown>): void {
+    const src = (values.src as string) ?? '';
+    if (!src) return;
+
+    const x = layer.position.x + ((values.offsetX as number) ?? 0);
+    const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const w = layer.size.width;
+    const h = layer.size.height;
+    const fit = (values.fit as string) ?? 'cover';
+
+    let img = this.imageCache.get(src);
+
+    if (!img) {
+      // Start loading — will appear on next frame once cached
+      img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        this.imageCache.set(src, img!);
+        this.onImageLoad?.();
+      };
+      img.onerror = () => { /* keep placeholder */ };
+      img.src = src;
+      this.imageCache.set(src, img);
+      return;
+    }
+
+    if (!img.complete || img.naturalWidth === 0) return;
+
+    if (fit === 'fill') {
+      this.ctx.drawImage(img, x, y, w, h);
+    } else if (fit === 'contain') {
+      const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+      const dw = img.naturalWidth * scale;
+      const dh = img.naturalHeight * scale;
+      this.ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    } else {
+      // cover (default) — crop to fill
+      const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+      const sw = w / scale;
+      const sh = h / scale;
+      const sx = (img.naturalWidth - sw) / 2;
+      const sy = (img.naturalHeight - sh) / 2;
+      this.ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+    }
   }
 
   // Word-wrap helper — returns array of lines that fit within maxWidth

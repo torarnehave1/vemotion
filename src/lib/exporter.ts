@@ -39,6 +39,10 @@ export async function exportToMp4(
 
   await loadFFmpeg(onProgress);
 
+  // Preload all image layers so frames render without blank placeholders
+  onProgress?.({ stage: 'loading', percent: 10, message: 'Preloading images...' });
+  await renderer.preloadImages(composition);
+
   // Render each frame and write to ffmpeg virtual filesystem
   for (let frame = 0; frame < totalFrames; frame++) {
     renderer.renderFrame(composition, frame);

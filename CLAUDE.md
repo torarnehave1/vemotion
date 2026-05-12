@@ -27,6 +27,13 @@
 ## Self-updating rule
 - When a command fails due to a missing tool, wrong path, expired credential, or wrong assumption about the environment, add a note to this file immediately so the same mistake is not repeated.
 
+## Reporting deployments — MANDATORY
+After every `git push` or `npx wrangler deploy`, always report back to the user with:
+- What was pushed/deployed (repo or worker name)
+- The commit message or a one-line summary of what changed
+- The target (e.g. `github.com/torarnehave1/vemotion → main`, or `api.vegvisr.org/vemotion/*`)
+Never silently push or deploy without telling the user what happened.
+
 ## General
 - Keep components consistent with the existing dark slate design system.
 - Prefer editing existing files over creating new ones.

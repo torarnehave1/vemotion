@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2 } from 'lucide-react';
 import type { Layer } from '../lib/api';
 
@@ -250,7 +251,7 @@ export const AnimationPortfolioModal: React.FC<AnimationPortfolioModalProps> = (
     onClose();
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl shadow-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-slate-800">
@@ -290,6 +291,7 @@ export const AnimationPortfolioModal: React.FC<AnimationPortfolioModalProps> = (
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

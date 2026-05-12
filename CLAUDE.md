@@ -25,9 +25,15 @@
 - For complex JSON payloads (mermaid diagrams etc), write to a temp file and use `curl --data-binary @file` to avoid shell escaping issues
 
 ## KG Graph Creation/Updates — MANDATORY
-- To create or update a KG graph, ALWAYS use `POST https://knowledge.vegvisr.org/saveGraphWithHistory` with body `{ "id": "<graphId>", "nodes": [...], "edges": [...], "override": true }`
+- To create or update a KG graph, ALWAYS use `POST https://knowledge.vegvisr.org/saveGraphWithHistory` with body `{ "id": "<graphId>", "graphData": { "nodes": [...], "edges": [...] }, "override": true }`
 - Do NOT use `saveknowgraph` (causes UNIQUE constraint errors), `updateknowgraph` (requires both id and graph data or errors), or `addNode` (adds to wrong graph context)
 - `saveGraphWithHistory` is the single correct endpoint for all graph creation and updates
+
+## Vemotion Animations Model — MANDATORY
+- **One KG node = one animation.** Do not split an animation into multiple nodes, and do not bundle multiple animations into one node.
+- The graph `vemotion-animations` holds these nodes. Each node has: `id`, `label` (display name), `color` (theme color), and `info` (the technical definition the renderer needs).
+- The Animations tab in the Add Layer modal renders **one card per node** in `vemotion-animations`. It does NOT iterate over the contents of the `info` field.
+- To add a new animation: add a new node to `vemotion-animations` with `type: "animation-library"` (or similar), a clear label, and the definition in `info`. The Animations tab picks it up automatically.
 
 ## Self-updating rule
 - When a command fails due to a missing tool, wrong path, expired credential, or wrong assumption about the environment, add a note to this file immediately so the same mistake is not repeated.

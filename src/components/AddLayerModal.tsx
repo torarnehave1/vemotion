@@ -134,6 +134,35 @@ function generateId() {
   return `layer-${Date.now().toString(36)}`;
 }
 
+function detectPresetFromAnimation(animation: Layer['animation'] | undefined): AnimationPreset {
+  if (!animation) return 'none';
+  switch (animation.property) {
+    case 'opacity': {
+      const frames = animation.keyframes;
+      if (frames.length >= 4) return 'fade-in-out';
+      const first = Number(frames[0]?.value ?? 0);
+      const last = Number(frames[frames.length - 1]?.value ?? 1);
+      if (first === 0 && last === 1) return 'fade-in';
+      if (first === 1 && last === 0) return 'fade-out';
+      return 'none';
+    }
+    case 'offsetX': {
+      const first = Number(animation.keyframes[0]?.value ?? 0);
+      return first < 0 ? 'slide-left' : 'slide-right';
+    }
+    case 'offsetY': {
+      const frames = animation.keyframes;
+      if (frames.length >= 5) return 'bounce';
+      const first = Number(frames[0]?.value ?? 0);
+      return first < 0 ? 'slide-top' : 'slide-bottom';
+    }
+    case 'scale':
+      return 'scale-up';
+    default:
+      return 'none';
+  }
+}
+
 function formatMotionScenes(scenes: unknown): string {
   if (!Array.isArray(scenes) || scenes.length === 0) return '';
   try {
@@ -233,7 +262,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [height, setHeight] = useState(editingLayer?.size.height ?? 80);
   const [posX, setPosX] = useState(editingLayer?.position.x ?? Math.floor((compositionWidth - 600) / 2));
   const [posY, setPosY] = useState(editingLayer?.position.y ?? Math.floor((compositionHeight - 80) / 2));
-  const [preset, setPreset] = useState<AnimationPreset>('fade-in');
+  const [preset, setPreset] = useState<AnimationPreset>(() => detectPresetFromAnimation(editingLayer?.animation) || 'fade-in');
   const [shapePreset, setShapePreset] = useState<AnimationPreset>('fade-in');
   const [align, setAlign] = useState<'left' | 'center' | 'right'>((editingLayer?.properties.align as 'left' | 'center' | 'right') ?? 'center');
   const [kgColor, setKgColor] = useState((editingLayer?.properties.color as string) ?? '#ffffff');
@@ -505,9 +534,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
       return;
     }
-    const animation = isEditing
-      ? editingLayer.animation
-      : buildAnimation(preset, compositionDuration, compositionWidth, compositionHeight, width, height);
+    const animation = buildAnimation(preset, compositionDuration, compositionWidth, compositionHeight, width, height);
 
     const layer: Layer = {
       id: isEditing ? editingLayer.id : generateId(),

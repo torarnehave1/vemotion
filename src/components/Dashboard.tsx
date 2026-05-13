@@ -6,7 +6,7 @@ import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
-import { hasCloudToken, saveCompositionToCloud } from '../lib/cloud-compositions';
+import { getCompositionFromCloud, hasCloudToken, readLastCompositionRef, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
 
 const DEFAULT_SIDEBAR_WIDTH = 420;
 const MIN_SIDEBAR_WIDTH = 260;
@@ -61,6 +61,7 @@ export const Dashboard: React.FC = () => {
   const [cloudCompositionName, setCloudCompositionName] = useState('Untitled composition');
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [autosaveVersion, setAutosaveVersion] = useState<number>(0);
+  const [restoreState, setRestoreState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [currentFrame, setCurrentFrame] = useState(0);
   const [seekFrame, setSeekFrame] = useState<number | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(
@@ -100,10 +101,35 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!auth?.email || !hasCloudToken()) return;
+
+    const lastRef = readLastCompositionRef();
+    if (!lastRef?.id) {
+      setRestoreState('ready');
+      return;
+    }
+
+    setRestoreState('loading');
+    getCompositionFromCloud(lastRef.id)
+      .then((data) => {
+        setComposition(data.composition);
+        setCloudCompositionId(data.id);
+        setCloudCompositionName(data.name || lastRef.name || 'Untitled composition');
+        setAutosaveVersion(data.version ?? 1);
+        lastSavedSnapshotRef.current = JSON.stringify(data.composition);
+        setAutosaveState('idle');
+        setRestoreState('ready');
+      })
+      .catch(() => {
+        writeLastCompositionRef(null);
+        setRestoreState('error');
+      });
+  }, [auth?.email]);
+
+  useEffect(() => {
     const nextSnapshot = JSON.stringify(composition);
 
     if (!auth?.email || !hasCloudToken()) {
-      lastSavedSnapshotRef.current = nextSnapshot;
       setAutosaveState('idle');
       return;
     }
@@ -128,6 +154,10 @@ export const Dashboard: React.FC = () => {
 
         lastSavedSnapshotRef.current = nextSnapshot;
         setCloudCompositionId(response.id);
+        writeLastCompositionRef({
+          id: response.id,
+          name: cloudCompositionName.trim() || 'Untitled composition',
+        });
         setAutosaveVersion(response.version ?? autosaveVersion);
         setAutosaveState('saved');
       } catch {
@@ -162,6 +192,14 @@ export const Dashboard: React.FC = () => {
         </span>
         <span className={[
           'text-xs px-2 py-0.5 rounded-full border flex-shrink-0',
+          restoreState === 'loading' && 'bg-violet-500/10 text-violet-300 border-violet-500/30',
+          restoreState === 'error' && 'bg-red-500/10 text-red-300 border-red-500/30',
+          (restoreState === 'idle' || restoreState === 'ready') && 'bg-slate-800 text-slate-400 border-slate-700',
+        ].join(' ')}>
+          {restoreState === 'loading' ? 'Restoring…' : restoreState === 'error' ? 'Restore failed' : 'Composition mode'}
+        </span>
+        <span className={[
+          'text-xs px-2 py-0.5 rounded-full border flex-shrink-0',
           autosaveState === 'saving' && 'bg-sky-500/10 text-sky-300 border-sky-500/30',
           autosaveState === 'saved' && 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
           autosaveState === 'error' && 'bg-red-500/10 text-red-300 border-red-500/30',
@@ -189,6 +227,7 @@ export const Dashboard: React.FC = () => {
             setComposition(defaultComposition);
             setCloudCompositionId(null);
             setCloudCompositionName('Untitled composition');
+            writeLastCompositionRef(null);
             lastSavedSnapshotRef.current = JSON.stringify(defaultComposition);
             setAutosaveState('idle');
             setAutosaveVersion(0);

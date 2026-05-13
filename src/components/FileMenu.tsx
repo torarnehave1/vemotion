@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, FilePlus, Save, Upload, FolderOpen, Trash2, Loader2 } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
-import { saveCompositionToCloud } from '../lib/cloud-compositions';
+import { getCompositionFromCloud, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -86,6 +86,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
         onLoad(parsed);
         setCurrentId(null);
         setSaveName('');
+        writeLastCompositionRef(null);
         onCloudMetaChange?.({ id: null, name: '' });
       } catch {
         alert('Invalid composition file.');
@@ -149,14 +150,11 @@ export const FileMenu: React.FC<FileMenuProps> = ({
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${VEMOTION_API}/composition?id=${encodeURIComponent(id)}`, {
-        headers: { 'X-API-Token': token },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await getCompositionFromCloud(id);
       onLoad(data.composition);
       setCurrentId(data.id);
       setSaveName(data.name);
+      writeLastCompositionRef({ id: data.id, name: data.name });
       onCloudMetaChange?.({ id: data.id, name: data.name });
       close();
     } catch (e) {

@@ -1,4 +1,4 @@
-import type { CompositionData, Layer, Keyframe } from './api';
+import type { CompositionData, Layer, Keyframe, MotionScene } from './api';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -46,7 +46,53 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
     values[anim.property] = interpolate(anim.keyframes, time);
   }
 
+  const motionScenes = Array.isArray(values.motionScenes) ? values.motionScenes as MotionScene[] : [];
+  if (motionScenes.length > 0) {
+    const currentScene = motionScenes.find((scene) => time >= scene.start && time <= scene.end);
+    if (currentScene) {
+      const context = {
+        t: time - currentScene.start,
+        p: currentScene.end > currentScene.start ? (time - currentScene.start) / (currentScene.end - currentScene.start) : 0,
+        start: currentScene.start,
+        end: currentScene.end,
+        duration: Math.max(0, currentScene.end - currentScene.start),
+        x0: layer.position.x,
+        y0: layer.position.y,
+        w: layer.size.width,
+        h: layer.size.height,
+      };
+      const sceneX = evaluateFormula(currentScene.xFormula, context);
+      const sceneY = evaluateFormula(currentScene.yFormula, context);
+      if (sceneX !== null) values.offsetX = sceneX - layer.position.x;
+      if (sceneY !== null) values.offsetY = sceneY - layer.position.y;
+    }
+  }
+
   return values;
+}
+
+function evaluateFormula(
+  formula: string | undefined,
+  context: { t: number; p: number; start: number; end: number; duration: number; x0: number; y0: number; w: number; h: number }
+): number | null {
+  if (!formula || !formula.trim()) return null;
+  const safe = formula.trim();
+  if (!/^[0-9+\-*/%().,\s_a-zA-Z]+$/.test(safe)) return null;
+
+  try {
+    const fn = new Function(
+      't', 'p', 'start', 'end', 'duration', 'x0', 'y0', 'w', 'h',
+      'sin', 'cos', 'tan', 'abs', 'min', 'max', 'pow', 'sqrt', 'pi',
+      `"use strict"; return (${safe});`
+    ) as (...args: unknown[]) => number;
+    const result = fn(
+      context.t, context.p, context.start, context.end, context.duration, context.x0, context.y0, context.w, context.h,
+      Math.sin, Math.cos, Math.tan, Math.abs, Math.min, Math.max, Math.pow, Math.sqrt, Math.PI
+    );
+    return Number.isFinite(result) ? result : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Renderer ──────────────────────────────────────────────────────────────────

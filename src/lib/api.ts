@@ -25,6 +25,13 @@ export type Animation = {
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
 };
 
+export type MotionScene = {
+  start: number;
+  end: number;
+  xFormula?: string;
+  yFormula?: string;
+};
+
 export type Keyframe = {
   time: number;
   value: unknown;

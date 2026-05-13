@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload } from 'lucide-react';
-import type { Layer } from '../lib/api';
+import type { Layer, MotionScene } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
@@ -134,6 +134,44 @@ function generateId() {
   return `layer-${Date.now().toString(36)}`;
 }
 
+function formatMotionScenes(scenes: unknown): string {
+  if (!Array.isArray(scenes) || scenes.length === 0) return '';
+  try {
+    return JSON.stringify(scenes, null, 2);
+  } catch {
+    return '';
+  }
+}
+
+function parseMotionScenes(json: string): MotionScene[] | undefined {
+  const trimmed = json.trim();
+  if (!trimmed) return undefined;
+  const parsed = JSON.parse(trimmed);
+  if (!Array.isArray(parsed)) {
+    throw new Error('Motion scenes must be a JSON array.');
+  }
+  return parsed.map((scene, index) => {
+    if (!scene || typeof scene !== 'object') {
+      throw new Error(`Scene ${index + 1} must be an object.`);
+    }
+    const start = Number((scene as Record<string, unknown>).start);
+    const end = Number((scene as Record<string, unknown>).end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+      throw new Error(`Scene ${index + 1} must have valid start/end values.`);
+    }
+    return {
+      start,
+      end,
+      xFormula: typeof (scene as Record<string, unknown>).xFormula === 'string'
+        ? (scene as Record<string, unknown>).xFormula as string
+        : undefined,
+      yFormula: typeof (scene as Record<string, unknown>).yFormula === 'string'
+        ? (scene as Record<string, unknown>).yFormula as string
+        : undefined,
+    };
+  });
+}
+
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   onAdd, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
 }) => {
@@ -248,6 +286,14 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
   const handleSaveImage = () => {
     if (!editingLayer || !isImgLayer) return;
+    let motionScenes: MotionScene[] | undefined;
+    try {
+      motionScenes = parseMotionScenes(motionScenesJson);
+      setMotionScenesError('');
+    } catch (error) {
+      setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
+      return;
+    }
     let animation: Layer['animation'] = undefined;
     let extraAnimations: Layer['animations'] = undefined;
     const st = animStartTime;
@@ -281,7 +327,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       size: { width: imgWidth, height: imgHeight },
       animation,
       animations: extraAnimations,
-      properties: { ...editingLayer.properties, fit: imgFit },
+      properties: { ...editingLayer.properties, fit: imgFit, ...(motionScenes ? { motionScenes } : { motionScenes: undefined }) },
     });
     onClose();
   };
@@ -289,6 +335,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   // Font override
   const [fontFamily, setFontFamily] = useState((editingLayer?.properties.fontFamily as string) ?? '');
   const [cardFontFamily, setCardFontFamily] = useState((editingLayer?.properties.fontFamily as string) ?? '');
+  const [motionScenesJson, setMotionScenesJson] = useState(formatMotionScenes(editingLayer?.properties.motionScenes));
+  const [motionScenesError, setMotionScenesError] = useState('');
 
   // Card edit state
   const [cardTitle,    setCardTitle]    = useState((editingLayer?.properties.title as string) ?? 'Title');
@@ -402,31 +450,61 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
   const handleSaveKgShape = () => {
     if (!editingLayer || !isKgShape) return;
+    let motionScenes: MotionScene[] | undefined;
+    try {
+      motionScenes = parseMotionScenes(motionScenesJson);
+      setMotionScenesError('');
+    } catch (error) {
+      setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
+      return;
+    }
     const animation = buildAnimation(kgPreset, compositionDuration, compositionWidth, compositionHeight, kgWidth, kgHeight);
     onAdd({
       ...editingLayer,
       position: { x: kgPosX, y: kgPosY },
       size: { width: kgWidth, height: kgHeight },
       animation,
-      properties: { ...editingLayer.properties, color: kgColor },
+      properties: { ...editingLayer.properties, color: kgColor, ...(motionScenes ? { motionScenes } : { motionScenes: undefined }) },
     });
     onClose();
   };
 
   const handleSaveCard = () => {
     if (!editingLayer || !isKgCard) return;
+    let motionScenes: MotionScene[] | undefined;
+    try {
+      motionScenes = parseMotionScenes(motionScenesJson);
+      setMotionScenesError('');
+    } catch (error) {
+      setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
+      return;
+    }
     const animation = buildAnimation(cardPreset, compositionDuration, compositionWidth, compositionHeight, cardWidth, cardHeight);
     onAdd({
       ...editingLayer,
       position: { x: cardPosX, y: cardPosY },
       size: { width: cardWidth, height: cardHeight },
       animation,
-      properties: { ...editingLayer.properties, title: cardTitle, body: cardBody, ...(cardFontFamily ? { fontFamily: cardFontFamily } : {}) },
+      properties: {
+        ...editingLayer.properties,
+        title: cardTitle,
+        body: cardBody,
+        ...(cardFontFamily ? { fontFamily: cardFontFamily } : {}),
+        ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
+      },
     });
     onClose();
   };
 
   const handleAdd = () => {
+    let motionScenes: MotionScene[] | undefined;
+    try {
+      motionScenes = parseMotionScenes(motionScenesJson);
+      setMotionScenesError('');
+    } catch (error) {
+      setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
+      return;
+    }
     const animation = isEditing
       ? editingLayer.animation
       : buildAnimation(preset, compositionDuration, compositionWidth, compositionHeight, width, height);
@@ -440,8 +518,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       layerDuration: isEditing ? editingLayer.layerDuration : undefined,
       animation,
       properties: layerType === 'text'
-        ? { text, fontSize, color, align, fontWeight: '600', ...(fontFamily ? { fontFamily } : {}) }
-        : { shape, color },
+        ? { text, fontSize, color, align, fontWeight: '600', ...(fontFamily ? { fontFamily } : {}), ...(motionScenes ? { motionScenes } : {}) }
+        : { shape, color, ...(motionScenes ? { motionScenes } : {}) },
     };
 
     onAdd(layer);
@@ -476,6 +554,23 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       setAiLoading(false);
     }
   };
+
+  const motionScenesField = (
+    <div className="space-y-2">
+      <label className="text-xs text-slate-400 block">Advanced motion scenes (JSON)</label>
+      <textarea
+        value={motionScenesJson}
+        onChange={(e) => setMotionScenesJson(e.target.value)}
+        rows={6}
+        placeholder={`[\n  {\n    "start": 0,\n    "end": 2.5,\n    "xFormula": "x0 + cos(t*2)*120",\n    "yFormula": "y0 + sin(t*2)*60"\n  }\n]`}
+        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500 resize-y"
+      />
+      <p className="text-xs text-slate-500">
+        Uses absolute coordinates. Available vars: <code>t</code>, <code>p</code>, <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>sin</code>, <code>cos</code>, <code>pi</code>.
+      </p>
+      {motionScenesError && <p className="text-xs text-red-400">{motionScenesError}</p>}
+    </div>
+  );
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -629,6 +724,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 )}
               </div>
 
+              {motionScenesField}
+
               <button onClick={handleSaveImage}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
@@ -678,6 +775,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   ))}
                 </select>
               </div>
+              {motionScenesField}
               <button onClick={handleSaveCard}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
@@ -719,6 +817,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
+              {motionScenesField}
               <button onClick={handleSaveKgShape}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
@@ -977,6 +1076,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
+              {motionScenesField}
 
               {/* Animation preset */}
               <div>

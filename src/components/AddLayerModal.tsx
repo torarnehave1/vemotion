@@ -262,6 +262,11 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [height, setHeight] = useState(editingLayer?.size.height ?? 80);
   const [posX, setPosX] = useState(editingLayer?.position.x ?? Math.floor((compositionWidth - 600) / 2));
   const [posY, setPosY] = useState(editingLayer?.position.y ?? Math.floor((compositionHeight - 80) / 2));
+  const [opacityValue, setOpacityValue] = useState(() => {
+    const raw = editingLayer?.properties.opacity;
+    const parsed = typeof raw === 'number' ? raw : Number(raw);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 1;
+  });
   const [preset, setPreset] = useState<AnimationPreset>(() => detectPresetFromAnimation(editingLayer?.animation) || 'fade-in');
   const [shapePreset, setShapePreset] = useState<AnimationPreset>('fade-in');
   const [align, setAlign] = useState<'left' | 'center' | 'right'>((editingLayer?.properties.align as 'left' | 'center' | 'right') ?? 'center');
@@ -356,7 +361,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       size: { width: imgWidth, height: imgHeight },
       animation,
       animations: extraAnimations,
-      properties: { ...editingLayer.properties, fit: imgFit, ...(motionScenes ? { motionScenes } : { motionScenes: undefined }) },
+      properties: {
+        ...editingLayer.properties,
+        fit: imgFit,
+        opacity: opacityValue,
+        ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
+      },
     });
     onClose();
   };
@@ -493,7 +503,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       position: { x: kgPosX, y: kgPosY },
       size: { width: kgWidth, height: kgHeight },
       animation,
-      properties: { ...editingLayer.properties, color: kgColor, ...(motionScenes ? { motionScenes } : { motionScenes: undefined }) },
+      properties: {
+        ...editingLayer.properties,
+        color: kgColor,
+        opacity: opacityValue,
+        ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
+      },
     });
     onClose();
   };
@@ -519,6 +534,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         title: cardTitle,
         body: cardBody,
         ...(cardFontFamily ? { fontFamily: cardFontFamily } : {}),
+        opacity: opacityValue,
         ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
       },
     });
@@ -545,8 +561,17 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       layerDuration: isEditing ? editingLayer.layerDuration : undefined,
       animation,
       properties: layerType === 'text'
-        ? { text, fontSize, color, align, fontWeight: '600', ...(fontFamily ? { fontFamily } : {}), ...(motionScenes ? { motionScenes } : {}) }
-        : { shape, color, ...(motionScenes ? { motionScenes } : {}) },
+        ? {
+            text,
+            fontSize,
+            color,
+            align,
+            fontWeight: '600',
+            opacity: opacityValue,
+            ...(fontFamily ? { fontFamily } : {}),
+            ...(motionScenes ? { motionScenes } : {}),
+          }
+        : { shape, color, opacity: opacityValue, ...(motionScenes ? { motionScenes } : {}) },
     };
 
     onAdd(layer);
@@ -596,6 +621,35 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         Uses absolute coordinates. Available vars: <code>t</code>, <code>p</code>, <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>sin</code>, <code>cos</code>, <code>pi</code>.
       </p>
       {motionScenesError && <p className="text-xs text-red-400">{motionScenesError}</p>}
+    </div>
+  );
+
+  const opacityField = (
+    <div className="space-y-2">
+      <label className="text-xs text-slate-400 block">Opacity</label>
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={opacityValue}
+          onChange={(e) => setOpacityValue(parseFloat(e.target.value))}
+          className="flex-1 accent-sky-500"
+        />
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.01"
+          value={opacityValue}
+          onChange={(e) => {
+            const next = parseFloat(e.target.value);
+            if (Number.isFinite(next)) setOpacityValue(Math.max(0, Math.min(1, next)));
+          }}
+          className="w-24 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+      </div>
     </div>
   );
 
@@ -680,6 +734,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              {opacityField}
 
               {/* Position & size */}
               <div className="grid grid-cols-2 gap-3">
@@ -802,6 +858,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   ))}
                 </select>
               </div>
+              {opacityField}
               {motionScenesField}
               <button onClick={handleSaveCard}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
@@ -844,6 +901,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
+              {opacityField}
               {motionScenesField}
               <button onClick={handleSaveKgShape}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
@@ -1103,6 +1161,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
+              {opacityField}
               {motionScenesField}
 
               {/* Animation preset */}

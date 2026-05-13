@@ -21,6 +21,47 @@ const FONT_OPTIONS = [
   { label: 'Space Grotesk',       value: 'Space Grotesk' },
 ];
 
+const MATH_SHAPE_PRESETS = {
+  circle: {
+    label: 'Circle',
+    samples: 180,
+    tStart: 0,
+    tEnd: Math.PI * 2,
+    xFormula: 'x0 + w/2 + min(w,h)*0.35*cos(t)',
+    yFormula: 'y0 + h/2 + min(w,h)*0.35*sin(t)',
+    closePath: true,
+  },
+  ellipse: {
+    label: 'Ellipse',
+    samples: 180,
+    tStart: 0,
+    tEnd: Math.PI * 2,
+    xFormula: 'x0 + w/2 + w*0.35*cos(t)',
+    yFormula: 'y0 + h/2 + h*0.22*sin(t)',
+    closePath: true,
+  },
+  sine: {
+    label: 'Sine wave',
+    samples: 220,
+    tStart: 0,
+    tEnd: 1,
+    xFormula: 'x0 + p*w',
+    yFormula: 'y0 + h/2 + sin(p*pi*4)*h*0.25',
+    closePath: false,
+  },
+  spiral: {
+    label: 'Spiral',
+    samples: 240,
+    tStart: 0,
+    tEnd: Math.PI * 6,
+    xFormula: 'x0 + w/2 + (t/(pi*6))*min(w,h)*0.4*cos(t)',
+    yFormula: 'y0 + h/2 + (t/(pi*6))*min(w,h)*0.4*sin(t)',
+    closePath: false,
+  },
+} as const;
+
+type MathShapePresetKey = keyof typeof MATH_SHAPE_PRESETS;
+
 interface KgShapeNode {
   id: string;
   label: string;
@@ -258,6 +299,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [color, setColor] = useState((editingLayer?.properties.color as string) ?? '#ffffff');
   const [shape, setShape] = useState<'rect' | 'circle'>((editingLayer?.properties.shape as 'rect' | 'circle') ?? 'rect');
   const [mathKind] = useState<'parametric'>('parametric');
+  const [mathPreset, setMathPreset] = useState<MathShapePresetKey>('circle');
   const [samples, setSamples] = useState(Number(editingLayer?.properties.samples) || 180);
   const [strokeWidth, setStrokeWidth] = useState(Number(editingLayer?.properties.strokeWidth) || 3);
   const [tStart, setTStart] = useState(Number(editingLayer?.properties.tStart) || 0);
@@ -397,6 +439,17 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [cardHeight,   setCardHeight]   = useState(editingLayer?.size.height ?? 250);
   const [cardPreset,   setCardPreset]   = useState<AnimationPreset>('fade-in');
   const [cardPickPreset, setCardPickPreset] = useState<AnimationPreset>('fade-in');
+
+  const applyMathShapePreset = (presetKey: MathShapePresetKey) => {
+    const preset = MATH_SHAPE_PRESETS[presetKey];
+    setMathPreset(presetKey);
+    setSamples(preset.samples);
+    setTStart(preset.tStart);
+    setTEnd(preset.tEnd);
+    setXFormula(preset.xFormula);
+    setYFormula(preset.yFormula);
+    setClosePath(preset.closePath);
+  };
 
   // Image assets
   const [albumName, setAlbumName] = useState(DEFAULT_ALBUM);
@@ -1156,6 +1209,18 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   <p className="text-xs text-slate-500">
                     Parametric curve. Use <code>t</code> from <code>tStart</code> to <code>tEnd</code>. Available vars: <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>sin</code>, <code>cos</code>, <code>min</code>, <code>max</code>, <code>pi</code>.
                   </p>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Preset</label>
+                    <select
+                      value={mathPreset}
+                      onChange={e => applyMathShapePreset(e.target.value as MathShapePresetKey)}
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    >
+                      {Object.entries(MATH_SHAPE_PRESETS).map(([key, preset]) => (
+                        <option key={key} value={key}>{preset.label}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-slate-400 mb-1 block">Samples</label>

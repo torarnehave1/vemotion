@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { CompositionEditor } from './CompositionEditor';
@@ -6,6 +6,7 @@ import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
+import { hasCloudToken, saveCompositionToCloud } from '../lib/cloud-compositions';
 
 const DEFAULT_SIDEBAR_WIDTH = 420;
 const MIN_SIDEBAR_WIDTH = 260;
@@ -56,6 +57,10 @@ const defaultComposition: CompositionData = {
 export const Dashboard: React.FC = () => {
   const auth = useAuth();
   const [composition, setComposition] = useState<CompositionData>(defaultComposition);
+  const [cloudCompositionId, setCloudCompositionId] = useState<string | null>(null);
+  const [cloudCompositionName, setCloudCompositionName] = useState('Untitled composition');
+  const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [autosaveVersion, setAutosaveVersion] = useState<number>(0);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [seekFrame, setSeekFrame] = useState<number | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(
@@ -63,6 +68,8 @@ export const Dashboard: React.FC = () => {
   );
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const isResizing = useRef(false);
+  const lastSavedSnapshotRef = useRef(JSON.stringify(defaultComposition));
+  const autosaveTimerRef = useRef<number | null>(null);
 
   const handleTimelineSeek = (frame: number) => {
     setSeekFrame(frame);
@@ -92,6 +99,49 @@ export const Dashboard: React.FC = () => {
     window.addEventListener('mouseup', onUp);
   }, []);
 
+  useEffect(() => {
+    const nextSnapshot = JSON.stringify(composition);
+
+    if (!auth?.email || !hasCloudToken()) {
+      lastSavedSnapshotRef.current = nextSnapshot;
+      setAutosaveState('idle');
+      return;
+    }
+
+    if (nextSnapshot === lastSavedSnapshotRef.current) {
+      return;
+    }
+
+    setAutosaveState('saving');
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      try {
+        const response = await saveCompositionToCloud({
+          id: cloudCompositionId,
+          name: cloudCompositionName.trim() || 'Untitled composition',
+          composition,
+          saveType: 'autosave',
+        });
+
+        lastSavedSnapshotRef.current = nextSnapshot;
+        setCloudCompositionId(response.id);
+        setAutosaveVersion(response.version ?? autosaveVersion);
+        setAutosaveState('saved');
+      } catch {
+        setAutosaveState('error');
+      }
+    }, 2500);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [auth?.email, autosaveVersion, cloudCompositionId, cloudCompositionName, composition]);
+
   return (
     <div className="flex flex-col flex-1">
 
@@ -110,11 +160,48 @@ export const Dashboard: React.FC = () => {
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview
         </span>
+        <span className={[
+          'text-xs px-2 py-0.5 rounded-full border flex-shrink-0',
+          autosaveState === 'saving' && 'bg-sky-500/10 text-sky-300 border-sky-500/30',
+          autosaveState === 'saved' && 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+          autosaveState === 'error' && 'bg-red-500/10 text-red-300 border-red-500/30',
+          autosaveState === 'idle' && 'bg-slate-800 text-slate-400 border-slate-700',
+        ].join(' ')}>
+          {autosaveState === 'saving' ? 'Autosaving…' : autosaveState === 'saved' ? `Autosaved v${autosaveVersion}` : autosaveState === 'error' ? 'Autosave failed' : 'Autosave idle'}
+        </span>
         <FileMenu
           composition={composition}
           userEmail={auth?.email}
-          onLoad={c => { setComposition(c); setCurrentFrame(0); setSeekFrame(0); }}
-          onNew={() => { setComposition(defaultComposition); setCurrentFrame(0); setSeekFrame(0); }}
+          currentCloudId={cloudCompositionId}
+          currentCloudName={cloudCompositionName}
+          onCloudMetaChange={({ id, name }) => {
+            setCloudCompositionId(id);
+            setCloudCompositionName(name || 'Untitled composition');
+          }}
+          onLoad={c => {
+            setComposition(c);
+            lastSavedSnapshotRef.current = JSON.stringify(c);
+            setAutosaveState('idle');
+            setCurrentFrame(0);
+            setSeekFrame(0);
+          }}
+          onNew={() => {
+            setComposition(defaultComposition);
+            setCloudCompositionId(null);
+            setCloudCompositionName('Untitled composition');
+            lastSavedSnapshotRef.current = JSON.stringify(defaultComposition);
+            setAutosaveState('idle');
+            setAutosaveVersion(0);
+            setCurrentFrame(0);
+            setSeekFrame(0);
+          }}
+          onCloudSaved={({ id, name, version }) => {
+            setCloudCompositionId(id);
+            setCloudCompositionName(name);
+            lastSavedSnapshotRef.current = JSON.stringify(composition);
+            setAutosaveVersion(version ?? autosaveVersion);
+            setAutosaveState('saved');
+          }}
         />
       </div>
 

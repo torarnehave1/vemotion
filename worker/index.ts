@@ -27,7 +27,7 @@ app.get('/api/compositions', async (c) => {
   if (!email) return c.json({ error: 'Missing email' }, { status: 400 });
   try {
     const rows = await c.env.DB.prepare(
-      'SELECT id, name, created_at, updated_at FROM compositions WHERE user_email = ? ORDER BY updated_at DESC'
+      'SELECT id, name, current_version, created_at, updated_at FROM compositions WHERE user_email = ? ORDER BY updated_at DESC'
     ).bind(email).all();
     return c.json({ compositions: rows.results });
   } catch (e) {
@@ -38,15 +38,56 @@ app.get('/api/compositions', async (c) => {
 // Save (create or update) a composition
 app.post('/api/compositions', async (c) => {
   try {
-    const { id, email, name, composition } = await c.req.json();
+    const { id, email, name, composition, saveType } = await c.req.json();
     if (!email || !name || !composition) return c.json({ error: 'Missing fields' }, { status: 400 });
     const compositionId = id || `comp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    const saveMode = saveType === 'autosave' ? 'autosave' : 'manual';
+    const compositionJson = JSON.stringify(composition);
+
+    const existing = await c.env.DB.prepare(
+      'SELECT name, composition, current_version FROM compositions WHERE id = ?'
+    ).bind(compositionId).first();
+
+    const currentVersion = Number(existing?.current_version ?? 0);
+    const changed = !existing || existing.name !== name || existing.composition !== compositionJson;
+
+    if (!changed) {
+      return c.json({
+        id: compositionId,
+        version: currentVersion,
+        unchanged: true,
+      });
+    }
+
+    const nextVersion = currentVersion + 1;
+
     await c.env.DB.prepare(
-      `INSERT INTO compositions (id, user_email, name, composition, created_at, updated_at)
-       VALUES (?, ?, ?, ?, unixepoch(), unixepoch())
-       ON CONFLICT(id) DO UPDATE SET name = excluded.name, composition = excluded.composition, updated_at = unixepoch()`
-    ).bind(compositionId, email, name, JSON.stringify(composition)).run();
-    return c.json({ id: compositionId });
+      `INSERT INTO compositions (id, user_email, name, composition, current_version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         composition = excluded.composition,
+         current_version = excluded.current_version,
+         updated_at = unixepoch()`
+    ).bind(compositionId, email, name, compositionJson, nextVersion).run();
+
+    await c.env.DB.prepare(
+      `INSERT INTO composition_history (composition_id, version, name, composition, save_type, created_at)
+       VALUES (?, ?, ?, ?, ?, unixepoch())`
+    ).bind(compositionId, nextVersion, name, compositionJson, saveMode).run();
+
+    await c.env.DB.prepare(
+      `DELETE FROM composition_history
+       WHERE composition_id = ?
+         AND id NOT IN (
+           SELECT id FROM composition_history
+           WHERE composition_id = ?
+           ORDER BY version DESC
+           LIMIT 30
+         )`
+    ).bind(compositionId, compositionId).run();
+
+    return c.json({ id: compositionId, version: nextVersion, unchanged: false });
   } catch (e) {
     return c.json({ error: 'Failed to save composition' }, { status: 500 });
   }
@@ -63,6 +104,23 @@ app.get('/api/compositions/:id', async (c) => {
     return c.json({ ...row, composition: JSON.parse(row.composition as string) });
   } catch (e) {
     return c.json({ error: 'Failed to load composition' }, { status: 500 });
+  }
+});
+
+// List the latest 30 composition versions
+app.get('/api/compositions/:id/history', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const rows = await c.env.DB.prepare(
+      `SELECT version, name, save_type, created_at
+       FROM composition_history
+       WHERE composition_id = ?
+       ORDER BY version DESC
+       LIMIT 30`
+    ).bind(id).all();
+    return c.json({ history: rows.results });
+  } catch (e) {
+    return c.json({ error: 'Failed to load composition history' }, { status: 500 });
   }
 });
 

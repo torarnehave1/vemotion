@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, FilePlus, Save, Upload, FolderOpen, Trash2, Loader2 } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
+import { saveCompositionToCloud } from '../lib/cloud-compositions';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -15,12 +16,25 @@ interface SavedComposition {
 interface FileMenuProps {
   composition: CompositionData;
   userEmail?: string;
+  currentCloudId?: string | null;
+  currentCloudName?: string;
   onLoad: (c: CompositionData) => void;
   onNew: () => void;
+  onCloudMetaChange?: (payload: { id: string | null; name: string }) => void;
+  onCloudSaved?: (payload: { id: string; name: string; version?: number }) => void;
 }
 
 
-export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLoad, onNew }) => {
+export const FileMenu: React.FC<FileMenuProps> = ({
+  composition,
+  userEmail,
+  currentCloudId,
+  currentCloudName,
+  onLoad,
+  onNew,
+  onCloudMetaChange,
+  onCloudSaved,
+}) => {
   const [open, setOpen] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
   const [cloudList, setCloudList] = useState<SavedComposition[]>([]);
@@ -30,6 +44,16 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
   const [error, setError] = useState('');
   const [currentId, setCurrentId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setCurrentId(currentCloudId ?? null);
+  }, [currentCloudId]);
+
+  useEffect(() => {
+    if (currentCloudName) {
+      setSaveName(currentCloudName);
+    }
+  }, [currentCloudName]);
 
   const close = () => { setOpen(false); setShowCloud(false); setError(''); };
 
@@ -61,6 +85,8 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
         const parsed = JSON.parse(ev.target?.result as string);
         onLoad(parsed);
         setCurrentId(null);
+        setSaveName('');
+        onCloudMetaChange?.({ id: null, name: '' });
       } catch {
         alert('Invalid composition file.');
       }
@@ -94,20 +120,21 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
   };
 
   const saveToCloud = async () => {
-    const token = getToken();
-    if (!token) { setError('Sign in to use cloud save.'); return; }
+    if (!getToken()) { setError('Sign in to use cloud save.'); return; }
     const name = saveName.trim() || `Composition ${new Date().toLocaleDateString()}`;
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`${VEMOTION_API}/composition/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
-        body: JSON.stringify({ id: currentId ?? undefined, name, composition }),
+      const data = await saveCompositionToCloud({
+        id: currentId ?? undefined,
+        name,
+        composition,
+        saveType: 'manual',
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       setCurrentId(data.id);
+      setSaveName(name);
+      onCloudMetaChange?.({ id: data.id, name });
+      onCloudSaved?.({ id: data.id, name, version: data.version });
       close();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save.');
@@ -130,6 +157,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({ composition, userEmail, onLo
       onLoad(data.composition);
       setCurrentId(data.id);
       setSaveName(data.name);
+      onCloudMetaChange?.({ id: data.id, name: data.name });
       close();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load.');

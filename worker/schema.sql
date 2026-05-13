@@ -27,3 +27,30 @@ INSERT OR IGNORE INTO templates (id, name, description, composition) VALUES (
   'White headline that fades in and out over a solid background.',
   '{"duration":5,"fps":30,"width":1280,"height":720,"layers":[{"id":"bg","type":"shape","position":{"x":0,"y":0},"size":{"width":1280,"height":720},"properties":{"shape":"rect","color":"#0f172a"}},{"id":"headline","type":"text","position":{"x":0,"y":300},"size":{"width":1280,"height":120},"properties":{"text":"Your Title Here","fontSize":72,"color":"#ffffff","align":"center","fontWeight":"700"},"animation":{"property":"opacity","keyframes":[{"time":0,"value":0},{"time":1,"value":1},{"time":4,"value":1},{"time":5,"value":0}]}}]}'
 );
+
+-- Compositions: latest snapshot per user
+CREATE TABLE IF NOT EXISTS compositions (
+  id              TEXT PRIMARY KEY,
+  user_email      TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  composition     TEXT NOT NULL,
+  current_version INTEGER NOT NULL DEFAULT 0,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at      INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX IF NOT EXISTS idx_compositions_user ON compositions(user_email);
+
+-- Composition history: capped to the latest 30 snapshots per composition
+CREATE TABLE IF NOT EXISTS composition_history (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  composition_id TEXT NOT NULL,
+  version        INTEGER NOT NULL,
+  name           TEXT NOT NULL,
+  composition    TEXT NOT NULL,
+  save_type      TEXT NOT NULL DEFAULT 'manual',
+  created_at     INTEGER NOT NULL DEFAULT (unixepoch()),
+  UNIQUE(composition_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_composition_history_comp ON composition_history(composition_id, version DESC);

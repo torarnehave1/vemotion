@@ -251,12 +251,23 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       .catch(() => setKgError('Failed to load cards from graph.'))
       .finally(() => setKgLoading(false));
   }, [tab]);
-  const [layerType, setLayerType] = useState<'text' | 'shape'>(
-    (editingLayer?.type === 'text' || editingLayer?.type === 'shape') ? editingLayer.type : 'text'
+  const [layerType, setLayerType] = useState<'text' | 'shape' | 'math-shape'>(
+    (editingLayer?.type === 'text' || editingLayer?.type === 'shape' || editingLayer?.type === 'math-shape') ? editingLayer.type : 'text'
   );
   const [text, setText] = useState((editingLayer?.properties.text as string) ?? 'Hello World');
   const [color, setColor] = useState((editingLayer?.properties.color as string) ?? '#ffffff');
   const [shape, setShape] = useState<'rect' | 'circle'>((editingLayer?.properties.shape as 'rect' | 'circle') ?? 'rect');
+  const [mathKind] = useState<'parametric'>('parametric');
+  const [samples, setSamples] = useState(Number(editingLayer?.properties.samples) || 180);
+  const [strokeWidth, setStrokeWidth] = useState(Number(editingLayer?.properties.strokeWidth) || 3);
+  const [tStart, setTStart] = useState(Number(editingLayer?.properties.tStart) || 0);
+  const [tEnd, setTEnd] = useState(Number(editingLayer?.properties.tEnd) || Math.PI * 2);
+  const [xFormula, setXFormula] = useState((editingLayer?.properties.xFormula as string) ?? 'x0 + w/2 + min(w,h)*0.35*cos(t)');
+  const [yFormula, setYFormula] = useState((editingLayer?.properties.yFormula as string) ?? 'y0 + h/2 + min(w,h)*0.35*sin(t)');
+  const [closePath, setClosePath] = useState(editingLayer?.properties.closePath !== false);
+  const [fillColor, setFillColor] = useState(
+    typeof editingLayer?.properties.fill === 'string' ? (editingLayer.properties.fill as string) : ''
+  );
   const [fontSize, setFontSize] = useState((editingLayer?.properties.fontSize as number) ?? 48);
   const [width, setWidth] = useState(editingLayer?.size.width ?? 600);
   const [height, setHeight] = useState(editingLayer?.size.height ?? 80);
@@ -571,7 +582,22 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             ...(fontFamily ? { fontFamily } : {}),
             ...(motionScenes ? { motionScenes } : {}),
           }
-        : { shape, color, opacity: opacityValue, ...(motionScenes ? { motionScenes } : {}) },
+        : layerType === 'shape'
+          ? { shape, color, opacity: opacityValue, ...(motionScenes ? { motionScenes } : {}) }
+          : {
+              mathKind,
+              stroke: color,
+              strokeWidth,
+              fill: fillColor || null,
+              samples,
+              tStart,
+              tEnd,
+              xFormula,
+              yFormula,
+              closePath,
+              opacity: opacityValue,
+              ...(motionScenes ? { motionScenes } : {}),
+            },
     };
 
     onAdd(layer);
@@ -1064,7 +1090,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             <>
               {/* Layer type */}
               <div className="flex gap-2">
-                {(['text', 'shape'] as const).map(t => (
+                {(['text', 'shape', 'math-shape'] as const).map(t => (
                   <button
                     key={t}
                     onClick={() => setLayerType(t)}
@@ -1113,7 +1139,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     </select>
                   </div>
                 </>
-              ) : (
+              ) : layerType === 'shape' ? (
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">Shape</label>
                   <div className="flex gap-2">
@@ -1123,6 +1149,54 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                         {s}
                       </button>
                     ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500">
+                    Parametric curve. Use <code>t</code> from <code>tStart</code> to <code>tEnd</code>. Available vars: <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>sin</code>, <code>cos</code>, <code>min</code>, <code>max</code>, <code>pi</code>.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Samples</label>
+                      <input type="number" value={samples} onChange={e => setSamples(parseInt(e.target.value) || 180)}
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Stroke width</label>
+                      <input type="number" step="0.5" value={strokeWidth} onChange={e => setStrokeWidth(parseFloat(e.target.value) || 3)}
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">tStart</label>
+                      <input type="number" step="0.01" value={tStart} onChange={e => setTStart(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">tEnd</label>
+                      <input type="number" step="0.01" value={tEnd} onChange={e => setTEnd(parseFloat(e.target.value) || Math.PI * 2)}
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">xFormula</label>
+                    <input value={xFormula} onChange={e => setXFormula(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">yFormula</label>
+                    <input value={yFormula} onChange={e => setYFormula(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                    <input type="checkbox" checked={closePath} onChange={e => setClosePath(e.target.checked)} />
+                    Close path
+                  </label>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Optional fill</label>
+                    <input value={fillColor} onChange={e => setFillColor(e.target.value)}
+                      placeholder="#0ea5e9 or leave blank"
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
                   </div>
                 </div>
               )}

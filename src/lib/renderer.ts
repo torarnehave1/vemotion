@@ -177,6 +177,9 @@ export class CanvasRenderer {
       case 'shape':
         this.drawShape(layer, values);
         break;
+      case 'math-shape':
+        this.drawMathShape(layer, values);
+        break;
       case 'image':
         this.drawImage(layer, values);
         break;
@@ -321,6 +324,56 @@ export class CanvasRenderer {
     } else {
       this.ctx.fillRect(x, y, w, h);
     }
+  }
+
+  private drawMathShape(layer: Layer, values: Record<string, unknown>): void {
+    const kind = (values.mathKind as string) ?? 'parametric';
+    const x = layer.position.x + ((values.offsetX as number) ?? 0);
+    const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const w = layer.size.width;
+    const h = layer.size.height;
+    const stroke = (values.stroke as string) ?? (values.color as string) ?? '#38bdf8';
+    const strokeWidth = (values.strokeWidth as number) ?? 3;
+    const fill = typeof values.fill === 'string' ? values.fill : null;
+    const samples = Math.max(12, Math.min(720, Number(values.samples) || 180));
+    const tStart = Number(values.tStart) || 0;
+    const tEnd = Number(values.tEnd) || Math.PI * 2;
+    const xFormula = typeof values.xFormula === 'string' ? values.xFormula : '';
+    const yFormula = typeof values.yFormula === 'string' ? values.yFormula : '';
+    const closePath = values.closePath !== false;
+
+    if (kind !== 'parametric' || !xFormula || !yFormula) return;
+
+    const points: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i <= samples; i += 1) {
+      const p = i / samples;
+      const t = tStart + (tEnd - tStart) * p;
+      const context = { t, p, start: tStart, end: tEnd, duration: tEnd - tStart, x0: x, y0: y, w, h };
+      const px = evaluateFormula(xFormula, context);
+      const py = evaluateFormula(yFormula, context);
+      if (px === null || py === null) continue;
+      points.push({ x: px, y: py });
+    }
+
+    if (points.length < 2) return;
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i += 1) {
+      this.ctx.lineTo(points[i].x, points[i].y);
+    }
+    if (closePath) {
+      this.ctx.closePath();
+    }
+
+    if (fill) {
+      this.ctx.fillStyle = fill;
+      this.ctx.fill();
+    }
+
+    this.ctx.strokeStyle = stroke;
+    this.ctx.lineWidth = strokeWidth;
+    this.ctx.stroke();
   }
 
   // ── Rounded rectangle helper ──────────────────────────────────────────────

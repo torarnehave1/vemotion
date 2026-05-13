@@ -341,6 +341,7 @@ export class CanvasRenderer {
     const xFormula = typeof values.xFormula === 'string' ? values.xFormula : '';
     const yFormula = typeof values.yFormula === 'string' ? values.yFormula : '';
     const closePath = values.closePath !== false;
+    const drawProgress = Math.max(0, Math.min(1, Number(values.drawProgress) || 1));
 
     if (kind !== 'parametric' || !xFormula || !yFormula) return;
 
@@ -357,16 +358,23 @@ export class CanvasRenderer {
 
     if (points.length < 2) return;
 
+    const visiblePointCount = Math.max(
+      2,
+      Math.min(points.length, Math.round(1 + (points.length - 1) * drawProgress))
+    );
+    const visiblePoints = points.slice(0, visiblePointCount);
+    if (visiblePoints.length < 2) return;
+
     this.ctx.beginPath();
-    this.ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i += 1) {
-      this.ctx.lineTo(points[i].x, points[i].y);
+    this.ctx.moveTo(visiblePoints[0].x, visiblePoints[0].y);
+    for (let i = 1; i < visiblePoints.length; i += 1) {
+      this.ctx.lineTo(visiblePoints[i].x, visiblePoints[i].y);
     }
-    if (closePath) {
+    if (closePath && drawProgress >= 0.999) {
       this.ctx.closePath();
     }
 
-    if (fill) {
+    if (fill && closePath && drawProgress >= 0.999) {
       this.ctx.fillStyle = fill;
       this.ctx.fill();
     }

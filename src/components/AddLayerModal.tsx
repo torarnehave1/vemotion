@@ -310,6 +310,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [fillColor, setFillColor] = useState(
     typeof editingLayer?.properties.fill === 'string' ? (editingLayer.properties.fill as string) : ''
   );
+  const [drawOverTime, setDrawOverTime] = useState(() => editingLayer?.animation?.property === 'drawProgress');
+  const [drawStartTime, setDrawStartTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[0]?.time ?? 0 : 0);
+  const [drawEndTime, setDrawEndTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[editingLayer.animation.keyframes.length - 1]?.time ?? Math.min(3, compositionDuration) : Math.min(3, compositionDuration));
   const [fontSize, setFontSize] = useState((editingLayer?.properties.fontSize as number) ?? 48);
   const [width, setWidth] = useState(editingLayer?.size.width ?? 600);
   const [height, setHeight] = useState(editingLayer?.size.height ?? 80);
@@ -614,7 +617,17 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
       return;
     }
-    const animation = buildAnimation(preset, compositionDuration, compositionWidth, compositionHeight, width, height);
+    const animation = layerType === 'math-shape'
+      ? (drawOverTime
+          ? {
+              property: 'drawProgress',
+              keyframes: [
+                { time: drawStartTime, value: 0 },
+                { time: drawEndTime, value: 1 },
+              ],
+            }
+          : undefined)
+      : buildAnimation(preset, compositionDuration, compositionWidth, compositionHeight, width, height);
 
     const layer: Layer = {
       id: isEditing ? editingLayer.id : generateId(),
@@ -1257,6 +1270,24 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     <input type="checkbox" checked={closePath} onChange={e => setClosePath(e.target.checked)} />
                     Close path
                   </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                    <input type="checkbox" checked={drawOverTime} onChange={e => setDrawOverTime(e.target.checked)} />
+                    Draw over time
+                  </label>
+                  {drawOverTime && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Draw start (s)</label>
+                        <input type="number" step="0.1" min="0" value={drawStartTime} onChange={e => setDrawStartTime(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Draw end (s)</label>
+                        <input type="number" step="0.1" min="0" value={drawEndTime} onChange={e => setDrawEndTime(parseFloat(e.target.value) || Math.min(3, compositionDuration))}
+                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="text-xs text-slate-400 mb-1 block">Optional fill</label>
                     <input value={fillColor} onChange={e => setFillColor(e.target.value)}

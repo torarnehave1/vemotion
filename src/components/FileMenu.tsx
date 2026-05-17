@@ -3,6 +3,7 @@ import { ChevronDown, FilePlus, Save, Upload, FolderOpen, Trash2, Loader2 } from
 import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { getCompositionFromCloud, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
+import { movementOverTimeExample, neyLessonExample } from '../lib/examples';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -94,6 +95,24 @@ export const FileMenu: React.FC<FileMenuProps> = ({
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const loadMovementGraphExample = () => {
+    onLoad(movementOverTimeExample);
+    setCurrentId(null);
+    setSaveName('Movement over Time demo');
+    writeLastCompositionRef(null);
+    onCloudMetaChange?.({ id: null, name: 'Movement over Time demo' });
+    close();
+  };
+
+  const loadNeyLessonExample = () => {
+    onLoad(neyLessonExample);
+    setCurrentId(null);
+    setSaveName('Ney lesson demo');
+    writeLastCompositionRef(null);
+    onCloudMetaChange?.({ id: null, name: 'Ney lesson demo' });
+    close();
   };
 
   // ── Cloud ───────────────────────────────────────────────────────────────────
@@ -193,6 +212,8 @@ export const FileMenu: React.FC<FileMenuProps> = ({
             {!showCloud ? (
               <>
                 <MenuItem icon={<FilePlus className="w-4 h-4" />} label="New composition" onClick={() => { onNew(); close(); }} />
+                <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load movement graph demo" onClick={loadMovementGraphExample} />
+                <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load ney lesson demo" onClick={loadNeyLessonExample} />
                 <div className="h-px bg-slate-800 mx-3" />
                 <MenuItem icon={<Save className="w-4 h-4" />} label="Save to computer" onClick={saveToComputer} />
                 <MenuItem icon={<Upload className="w-4 h-4" />} label="Load from computer" onClick={loadFromComputer} />

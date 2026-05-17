@@ -11,14 +11,21 @@ interface VideoPreviewProps {
 
 export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const controllerRef = useRef<PlaybackController | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
 
   const totalFrames = Math.floor(composition.duration * composition.fps);
+
+  useEffect(() => {
+    setPan({ x: 0, y: 0 });
+  }, [zoom, composition.width, composition.height]);
 
   // Initialise renderer when canvas is ready
   useEffect(() => {
@@ -77,6 +84,43 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     setCurrentFrame(frame);
   }, []);
 
+  const clampPan = useCallback((nextX: number, nextY: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return { x: nextX, y: nextY };
+    const baseWidth = Math.min(viewport.clientWidth, (viewport.clientHeight * composition.width) / composition.height);
+    const baseHeight = baseWidth * (composition.height / composition.width);
+    const maxX = Math.max(0, (baseWidth * zoom - baseWidth) / 2);
+    const maxY = Math.max(0, (baseHeight * zoom - baseHeight) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, nextX)),
+      y: Math.max(-maxY, Math.min(maxY, nextY)),
+    };
+  }, [composition.height, composition.width, zoom]);
+
+  const handlePanStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (zoom <= 1) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialPan = { ...pan };
+    setIsPanning(true);
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      setPan(clampPan(initialPan.x + dx, initialPan.y + dy));
+    };
+
+    const onUp = () => {
+      setIsPanning(false);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [clampPan, pan, zoom]);
+
   const currentTime = (currentFrame / composition.fps).toFixed(2);
   const totalTime = composition.duration.toFixed(2);
   const progressPct = totalFrames > 0 ? (currentFrame / totalFrames) * 100 : 0;
@@ -100,17 +144,21 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           </select>
         </div>
 
-        <div className="flex justify-center overflow-auto rounded-lg">
+        <div
+          ref={viewportRef}
+          className="flex justify-center overflow-hidden rounded-lg"
+        >
           <div
             className="relative bg-black rounded-lg overflow-hidden"
             style={{
               aspectRatio: `${composition.width}/${composition.height}`,
               maxHeight: '50vh',
               width: `min(100%, calc(50vh * ${composition.width} / ${composition.height}))`,
-              transform: `scale(${zoom})`,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: 'center center',
-              margin: `${(zoom - 1) * 12}px`,
+              cursor: zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
             }}
+            onMouseDown={handlePanStart}
           >
             <canvas ref={canvasRef} className="w-full h-full" />
           </div>

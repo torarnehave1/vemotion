@@ -16,6 +16,14 @@ type DragState =
   | { type: 'resize-right'; layerId: string; startMouseX: number; originalDuration: number; originalStartTime: number }
   | { type: 'resize-left'; layerId: string; startMouseX: number; originalStartTime: number; originalDuration: number };
 
+type BoxSelectState = {
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  additive: boolean;
+};
+
 type TimelineRow =
   | { kind: 'group'; group: LayerGroup; members: Layer[] }
   | { kind: 'layer'; layer: Layer };
@@ -68,8 +76,10 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   onChange,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [trackWidth, setTrackWidth] = useState(0);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [boxSelect, setBoxSelect] = useState<BoxSelectState | null>(null);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [selectedLayerIds, setSelectedLayerIds] = useState<Set<string>>(new Set());
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -180,6 +190,27 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     return { delta: endDelta, guide: Math.abs(endDelta) > 0 ? snappedEnd : null };
   }, [snapSingleTime]);
 
+  const getLayersInSelectionBox = useCallback((selection: BoxSelectState) => {
+    const left = Math.min(selection.startX, selection.currentX);
+    const right = Math.max(selection.startX, selection.currentX);
+    const top = Math.min(selection.startY, selection.currentY);
+    const bottom = Math.max(selection.startY, selection.currentY);
+
+    const selected = new Set<string>();
+    rows.forEach((row, index) => {
+      if (row.kind !== 'layer') return;
+      const rowTop = RULER_HEIGHT + index * (LAYER_HEIGHT + LAYER_GAP);
+      const rowBottom = rowTop + LAYER_HEIGHT;
+      if (bottom < rowTop || top > rowBottom) return;
+
+      const start = LABEL_WIDTH + layerStart(row.layer) * pxPerSecond;
+      const end = LABEL_WIDTH + (layerStart(row.layer) + layerDuration(row.layer, composition.duration)) * pxPerSecond;
+      if (right < start || left > end) return;
+      selected.add(row.layer.id);
+    });
+    return selected;
+  }, [composition.duration, pxPerSecond, rows]);
+
   useEffect(() => {
     if (!drag) return;
 
@@ -253,6 +284,38 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       document.removeEventListener('mouseup', onUp);
     };
   }, [collectSnapTimes, composition, onChange, pxPerSecond, snapRange, snapSingleTime, drag]);
+
+  useEffect(() => {
+    if (!boxSelect) return;
+
+    const onMove = (e: MouseEvent) => {
+      if (!bodyRef.current) return;
+      const rect = bodyRef.current.getBoundingClientRect();
+      const next = {
+        ...boxSelect,
+        currentX: Math.max(0, Math.min(rect.width, e.clientX - rect.left)),
+        currentY: Math.max(0, Math.min(rect.height, e.clientY - rect.top)),
+      };
+      setBoxSelect(next);
+      setSelectedGroupId(null);
+      setSelectedLayerIds((prev) => {
+        const nextIds = getLayersInSelectionBox(next);
+        if (!next.additive) return nextIds;
+        const merged = new Set(prev);
+        nextIds.forEach((id) => merged.add(id));
+        return merged;
+      });
+    };
+
+    const onUp = () => setBoxSelect(null);
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [boxSelect, getLayersInSelectionBox]);
 
   const selectLayer = (layerId: string, multi: boolean) => {
     setSelectedGroupId(null);
@@ -409,6 +472,27 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     });
   };
 
+  const startBoxSelection = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!bodyRef.current) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-no-marquee="true"]')) return;
+    const rect = bodyRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    const additive = e.metaKey || e.ctrlKey;
+    if (!additive) {
+      setSelectedLayerIds(new Set());
+      setSelectedGroupId(null);
+    }
+    setBoxSelect({
+      startX: x,
+      startY: y,
+      currentX: x,
+      currentY: y,
+      additive,
+    });
+  };
+
   const ticks: number[] = [];
   for (let t = 0; t <= composition.duration; t += tickInterval) {
     ticks.push(parseFloat(t.toFixed(2)));
@@ -421,6 +505,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       return (
         <div
           key={`group-${row.group.id}`}
+          data-no-marquee="true"
           className={[
             'flex items-center px-3 text-xs text-slate-300 gap-1 transition bg-slate-800/50',
             selectedGroupId === row.group.id && 'ring-1 ring-sky-500/60',
@@ -428,11 +513,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           style={{ height: LAYER_HEIGHT, marginBottom: LAYER_GAP }}
           onClick={() => selectGroup(row.group.id)}
         >
-          <button className="text-slate-400 hover:text-white transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupCollapsed(row.group.id); }}>
+          <button data-no-marquee="true" className="text-slate-400 hover:text-white transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupCollapsed(row.group.id); }}>
             {row.group.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
           <span className="font-medium truncate flex-1">{row.group.name}</span>
-          <button className="text-slate-400 hover:text-sky-400 transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupVisibility(row.group.id); }} title={anyHidden ? 'Show group' : 'Hide group'}>
+          <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupVisibility(row.group.id); }} title={anyHidden ? 'Show group' : 'Hide group'}>
             {anyHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -443,6 +528,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     return (
       <div
         key={layer.id}
+        data-no-marquee="true"
         className={[
           'flex items-center px-3 text-xs text-slate-400 truncate gap-1 transition',
           layer.visible === false && 'opacity-50',
@@ -454,10 +540,10 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       >
         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getLayerColor(layer) }} />
         <span className="truncate flex-1">{layer.id}</span>
-        <button className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} title={layer.visible === false ? 'Show layer' : 'Hide layer'}>
+        <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} title={layer.visible === false ? 'Show layer' : 'Hide layer'}>
           {layer.visible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
-        <button className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); setEditingLayerId(layer.id); }} title="Edit layer">
+        <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); setEditingLayerId(layer.id); }} title="Edit layer">
           <Pencil className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -476,6 +562,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       return (
         <div key={`track-group-${row.group.id}`} className="relative" style={{ height: LAYER_HEIGHT, marginBottom: LAYER_GAP }}>
           <div
+            data-no-marquee="true"
             className={[
               'absolute top-1 rounded flex items-center cursor-grab active:cursor-grabbing',
               selectedGroupId === row.group.id && 'ring-1 ring-sky-500/60',
@@ -506,6 +593,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     return (
       <div key={`track-${layer.id}`} className="relative" style={{ height: LAYER_HEIGHT, marginBottom: LAYER_GAP }}>
         <div
+          data-no-marquee="true"
           className={[
             'absolute top-1 rounded cursor-grab active:cursor-grabbing flex items-center group',
             selectedLayerIds.has(layer.id) && 'ring-1 ring-sky-500/60',
@@ -524,11 +612,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
             selectLayer(layer.id, e.metaKey || e.ctrlKey);
           }}
         >
-          <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l" style={{ backgroundColor: color + '66' }} onMouseDown={(e) => startDragResizeLeft(e, layer)} />
+          <div data-no-marquee="true" className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l" style={{ backgroundColor: color + '66' }} onMouseDown={(e) => startDragResizeLeft(e, layer)} />
           <span className="text-[10px] px-3 truncate flex-1" style={{ color }}>
             {(layer.properties.text as string) ?? layer.type}
           </span>
-          <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r" style={{ backgroundColor: color + '66' }} onMouseDown={(e) => startDragResizeRight(e, layer)} />
+          <div data-no-marquee="true" className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r" style={{ backgroundColor: color + '66' }} onMouseDown={(e) => startDragResizeRight(e, layer)} />
         </div>
       </div>
     );
@@ -591,7 +679,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           </span>
         </div>
 
-        <div className="flex" style={{ minHeight: totalHeight }}>
+        <div
+          ref={bodyRef}
+          className="flex relative"
+          style={{ minHeight: totalHeight }}
+          onMouseDown={startBoxSelection}
+        >
           <div className="flex-shrink-0 border-r border-slate-800" style={{ width: LABEL_WIDTH, paddingTop: RULER_HEIGHT }}>
             {rows.map(renderLabelRow)}
           </div>
@@ -621,6 +714,18 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
               </div>
             )}
           </div>
+
+          {boxSelect && (
+            <div
+              className="absolute border border-sky-400/80 bg-sky-400/10 pointer-events-none z-30"
+              style={{
+                left: Math.min(boxSelect.startX, boxSelect.currentX),
+                top: Math.min(boxSelect.startY, boxSelect.currentY),
+                width: Math.abs(boxSelect.currentX - boxSelect.startX),
+                height: Math.abs(boxSelect.currentY - boxSelect.startY),
+              }}
+            />
+          )}
         </div>
       </div>
     </>

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Pencil } from 'lucide-react';
+import { Pencil, Eye, EyeOff } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 
 interface TimelineEditorProps {
@@ -130,6 +130,15 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     setDrag({ type: 'resize-left', layerId: layer.id, startMouseX: e.clientX, originalStartTime: startTime, originalDuration: dur });
   };
 
+  const toggleLayerVisibility = (layerId: string) => {
+    onChange({
+      ...composition,
+      layers: composition.layers.map((layer) =>
+        layer.id === layerId ? { ...layer, visible: layer.visible === false ? true : false } : layer
+      ),
+    });
+  };
+
   // Ruler ticks
   const ticks: number[] = [];
   const tickInterval = composition.duration <= 10 ? 0.5 : 1;
@@ -169,7 +178,10 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           {composition.layers.map(layer => (
             <div
               key={layer.id}
-              className="flex items-center px-3 text-xs text-slate-400 truncate gap-1"
+              className={[
+                'flex items-center px-3 text-xs text-slate-400 truncate gap-1 transition',
+                layer.visible === false && 'opacity-50',
+              ].join(' ')}
               style={{ height: LAYER_HEIGHT, marginBottom: LAYER_GAP }}
             >
               <span
@@ -177,6 +189,13 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
                 style={{ backgroundColor: getLayerColor(layer) }}
               />
               <span className="truncate flex-1">{layer.id}</span>
+              <button
+                className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5"
+                onClick={() => toggleLayerVisibility(layer.id)}
+                title={layer.visible === false ? 'Show layer' : 'Hide layer'}
+              >
+                {layer.visible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
               <button
                 className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5"
                 onClick={() => setEditingLayerId(layer.id)}
@@ -234,6 +253,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
                     height: LAYER_HEIGHT - 8,
                     backgroundColor: color + '33',
                     border: `1px solid ${color}88`,
+                    opacity: layer.visible === false ? 0.35 : 1,
                   }}
                   onMouseDown={e => startDragMove(e, layer)}
                 >

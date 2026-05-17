@@ -12,6 +12,7 @@ export type Layer = {
   type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape';
   position: { x: number; y: number };
   size: { width: number; height: number };
+  visible?: boolean;
   startTime?: number;
   layerDuration?: number;
   animation?: Animation;

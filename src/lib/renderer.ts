@@ -146,6 +146,7 @@ export class CanvasRenderer {
 
     // Draw each layer in order
     for (const layer of composition.layers) {
+      if (layer.visible === false) continue;
       const startTime = layer.startTime ?? 0;
       const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
       if (time < startTime || time > startTime + layerDuration) continue;

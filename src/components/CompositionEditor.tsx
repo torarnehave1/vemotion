@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
@@ -59,6 +59,15 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
   const removeLayer = (id: string) => {
     onChange({ ...composition, layers: composition.layers.filter(l => l.id !== id) });
+  };
+
+  const toggleLayerVisibility = (id: string) => {
+    onChange({
+      ...composition,
+      layers: composition.layers.map((layer) =>
+        layer.id === id ? { ...layer, visible: layer.visible === false ? true : false } : layer
+      ),
+    });
   };
 
   return (
@@ -152,11 +161,24 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Layers</h3>
 
         {composition.layers.map((layer) => (
-          <div key={layer.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 space-y-2">
+          <div
+            key={layer.id}
+            className={[
+              'bg-slate-800 border border-slate-700 rounded-lg p-4 space-y-2 transition',
+              layer.visible === false && 'opacity-60',
+            ].join(' ')}
+          >
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-white">{layer.id}</span>
               <div className="flex items-center gap-2">
                 <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">{layer.type}</span>
+                <button
+                  onClick={() => toggleLayerVisibility(layer.id)}
+                  className="text-slate-500 hover:text-sky-400 transition"
+                  title={layer.visible === false ? 'Show layer' : 'Hide layer'}
+                >
+                  {layer.visible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
                 <button onClick={() => removeLayer(layer.id)} className="text-slate-500 hover:text-red-400 transition">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

@@ -4,12 +4,21 @@ export type CompositionData = {
   width: number;
   height: number;
   fontFamily?: string;
+  groups?: LayerGroup[];
   layers: Layer[];
+};
+
+export type LayerGroup = {
+  id: string;
+  name: string;
+  collapsed?: boolean;
+  visible?: boolean;
 };
 
 export type Layer = {
   id: string;
   type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape';
+  groupId?: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
   visible?: boolean;

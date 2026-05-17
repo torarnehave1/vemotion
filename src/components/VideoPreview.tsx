@@ -16,6 +16,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [zoom, setZoom] = useState(1);
 
   const totalFrames = Math.floor(composition.duration * composition.fps);
 
@@ -83,16 +84,36 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
 
       {/* Canvas */}
-      <div className="flex justify-center">
-        <div
-          className="relative bg-black rounded-lg overflow-hidden"
-          style={{
-            aspectRatio: `${composition.width}/${composition.height}`,
-            maxHeight: '50vh',
-            width: `min(100%, calc(50vh * ${composition.width} / ${composition.height}))`,
-          }}
-        >
-          <canvas ref={canvasRef} className="w-full h-full" />
+      <div className="space-y-3">
+        <div className="flex items-center justify-end gap-2">
+          <label htmlFor="preview-zoom" className="text-xs font-medium text-slate-400">Zoom</label>
+          <select
+            id="preview-zoom"
+            value={zoom}
+            onChange={(e) => setZoom(parseFloat(e.target.value))}
+            className="bg-slate-800 border border-slate-700 text-white rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+          >
+            <option value={1}>1x</option>
+            <option value={1.5}>1.5x</option>
+            <option value={2}>2x</option>
+            <option value={3}>3x</option>
+          </select>
+        </div>
+
+        <div className="flex justify-center overflow-auto rounded-lg">
+          <div
+            className="relative bg-black rounded-lg overflow-hidden"
+            style={{
+              aspectRatio: `${composition.width}/${composition.height}`,
+              maxHeight: '50vh',
+              width: `min(100%, calc(50vh * ${composition.width} / ${composition.height}))`,
+              transform: `scale(${zoom})`,
+              transformOrigin: 'center center',
+              margin: `${(zoom - 1) * 12}px`,
+            }}
+          >
+            <canvas ref={canvasRef} className="w-full h-full" />
+          </div>
         </div>
       </div>
 

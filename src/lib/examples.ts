@@ -168,55 +168,78 @@ export const movementOverTimeExample: CompositionData = {
 };
 
 const flutePhraseNotes = DAGLAR_ILE_TASLAR_ILE_FLUTE_LESSON.notes;
-const flutePointStartX = 170;
-const flutePointSpacing = 58;
-const flutePointY = 265;
-const flutePointSize = 26;
-const fluteSolfegeY = 322;
+const fluteTrackStartX = 180;
+const fluteTrackSpacing = 58;
+const fluteTrackY = 144;
+const fluteTrackDotSize = 12;
+const fluteWheelCenterX = 645;
+const fluteWheelCenterY = 396;
+const fluteWheelRadius = 142;
+const fluteBigSolfegeY = 612;
+const fluteBigSolfegeWidth = 220;
+const fluteBigSolfegeX = fluteWheelCenterX - fluteBigSolfegeWidth / 2;
+
+const solfegeSlots: Record<string, { x: number; y: number }> = {
+  do: { x: 0, y: fluteWheelRadius - 26 },
+  re: { x: -94, y: 46 },
+  mi: { x: -82, y: -52 },
+  fa: { x: 0, y: -(fluteWheelRadius - 16) },
+  sol: { x: 104, y: -44 },
+  'sol#': { x: 104, y: -44 },
+  la: { x: 112, y: 34 },
+  si: { x: 0, y: 4 },
+};
 
 const flutePointScenes = flutePhraseNotes.map((note, index) => ({
   start: note.startSeconds,
   end: note.startSeconds + note.durationSeconds,
-  xFormula: `${flutePointStartX + index * flutePointSpacing}`,
-  yFormula: `${flutePointY}`,
+  xFormula: `${fluteTrackStartX + index * fluteTrackSpacing - 16}`,
+  yFormula: `${fluteTrackY - 16}`,
 }));
 
-const fluteSolfegeLayers = flutePhraseNotes.map((note, index) => {
-  const x = flutePointStartX + index * flutePointSpacing - 72;
+const fluteWheelDotScenes = flutePhraseNotes.map((note) => {
+  const slot = solfegeSlots[note.solfege] ?? solfegeSlots.do;
   return {
-    id: `flute-solfege-${index}`,
-    type: 'text' as const,
-    position: { x, y: fluteSolfegeY },
-    size: { width: 144, height: 64 },
-    properties: {
-      text: note.solfege,
-      fontSize: 34,
-      color: '#f8fafc',
-      align: 'center',
-      fontWeight: '700',
-      opacity: 0,
-    },
-    animation: {
-      property: 'opacity',
-      keyframes: [
-        { time: Math.max(0, note.startSeconds - 0.04), value: 0 },
-        { time: note.startSeconds + 0.02, value: 1 },
-        { time: note.startSeconds + note.durationSeconds - 0.02, value: 1 },
-        { time: note.startSeconds + note.durationSeconds + 0.04, value: 0 },
-      ],
-    },
+    start: note.startSeconds,
+    end: note.startSeconds + note.durationSeconds,
+    xFormula: `${fluteWheelCenterX + slot.x - 18}`,
+    yFormula: `${fluteWheelCenterY + slot.y - 18}`,
   };
 });
+
+const fluteSolfegeLayers = flutePhraseNotes.map((note, index) => ({
+  id: `flute-solfege-${index}`,
+  type: 'text' as const,
+  position: { x: fluteBigSolfegeX, y: fluteBigSolfegeY },
+  size: { width: fluteBigSolfegeWidth, height: 64 },
+  properties: {
+    text: note.solfege.toUpperCase(),
+    fontSize: 38,
+    color: '#123047',
+    align: 'center',
+    fontWeight: '700',
+    opacity: 0,
+  },
+  animation: {
+    property: 'opacity',
+    keyframes: [
+      { time: Math.max(0, note.startSeconds - 0.04), value: 0 },
+      { time: note.startSeconds + 0.02, value: 1 },
+      { time: note.startSeconds + note.durationSeconds - 0.02, value: 1 },
+      { time: note.startSeconds + note.durationSeconds + 0.04, value: 0 },
+    ],
+  },
+}));
 
 const flutePitchLayers = flutePhraseNotes.map((note, index) => ({
   id: `flute-pitch-${index}`,
   type: 'text' as const,
-  position: { x: 860, y: 170 },
+  position: { x: 932, y: 220 },
   size: { width: 220, height: 50 },
   properties: {
     text: note.pitch,
     fontSize: 28,
-    color: '#f8fafc',
+    color: '#14364a',
     align: 'left',
     fontWeight: '700',
     opacity: 0,
@@ -235,12 +258,12 @@ const flutePitchLayers = flutePhraseNotes.map((note, index) => ({
 const fluteTimingLayers = flutePhraseNotes.map((note, index) => ({
   id: `flute-timing-${index}`,
   type: 'text' as const,
-  position: { x: 860, y: 214 },
+  position: { x: 932, y: 266 },
   size: { width: 280, height: 70 },
   properties: {
     text: `m${note.measure} · beat ${note.beat}\n${note.durationBeats} beat · ${note.durationSeconds.toFixed(4)}s`,
-    fontSize: 20,
-    color: '#cbd5e1',
+    fontSize: 18,
+    color: '#486173',
     align: 'left',
     fontWeight: '500',
     opacity: 0,
@@ -264,6 +287,64 @@ const fluteVerificationText = [
   ),
 ].join('\n');
 
+const fluteMeasureNumbers = [
+  { id: 'measure-1', text: '1', x: fluteTrackStartX + fluteTrackSpacing * 3.8 },
+  { id: 'measure-2', text: '2', x: fluteTrackStartX + fluteTrackSpacing * 8.3 },
+];
+
+const fluteTopDotLayers = flutePhraseNotes.map((_, index) => ({
+  id: `flute-track-dot-${index}`,
+  type: 'shape' as const,
+  position: {
+    x: fluteTrackStartX + index * fluteTrackSpacing - fluteTrackDotSize / 2,
+    y: fluteTrackY - fluteTrackDotSize / 2,
+  },
+  size: { width: fluteTrackDotSize, height: fluteTrackDotSize },
+  properties: {
+    shape: 'circle',
+    color: '#1d334a',
+    opacity: 0.92,
+  },
+}));
+
+const fluteTopSolfegeLabels = flutePhraseNotes.map((note, index) => ({
+  id: `flute-track-label-${index}`,
+  type: 'text' as const,
+  position: { x: fluteTrackStartX + index * fluteTrackSpacing - 30, y: fluteTrackY + 22 },
+  size: { width: 60, height: 24 },
+  properties: {
+    text: note.solfege,
+    fontSize: 12,
+    color: '#68879a',
+    align: 'center',
+    fontWeight: '600',
+    opacity: 1,
+  },
+}));
+
+const fluteWheelTextLayers = [
+  { id: 'wheel-do', text: 'DO', x: fluteWheelCenterX - 24, y: fluteWheelCenterY + fluteWheelRadius - 8 },
+  { id: 'wheel-re', text: 'RE', x: fluteWheelCenterX - 118, y: fluteWheelCenterY + 36 },
+  { id: 'wheel-mi', text: 'MI', x: fluteWheelCenterX - 126, y: fluteWheelCenterY - 60 },
+  { id: 'wheel-fa', text: 'FA', x: fluteWheelCenterX - 18, y: fluteWheelCenterY - fluteWheelRadius - 6 },
+  { id: 'wheel-sol', text: 'SOL', x: fluteWheelCenterX + 86, y: fluteWheelCenterY - 52 },
+  { id: 'wheel-la', text: 'LA', x: fluteWheelCenterX + 100, y: fluteWheelCenterY + 28 },
+  { id: 'wheel-si', text: 'SI', x: fluteWheelCenterX - 16, y: fluteWheelCenterY - 6 },
+].map((item) => ({
+  id: item.id,
+  type: 'text' as const,
+  position: { x: item.x, y: item.y },
+  size: { width: 48, height: 24 },
+  properties: {
+    text: item.text,
+    fontSize: 16,
+    color: '#204458',
+    align: 'center',
+    fontWeight: '700',
+    opacity: 1,
+  },
+}));
+
 export const neyLessonExample: CompositionData = {
   duration: 9,
   fps: 30,
@@ -275,24 +356,45 @@ export const neyLessonExample: CompositionData = {
       type: 'shape',
       position: { x: 0, y: 0 },
       size: { width: 1280, height: 720 },
-      properties: { shape: 'rect', color: '#0b1220', opacity: 1 },
+      properties: { shape: 'rect', color: '#aec6d6', opacity: 1 },
+    },
+    {
+      id: 'card-shadow',
+      type: 'shape',
+      position: { x: 72, y: 34 },
+      size: { width: 1136, height: 652 },
+      properties: { shape: 'rect', color: '#7b91a3', opacity: 0.18 },
     },
     {
       id: 'panel',
       type: 'shape',
-      position: { x: 60, y: 52 },
-      size: { width: 1160, height: 616 },
-      properties: { shape: 'rect', color: '#111827', opacity: 1 },
+      position: { x: 52, y: 28 },
+      size: { width: 1176, height: 664 },
+      properties: { shape: 'rect', color: '#edf5f8', opacity: 1 },
+    },
+    {
+      id: 'header-divider',
+      type: 'shape',
+      position: { x: 92, y: 193 },
+      size: { width: 1094, height: 2 },
+      properties: { shape: 'rect', color: '#b6d5df', opacity: 1 },
+    },
+    {
+      id: 'track-progress',
+      type: 'shape',
+      position: { x: 92, y: 193 },
+      size: { width: 520, height: 5 },
+      properties: { shape: 'rect', color: '#6ec6d6', opacity: 1 },
     },
     {
       id: 'title',
       type: 'text',
-      position: { x: 92, y: 78 },
+      position: { x: 88, y: 54 },
       size: { width: 580, height: 60 },
       properties: {
         text: 'Dağlar İle Taşlar İle',
-        fontSize: 38,
-        color: '#f8fafc',
+        fontSize: 42,
+        color: '#12263b',
         align: 'left',
         fontWeight: '700',
         opacity: 1,
@@ -301,26 +403,40 @@ export const neyLessonExample: CompositionData = {
     {
       id: 'subtitle',
       type: 'text',
-      position: { x: 92, y: 126 },
+      position: { x: 90, y: 102 },
       size: { width: 620, height: 32 },
       properties: {
-        text: 'Flute lesson · first phrase · point + solfège only',
-        fontSize: 18,
-        color: '#94a3b8',
+        text: 'Flute lesson · first phrase',
+        fontSize: 20,
+        color: '#607789',
         align: 'left',
-        fontWeight: '500',
+        fontWeight: '600',
+        opacity: 1,
+      },
+    },
+    {
+      id: 'brand',
+      type: 'text',
+      position: { x: 964, y: 64 },
+      size: { width: 180, height: 34 },
+      properties: {
+        text: 'Harmony Flow',
+        fontSize: 24,
+        color: '#1b5968',
+        align: 'left',
+        fontWeight: '700',
         opacity: 1,
       },
     },
     {
       id: 'lesson-point-label',
       type: 'text',
-      position: { x: 150, y: 202 },
+      position: { x: 92, y: 212 },
       size: { width: 360, height: 28 },
       properties: {
-        text: 'active point / rhythm',
+        text: 'Track 1 · Flute',
         fontSize: 14,
-        color: '#67d7ff',
+        color: '#1c384f',
         align: 'left',
         fontWeight: '700',
         opacity: 1,
@@ -329,12 +445,12 @@ export const neyLessonExample: CompositionData = {
     {
       id: 'lesson-active-label',
       type: 'text',
-      position: { x: 860, y: 128 },
+      position: { x: 932, y: 184 },
       size: { width: 180, height: 28 },
       properties: {
         text: 'active note',
         fontSize: 14,
-        color: '#67d7ff',
+        color: '#1c5668',
         align: 'left',
         fontWeight: '700',
         opacity: 1,
@@ -343,12 +459,12 @@ export const neyLessonExample: CompositionData = {
     {
       id: 'lesson-source',
       type: 'text',
-      position: { x: 92, y: 598 },
+      position: { x: 104, y: 636 },
       size: { width: 720, height: 26 },
       properties: {
         text: `${DAGLAR_ILE_TASLAR_ILE_FLUTE_LESSON.source} · tempo ${DAGLAR_ILE_TASLAR_ILE_FLUTE_LESSON.tempo}`,
         fontSize: 14,
-        color: '#64748b',
+        color: '#688191',
         align: 'left',
         fontWeight: '500',
         opacity: 1,
@@ -357,12 +473,12 @@ export const neyLessonExample: CompositionData = {
     {
       id: 'verification-title',
       type: 'text',
-      position: { x: 860, y: 320 },
+      position: { x: 932, y: 328 },
       size: { width: 240, height: 28 },
       properties: {
         text: 'parsed notes',
         fontSize: 14,
-        color: '#67d7ff',
+        color: '#1c5668',
         align: 'left',
         fontWeight: '700',
         opacity: 1,
@@ -371,30 +487,139 @@ export const neyLessonExample: CompositionData = {
     {
       id: 'verification-block',
       type: 'text',
-      position: { x: 860, y: 352 },
+      position: { x: 932, y: 360 },
       size: { width: 300, height: 252 },
       properties: {
         text: fluteVerificationText,
         fontSize: 12,
-        color: '#cbd5e1',
+        color: '#436173',
         align: 'left',
         fontWeight: '500',
         opacity: 1,
       },
     },
+    {
+      id: 'track-line',
+      type: 'shape',
+      position: { x: 108, y: fluteTrackY - 1 },
+      size: { width: 968, height: 2 },
+      properties: { shape: 'rect', color: '#9ab9c6', opacity: 1 },
+    },
+    ...fluteMeasureNumbers.map((measure) => ({
+      id: measure.id,
+      type: 'text' as const,
+      position: { x: measure.x - 12, y: 104 },
+      size: { width: 24, height: 24 },
+      properties: {
+        text: measure.text,
+        fontSize: 16,
+        color: '#556f81',
+        align: 'center',
+        fontWeight: '700',
+        opacity: 1,
+      },
+    })),
+    ...fluteTopDotLayers,
+    ...fluteTopSolfegeLabels,
+    {
+      id: 'track-playhead-band',
+      type: 'shape',
+      position: { x: fluteTrackStartX - 12, y: 96 },
+      size: { width: 22, height: 86 },
+      properties: {
+        shape: 'rect',
+        color: '#9dd6e0',
+        opacity: 0.35,
+        motionScenes: flutePointScenes.map((scene) => ({
+          ...scene,
+          yFormula: '96',
+        })),
+      },
+    },
+    {
+      id: 'track-playhead-line',
+      type: 'shape',
+      position: { x: fluteTrackStartX - 1, y: 94 },
+      size: { width: 4, height: 92 },
+      properties: {
+        shape: 'rect',
+        color: '#2f6f82',
+        opacity: 0.92,
+        motionScenes: flutePointScenes.map((scene) => ({
+          ...scene,
+          xFormula: `${scene.xFormula} + 11`,
+          yFormula: '94',
+        })),
+      },
+    },
+    {
+      id: 'wheel-ring-1',
+      type: 'shape',
+      position: { x: fluteWheelCenterX - 196, y: fluteWheelCenterY - 196 },
+      size: { width: 392, height: 392 },
+      properties: { shape: 'circle', color: '#cfdcf2', opacity: 0.78 },
+    },
+    {
+      id: 'wheel-ring-2',
+      type: 'shape',
+      position: { x: fluteWheelCenterX - 154, y: fluteWheelCenterY - 154 },
+      size: { width: 308, height: 308 },
+      properties: { shape: 'circle', color: '#d8eddc', opacity: 0.82 },
+    },
+    {
+      id: 'wheel-ring-3',
+      type: 'shape',
+      position: { x: fluteWheelCenterX - 112, y: fluteWheelCenterY - 112 },
+      size: { width: 224, height: 224 },
+      properties: { shape: 'circle', color: '#d8ebef', opacity: 0.92 },
+    },
+    {
+      id: 'wheel-ring-4',
+      type: 'shape',
+      position: { x: fluteWheelCenterX - 70, y: fluteWheelCenterY - 70 },
+      size: { width: 140, height: 140 },
+      properties: { shape: 'circle', color: '#dce3f6', opacity: 0.96 },
+    },
+    {
+      id: 'wheel-center',
+      type: 'shape',
+      position: { x: fluteWheelCenterX - 34, y: fluteWheelCenterY - 34 },
+      size: { width: 68, height: 68 },
+      properties: { shape: 'circle', color: '#edf5f8', opacity: 1 },
+    },
+    ...fluteWheelTextLayers,
     ...fluteSolfegeLayers,
     ...flutePitchLayers,
     ...fluteTimingLayers,
     {
       id: 'flute-point',
       type: 'shape',
-      position: { x: flutePointStartX, y: flutePointY },
-      size: { width: flutePointSize, height: flutePointSize },
+      position: { x: fluteTrackStartX - 16, y: fluteTrackY - 16 },
+      size: { width: 32, height: 32 },
       properties: {
         shape: 'circle',
-        color: '#67d7ff',
+        color: '#2e8ca5',
         opacity: 1,
         motionScenes: flutePointScenes,
+      },
+      animation: {
+        property: 'opacity',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.12, value: 1 },
+        ],
+      },
+    },
+    {
+      id: 'flute-wheel-dot',
+      type: 'shape',
+      position: { x: fluteWheelCenterX - 18, y: fluteWheelCenterY + fluteWheelRadius - 44 },
+      size: { width: 36, height: 36 },
+      properties: {
+        shape: 'circle',
+        color: '#69c0d3',
+        opacity: 1,
+        motionScenes: fluteWheelDotScenes,
       },
       animation: {
         property: 'opacity',

@@ -109,9 +109,9 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   const loadNeyLessonExample = () => {
     onLoad(neyLessonExample);
     setCurrentId(null);
-    setSaveName('Ney lesson demo');
+    setSaveName('Flute solfège demo');
     writeLastCompositionRef(null);
-    onCloudMetaChange?.({ id: null, name: 'Ney lesson demo' });
+    onCloudMetaChange?.({ id: null, name: 'Flute solfège demo' });
     close();
   };
 
@@ -213,7 +213,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
               <>
                 <MenuItem icon={<FilePlus className="w-4 h-4" />} label="New composition" onClick={() => { onNew(); close(); }} />
                 <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load movement graph demo" onClick={loadMovementGraphExample} />
-                <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load ney lesson demo" onClick={loadNeyLessonExample} />
+                <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load flute solfège demo" onClick={loadNeyLessonExample} />
                 <div className="h-px bg-slate-800 mx-3" />
                 <MenuItem icon={<Save className="w-4 h-4" />} label="Save to computer" onClick={saveToComputer} />
                 <MenuItem icon={<Upload className="w-4 h-4" />} label="Load from computer" onClick={loadFromComputer} />

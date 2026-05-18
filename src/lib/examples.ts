@@ -1,4 +1,5 @@
 import type { CompositionData } from './api';
+import { DAGLAR_ILE_TASLAR_ILE_FLUTE_LESSON } from './neyLessonData';
 
 export const movementOverTimeExample: CompositionData = {
   duration: 5,
@@ -166,162 +167,102 @@ export const movementOverTimeExample: CompositionData = {
   ],
 };
 
-type NeyLessonNote = {
-  id: string;
-  measure: number;
-  startSeconds: number;
-  durationSeconds: number;
-  pitch: string;
-  solfege: string;
-  x: number;
-  y: number;
-};
+const flutePhraseNotes = DAGLAR_ILE_TASLAR_ILE_FLUTE_LESSON.notes;
+const flutePointStartX = 170;
+const flutePointSpacing = 58;
+const flutePointY = 265;
+const flutePointSize = 26;
+const fluteSolfegeY = 322;
 
-const neyPhraseNotes: NeyLessonNote[] = [
-  { id: 'P1-m1-n0', measure: 1, startSeconds: 0.0, durationSeconds: 0.9231, pitch: 'E4', solfege: 'mi', x: 99.27, y: -40.0 },
-  { id: 'P1-m1-n1', measure: 1, startSeconds: 0.9231, durationSeconds: 0.9231, pitch: 'A4', solfege: 'la', x: 137.46, y: -25.0 },
-  { id: 'P1-m1-n2', measure: 1, startSeconds: 1.8462, durationSeconds: 0.2308, pitch: 'B4', solfege: 'si', x: 175.65, y: -20.0 },
-  { id: 'P1-m1-n3', measure: 1, startSeconds: 2.0769, durationSeconds: 0.2308, pitch: 'A4', solfege: 'la', x: 193.65, y: -25.0 },
-  { id: 'P1-m1-n4', measure: 1, startSeconds: 2.3077, durationSeconds: 0.2308, pitch: 'A4', solfege: 'la', x: 211.65, y: -25.0 },
-  { id: 'P1-m1-n5', measure: 1, startSeconds: 2.5385, durationSeconds: 0.2308, pitch: 'G#4', solfege: 'sol#', x: 229.65, y: -30.0 },
-  { id: 'P1-m1-n6', measure: 1, startSeconds: 2.7692, durationSeconds: 0.9231, pitch: 'A4', solfege: 'la', x: 247.65, y: -25.0 },
-  { id: 'P1-m2-n0', measure: 2, startSeconds: 3.6923, durationSeconds: 0.4615, pitch: 'G#4', solfege: 'sol#', x: 12.5, y: -30.0 },
-  { id: 'P1-m2-n1', measure: 2, startSeconds: 4.1538, durationSeconds: 0.4615, pitch: 'A4', solfege: 'la', x: 37.96, y: -25.0 },
-  { id: 'P1-m2-n2', measure: 2, startSeconds: 4.6154, durationSeconds: 0.4615, pitch: 'B4', solfege: 'si', x: 63.42, y: -20.0 },
-  { id: 'P1-m2-n3', measure: 2, startSeconds: 5.0769, durationSeconds: 0.4615, pitch: 'C5', solfege: 'do', x: 88.88, y: -15.0 },
-  { id: 'P1-m2-n4', measure: 2, startSeconds: 5.5385, durationSeconds: 0.2308, pitch: 'B4', solfege: 'si', x: 114.34, y: -20.0 },
-  { id: 'P1-m2-n5', measure: 2, startSeconds: 5.7692, durationSeconds: 0.2308, pitch: 'A4', solfege: 'la', x: 132.34, y: -25.0 },
-  { id: 'P1-m2-n6', measure: 2, startSeconds: 6.0, durationSeconds: 0.2308, pitch: 'A4', solfege: 'la', x: 150.34, y: -25.0 },
-  { id: 'P1-m2-n7', measure: 2, startSeconds: 6.2308, durationSeconds: 0.2308, pitch: 'G#4', solfege: 'sol#', x: 168.34, y: -30.0 },
-  { id: 'P1-m2-n8', measure: 2, startSeconds: 6.4615, durationSeconds: 0.9231, pitch: 'A4', solfege: 'la', x: 186.34, y: -25.0 },
-];
-
-const mapNeyNoteX = (note: NeyLessonNote) => {
-  const measureOffset = note.measure === 1 ? 0 : 290;
-  return 210 + note.x + measureOffset;
-};
-
-const mapNeyNoteY = (note: NeyLessonNote) => {
-  const minY = -40;
-  const maxY = -15;
-  const progress = (note.y - minY) / (maxY - minY);
-  return 248 + progress * 112;
-};
-
-const staffLayers = Array.from({ length: 5 }, (_, index) => ({
-  id: `ney-staff-${index + 1}`,
-  type: 'shape' as const,
-  position: { x: 180, y: 248 + index * 28 },
-  size: { width: 860, height: 1 },
-  properties: { shape: 'rect', color: '#64748b', opacity: 0.9 },
-}));
-
-const noteLayers = neyPhraseNotes.flatMap((note, index) => {
-  const x = mapNeyNoteX(note);
-  const y = mapNeyNoteY(note);
-  const short = note.durationSeconds <= 0.25;
-  return [
-    {
-      id: `ney-notehead-${index}`,
-      type: 'shape' as const,
-      position: { x: x - 11, y: y + 18 },
-      size: { width: 24, height: 18 },
-      properties: { shape: 'circle', color: '#f8fafc', opacity: 1 },
-      animation: {
-        property: 'opacity',
-        keyframes: [
-          { time: 0, value: 0.32 },
-          { time: note.startSeconds + 0.01, value: 1 },
-        ],
-      },
-    },
-    {
-      id: `ney-stem-${index}`,
-      type: 'shape' as const,
-      position: { x: x + 6, y: y - 30 },
-      size: { width: 2, height: 50 },
-      properties: { shape: 'rect', color: '#f8fafc', opacity: 1 },
-      animation: {
-        property: 'opacity',
-        keyframes: [
-          { time: 0, value: 0.32 },
-          { time: note.startSeconds + 0.01, value: 1 },
-        ],
-      },
-    },
-    ...(short
-      ? [{
-          id: `ney-flag-${index}`,
-          type: 'shape' as const,
-          position: { x: x + 6, y: y - 30 },
-          size: { width: 18, height: 3 },
-          properties: { shape: 'rect', color: '#f8fafc', opacity: 1 },
-          animation: {
-            property: 'opacity',
-            keyframes: [
-              { time: 0, value: 0.32 },
-              { time: note.startSeconds + 0.01, value: 1 },
-            ],
-          },
-        }]
-      : []),
-  ];
-});
-
-const largeSolfegeLayers = neyPhraseNotes.map((note, index) => ({
-  id: `ney-solfege-${index}`,
-  type: 'text' as const,
-  position: { x: 140, y: 470 },
-  size: { width: 320, height: 120 },
-  properties: {
-    text: note.solfege,
-    fontSize: 86,
-    color: '#f8fafc',
-    align: 'left',
-    fontWeight: '700',
-    opacity: 0,
-  },
-  animation: {
-    property: 'opacity',
-    keyframes: [
-      { time: Math.max(0, note.startSeconds - 0.04), value: 0 },
-      { time: note.startSeconds + 0.02, value: 1 },
-      { time: note.startSeconds + note.durationSeconds - 0.02, value: 1 },
-      { time: note.startSeconds + note.durationSeconds + 0.04, value: 0 },
-    ],
-  },
-}));
-
-const pitchLayers = neyPhraseNotes.map((note, index) => ({
-  id: `ney-pitch-${index}`,
-  type: 'text' as const,
-  position: { x: 920, y: 486 },
-  size: { width: 170, height: 60 },
-  properties: {
-    text: note.pitch,
-    fontSize: 32,
-    color: '#f8fafc',
-    align: 'left',
-    fontWeight: '700',
-    opacity: 0,
-  },
-  animation: {
-    property: 'opacity',
-    keyframes: [
-      { time: Math.max(0, note.startSeconds - 0.04), value: 0 },
-      { time: note.startSeconds + 0.02, value: 1 },
-      { time: note.startSeconds + note.durationSeconds - 0.02, value: 1 },
-      { time: note.startSeconds + note.durationSeconds + 0.04, value: 0 },
-    ],
-  },
-}));
-
-const markerScenes = neyPhraseNotes.map((note) => ({
+const flutePointScenes = flutePhraseNotes.map((note, index) => ({
   start: note.startSeconds,
   end: note.startSeconds + note.durationSeconds,
-  xFormula: `${mapNeyNoteX(note) - 26}`,
-  yFormula: `${mapNeyNoteY(note) - 6}`,
+  xFormula: `${flutePointStartX + index * flutePointSpacing}`,
+  yFormula: `${flutePointY}`,
 }));
+
+const fluteSolfegeLayers = flutePhraseNotes.map((note, index) => {
+  const x = flutePointStartX + index * flutePointSpacing - 72;
+  return {
+    id: `flute-solfege-${index}`,
+    type: 'text' as const,
+    position: { x, y: fluteSolfegeY },
+    size: { width: 144, height: 64 },
+    properties: {
+      text: note.solfege,
+      fontSize: 34,
+      color: '#f8fafc',
+      align: 'center',
+      fontWeight: '700',
+      opacity: 0,
+    },
+    animation: {
+      property: 'opacity',
+      keyframes: [
+        { time: Math.max(0, note.startSeconds - 0.04), value: 0 },
+        { time: note.startSeconds + 0.02, value: 1 },
+        { time: note.startSeconds + note.durationSeconds - 0.02, value: 1 },
+        { time: note.startSeconds + note.durationSeconds + 0.04, value: 0 },
+      ],
+    },
+  };
+});
+
+const flutePitchLayers = flutePhraseNotes.map((note, index) => ({
+  id: `flute-pitch-${index}`,
+  type: 'text' as const,
+  position: { x: 860, y: 170 },
+  size: { width: 220, height: 50 },
+  properties: {
+    text: note.pitch,
+    fontSize: 28,
+    color: '#f8fafc',
+    align: 'left',
+    fontWeight: '700',
+    opacity: 0,
+  },
+  animation: {
+    property: 'opacity',
+    keyframes: [
+      { time: Math.max(0, note.startSeconds - 0.04), value: 0 },
+      { time: note.startSeconds + 0.02, value: 1 },
+      { time: note.startSeconds + note.durationSeconds - 0.02, value: 1 },
+      { time: note.startSeconds + note.durationSeconds + 0.04, value: 0 },
+    ],
+  },
+}));
+
+const fluteTimingLayers = flutePhraseNotes.map((note, index) => ({
+  id: `flute-timing-${index}`,
+  type: 'text' as const,
+  position: { x: 860, y: 214 },
+  size: { width: 280, height: 70 },
+  properties: {
+    text: `m${note.measure} · beat ${note.beat}\n${note.durationBeats} beat · ${note.durationSeconds.toFixed(4)}s`,
+    fontSize: 20,
+    color: '#cbd5e1',
+    align: 'left',
+    fontWeight: '500',
+    opacity: 0,
+  },
+  animation: {
+    property: 'opacity',
+    keyframes: [
+      { time: Math.max(0, note.startSeconds - 0.04), value: 0 },
+      { time: note.startSeconds + 0.02, value: 1 },
+      { time: note.startSeconds + note.durationSeconds - 0.02, value: 1 },
+      { time: note.startSeconds + note.durationSeconds + 0.04, value: 0 },
+    ],
+  },
+}));
+
+const fluteVerificationText = [
+  'verify from .mxl',
+  ...flutePhraseNotes.map(
+    (note, index) =>
+      `${String(index + 1).padStart(2, '0')}  m${note.measure} b${note.beat}  ${note.solfege.padEnd(4, ' ')} ${note.pitch.padEnd(3, ' ')}  ${note.durationBeats} beat  ${note.startSeconds.toFixed(4)}s`
+  ),
+].join('\n');
 
 export const neyLessonExample: CompositionData = {
   duration: 9,
@@ -361,9 +302,9 @@ export const neyLessonExample: CompositionData = {
       id: 'subtitle',
       type: 'text',
       position: { x: 92, y: 126 },
-      size: { width: 460, height: 32 },
+      size: { width: 620, height: 32 },
       properties: {
-        text: 'Ney lesson · first phrase',
+        text: 'Flute lesson · first phrase · point + solfège only',
         fontSize: 18,
         color: '#94a3b8',
         align: 'left',
@@ -372,12 +313,12 @@ export const neyLessonExample: CompositionData = {
       },
     },
     {
-      id: 'lesson-note-label',
+      id: 'lesson-point-label',
       type: 'text',
-      position: { x: 140, y: 438 },
-      size: { width: 260, height: 28 },
+      position: { x: 150, y: 202 },
+      size: { width: 360, height: 28 },
       properties: {
-        text: 'active solfège',
+        text: 'active point / rhythm',
         fontSize: 14,
         color: '#67d7ff',
         align: 'left',
@@ -386,12 +327,12 @@ export const neyLessonExample: CompositionData = {
       },
     },
     {
-      id: 'lesson-pitch-label',
+      id: 'lesson-active-label',
       type: 'text',
-      position: { x: 920, y: 448 },
+      position: { x: 860, y: 128 },
       size: { width: 180, height: 28 },
       properties: {
-        text: 'pitch',
+        text: 'active note',
         fontSize: 14,
         color: '#67d7ff',
         align: 'left',
@@ -399,26 +340,67 @@ export const neyLessonExample: CompositionData = {
         opacity: 1,
       },
     },
-    ...staffLayers,
-    ...noteLayers,
-    ...largeSolfegeLayers,
-    ...pitchLayers,
     {
-      id: 'ney-marker',
+      id: 'lesson-source',
+      type: 'text',
+      position: { x: 92, y: 598 },
+      size: { width: 720, height: 26 },
+      properties: {
+        text: `${DAGLAR_ILE_TASLAR_ILE_FLUTE_LESSON.source} · tempo ${DAGLAR_ILE_TASLAR_ILE_FLUTE_LESSON.tempo}`,
+        fontSize: 14,
+        color: '#64748b',
+        align: 'left',
+        fontWeight: '500',
+        opacity: 1,
+      },
+    },
+    {
+      id: 'verification-title',
+      type: 'text',
+      position: { x: 860, y: 320 },
+      size: { width: 240, height: 28 },
+      properties: {
+        text: 'parsed notes',
+        fontSize: 14,
+        color: '#67d7ff',
+        align: 'left',
+        fontWeight: '700',
+        opacity: 1,
+      },
+    },
+    {
+      id: 'verification-block',
+      type: 'text',
+      position: { x: 860, y: 352 },
+      size: { width: 300, height: 252 },
+      properties: {
+        text: fluteVerificationText,
+        fontSize: 12,
+        color: '#cbd5e1',
+        align: 'left',
+        fontWeight: '500',
+        opacity: 1,
+      },
+    },
+    ...fluteSolfegeLayers,
+    ...flutePitchLayers,
+    ...fluteTimingLayers,
+    {
+      id: 'flute-point',
       type: 'shape',
-      position: { x: mapNeyNoteX(neyPhraseNotes[0]) - 26, y: mapNeyNoteY(neyPhraseNotes[0]) - 6 },
-      size: { width: 52, height: 52 },
+      position: { x: flutePointStartX, y: flutePointY },
+      size: { width: flutePointSize, height: flutePointSize },
       properties: {
         shape: 'circle',
         color: '#67d7ff',
-        opacity: 0.16,
-        motionScenes: markerScenes,
+        opacity: 1,
+        motionScenes: flutePointScenes,
       },
       animation: {
         property: 'opacity',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.12, value: 0.16 },
+          { time: 0.12, value: 1 },
         ],
       },
     },

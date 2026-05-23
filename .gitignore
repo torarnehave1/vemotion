@@ -20,3 +20,5 @@ coverage/
 # Wrangler configuration with secrets
 wrangler.toml
 wrangler.production.toml
+/_project/
+.claude/settings.local.json

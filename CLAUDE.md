@@ -1,5 +1,20 @@
 # Claude Code instructions for video-generator
 
+## MANDATORY — read `_project/lessons_learned.md` BEFORE EVERY RESPONSE
+
+Not per session. **Per response.** The full file, with the Read tool. Token cost is not a
+consideration. If you are about to send any reply that involves code, commits, claims about
+state, design decisions, or interpreting an instruction — open the file first. The Read call
+is visible in the transcript; that's the proof it happened.
+
+> `_project/` is local-only scaffold (gitignored). It is installed per-clone via the
+> bootstrap script referenced in the global `~/.claude/CLAUDE.md`. If `_project/` is
+> absent in this checkout, run the bootstrap before continuing. Companion docs (local):
+> `_project/lessons_learned.md` (READ FIRST), `_project/STATUS.md`, `_project/TODO.md`,
+> `_project/PLAN.md`, `_project/TEST_PLAN.md`.
+
+---
+
 ## Before creating any new UI component
 - Always search the existing codebase for similar components first.
 - If a modal, form, panel, or UI pattern already exists, reuse or extend it — do not build a new one from scratch.

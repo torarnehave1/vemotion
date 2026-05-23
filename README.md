@@ -2,6 +2,11 @@
 
 Vemotion is a fully open source, browser-native video generation system that runs entirely on Cloudflare. There is no Node.js server, no headless Chromium, and no FFmpeg process. The browser renders every frame using the HTML5 Canvas API and exports MP4 files using ffmpeg.wasm — no server required.
 
+## Project Documentation
+
+- [CLAUDE.md](./CLAUDE.md) — Project-specific Claude Code instructions
+- [docs/AGENT_BRIEF.md](./docs/AGENT_BRIEF.md) — Vemotion composition schema, endpoints, and auth (for AI agents authoring compositions)
+
 ## Why this exists
 
 Remotion, the popular React-based video library, requires Node.js, headless Chromium, and a persistent server process. None of that is compatible with a Cloudflare-native edge architecture. Vemotion was built to answer a simple question:

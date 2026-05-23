@@ -6,7 +6,7 @@ import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
-import { getCompositionFromCloud, hasCloudToken, readLastCompositionRef, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
+import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
 
 const DEFAULT_SIDEBAR_WIDTH = 420;
 const MIN_SIDEBAR_WIDTH = 260;
@@ -62,6 +62,7 @@ export const Dashboard: React.FC = () => {
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [autosaveVersion, setAutosaveVersion] = useState<number>(0);
   const [restoreState, setRestoreState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [seekFrame, setSeekFrame] = useState<number | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(
@@ -102,6 +103,32 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (!auth?.email || !hasCloudToken()) return;
+
+    // Deep-link via `?compositionId=<id>` takes precedence over the stored last-ref.
+    // On success the id is persisted as last-ref (B1) so a future visit without the
+    // param reopens the same composition. On failure we keep the URL param so a
+    // reload retries, do NOT touch the stored last-ref, and surface a banner.
+    const deepLinkId = readCompositionIdFromUrl();
+    if (deepLinkId) {
+      setRestoreState('loading');
+      setDeepLinkError(null);
+      getCompositionFromCloud(deepLinkId)
+        .then((data) => {
+          setComposition(data.composition);
+          setCloudCompositionId(data.id);
+          setCloudCompositionName(data.name || 'Untitled composition');
+          setAutosaveVersion(data.version ?? 1);
+          lastSavedSnapshotRef.current = JSON.stringify(data.composition);
+          writeLastCompositionRef({ id: data.id, name: data.name || 'Untitled composition' });
+          setAutosaveState('idle');
+          setRestoreState('ready');
+        })
+        .catch((err) => {
+          setDeepLinkError(`Couldn't load composition ${deepLinkId}: ${err instanceof Error ? err.message : 'unknown error'}`);
+          setRestoreState('error');
+        });
+      return;
+    }
 
     const lastRef = readLastCompositionRef();
     if (!lastRef?.id) {
@@ -243,6 +270,20 @@ export const Dashboard: React.FC = () => {
           }}
         />
       </div>
+
+      {/* Deep-link load failure banner */}
+      {deepLinkError && (
+        <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/30 text-red-200 text-sm flex items-center gap-3">
+          <span className="flex-1">{deepLinkError}</span>
+          <button
+            onClick={() => setDeepLinkError(null)}
+            className="px-2 py-0.5 rounded text-xs text-red-100 hover:bg-red-500/20 transition"
+            title="Dismiss"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Body: sidebar + main */}
       <div className="flex flex-1 items-start relative">

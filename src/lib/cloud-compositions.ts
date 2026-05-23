@@ -46,6 +46,24 @@ export const writeLastCompositionRef = (value: StoredCompositionRef | null) => {
   window.localStorage.setItem(LAST_COMPOSITION_KEY, JSON.stringify(value));
 };
 
+/**
+ * Read `?compositionId=<id>` from the current URL.
+ * Used to deep-link a specific cloud composition on load.
+ * Returns the trimmed id, or null if absent / empty.
+ */
+export const readCompositionIdFromUrl = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('compositionId');
+    if (!id) return null;
+    const trimmed = id.trim();
+    return trimmed ? trimmed : null;
+  } catch {
+    return null;
+  }
+};
+
 export const getCompositionFromCloud = async (id: string) => {
   const token = getToken();
   if (!token) {

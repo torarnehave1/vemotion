@@ -440,3 +440,50 @@ Layer originally at position {x:80, y:40}, size {w:1120, h:60}:
 ```
 
 The negative x at -300 clips the left side of that layer in the new canvas — expected for `fill` mode going from wider to square.
+
+### Endpoint — `POST /vemotion/composition/refit`
+
+The algorithm is exposed as an HTTP endpoint on the worker so other clients (e.g. `agent.vegvisr.org`) don't need to re-implement the math. Two input shapes, two output shapes — pick a combination from the matrix below.
+
+| Input | Output (no `name`) | Output (with `name`) |
+|---|---|---|
+| `compositionId` (saved comp; owner check applies) | `200 { ok, composition }` (pure transform, source untouched) | `201 { ok, id, summary, version }` (saved as NEW row; source untouched) |
+| `composition` (inline body) | `200 { ok, composition }` (pure transform) | `201 { ok, id, summary, version }` (saved as NEW row) |
+
+Required fields: exactly one of `compositionId` / `composition`, plus `targetWidth`, `targetHeight`, `mode`. `name` is optional and toggles the save path.
+
+Inline refit (no save) — useful when an agent just wants the transformed body to feed downstream:
+
+```bash
+curl -sS -X POST https://api.vegvisr.org/vemotion/composition/refit \
+  -H "X-API-Token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "composition": {
+      "duration": 5, "fps": 30, "width": 1280, "height": 720,
+      "layers": [
+        { "id": "title", "type": "text",
+          "position": { "x": 80, "y": 40 }, "size": { "width": 1120, "height": 60 },
+          "properties": { "text": "Hello", "fontSize": 48 } }
+      ]
+    },
+    "targetWidth": 1080, "targetHeight": 1080, "mode": "fill"
+  }'
+# → 200 { ok: true, composition: { width: 1080, height: 1080, layers: [...] } }
+```
+
+Save-mode refit (creates a NEW composition; source row, if any, is not modified):
+
+```bash
+curl -sS -X POST https://api.vegvisr.org/vemotion/composition/refit \
+  -H "X-API-Token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "compositionId": "comp_mp9hg7zz_gmhl5",
+    "targetWidth": 1080, "targetHeight": 1080, "mode": "fill",
+    "name": "Fibonacci Spiral — Square"
+  }'
+# → 201 { ok: true, id: "comp_…new…", summary: { … }, version: 1 }
+```
+
+Error codes: 400 (missing required field / invalid mode / both compositionId+composition / inline composition missing width/height/layers), 403 (compositionId belongs to another user), 404 (compositionId not found).

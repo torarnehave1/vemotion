@@ -364,3 +364,79 @@ Example — title card with a photo visible inside the letters:
 - **Title card, image inside letters:** big bold text + `fillMode: 'image'` + `fillSource: <url>` + a `mask-wipe` animation = the *Gladiator* opener.
 - **Lyric video word reveals:** image-filled text + `char-stagger` opacity = each character fades in as a window onto the video frame.
 - **Logo lockup:** image-filled text with a static `fillSource` and no animations = a wordmark with photographic fill.
+
+---
+
+## 12. Reformatting a composition for a new aspect (refit)
+
+When a composition authored for one canvas size (e.g. `1280×720` landscape) needs to be reformatted for another (e.g. `1080×1080` Instagram Square or `1080×1920` Reels), simply changing `composition.width` / `height` is not enough — every layer still has its original absolute pixel `position` and `size`, so the content ends up clipped, mispositioned, or surrounded by black.
+
+**There is a client-side modal in the editor** ("Refit layers to canvas…") that performs this transformation, but the algorithm below is also the canonical recipe an agent should follow when producing a reformatted composition over the API. The logic lives in [src/lib/refit.ts](../src/lib/refit.ts).
+
+### Three modes
+
+| Mode | Uniform scale? | Offsets | Result |
+|---|---|---|---|
+| `fit` | yes, `s = min(targetW/oldW, targetH/oldH)` | centred, positive on the longer axis | letterbox bars on the longer axis; everything visible |
+| `fill` | yes, `s = max(targetW/oldW, targetH/oldH)` | centred, negative on the shorter axis | no bars; content fills the frame, edges may clip — **default for most reformats** |
+| `stretch` | no, `sx = targetW/oldW`, `sy = targetH/oldH` | `0, 0` | no bars, no clipping, but circles become ellipses and text gets squashed |
+
+### Algorithm
+
+For each layer, compute the new geometry:
+
+```
+sx       = (mode === 'stretch') ? targetW / oldW : s
+sy       = (mode === 'stretch') ? targetH / oldH : s
+offsetX  = (mode === 'stretch') ? 0 : (targetW - oldW * s) / 2
+offsetY  = (mode === 'stretch') ? 0 : (targetH - oldH * s) / 2
+
+layer.position.x' = layer.position.x * sx + offsetX
+layer.position.y' = layer.position.y * sy + offsetY
+layer.size.width'  = layer.size.width  * sx
+layer.size.height' = layer.size.height * sy
+```
+
+### Properties to scale uniformly
+
+Beyond `position` / `size`, scale these numeric properties (if present) by `fontScale = min(sx, sy)`:
+
+- `fontSize`, `titleFontSize`, `bodyFontSize`
+- `strokeWidth`
+- `padding`, `gap`, `borderRadius`
+
+For `stretch` mode, `min(sx, sy)` keeps text legible inside whatever the squished layer rect becomes.
+
+### Animation keyframe scaling
+
+Scale only the pixel-valued animation properties:
+
+| `animation.property` | Scale `keyframe.value` by |
+|---|---|
+| `offsetX` | `sx` |
+| `offsetY` | `sy` |
+| anything else (`opacity`, `scale`, `drawProgress`, …) | — leave untouched |
+
+For `kind: 'char-stagger'`, scale per the same rule (the per-glyph offsets ride the layer's own scaling, so it Just Works).
+
+For `kind: 'mask-wipe'`, leave untouched — `direction` is geometric, keyframes drive a 0..1 progress, neither is a pixel quantity.
+
+### Known limitations
+
+- **math-shape formulas with hard-coded pixel constants** (e.g. `xFormula: "x0 + t * 60"`, `yFormula: "y0 + sin(t*0.8) * 30 + 40"`) **don't auto-scale**. Only references to `x0`, `y0`, `w`, `h` adapt. To make a math-shape refit cleanly, author its formula in terms of `w` / `h` percentages instead of pixels — e.g. `x0 + p * w` instead of `x0 + t * 60`.
+- **`motionScenes` formulas** have the same limitation.
+- **`fillSource` images** aren't re-fetched at a new resolution; the renderer cover-fits them at runtime, so this is usually fine, but a tight crop authored for one aspect will shift.
+
+### Worked example — landscape → Instagram Square (1280×720 → 1080×1080, fill mode)
+
+```
+sx = sy = max(1080/1280, 1080/720) = max(0.844, 1.500) = 1.500
+offsetX = (1080 - 1280 * 1.500) / 2 = (1080 - 1920) / 2 = -420
+offsetY = (1080 -  720 * 1.500) / 2 = (1080 - 1080) / 2 =    0
+
+Layer originally at position {x:80, y:40}, size {w:1120, h:60}:
+  position' = { x: 80*1.5 + (-420), y: 40*1.5 + 0 } = { x: -300, y: 60 }
+  size'     = { w: 1120*1.5, h: 60*1.5 }            = { w: 1680, h: 90 }
+```
+
+The negative x at -300 clips the left side of that layer in the new canvas — expected for `fill` mode going from wider to square.

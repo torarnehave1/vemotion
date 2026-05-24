@@ -38,13 +38,19 @@ export type Animation = {
    *   layer's `properties.text` into characters at draw time and applies the
    *   keyframes per-character with an offset of `index * stagger` seconds.
    *   `stagger` is required when `kind === 'char-stagger'`.
+   * - 'mask-wipe': renderer applies an animated clip path to the whole layer
+   *   before drawing. `direction` controls the wipe geometry; `keyframes`
+   *   drive a 0..1 reveal progress. `property` is unused for this kind.
    */
-  kind?: 'layer' | 'char-stagger';
-  property: string;
+  kind?: 'layer' | 'char-stagger' | 'mask-wipe';
+  /** Layer property name to animate. Required for kind 'layer' and 'char-stagger'; unused for 'mask-wipe'. */
+  property?: string;
   keyframes: Keyframe[];
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
   /** Seconds of delay between successive characters. Used only when kind === 'char-stagger'. */
   stagger?: number;
+  /** Wipe direction. Required when kind === 'mask-wipe'. */
+  direction?: 'ltr' | 'rtl' | 'ttb' | 'btt' | 'radial';
 };
 
 export type MotionScene = {

@@ -116,7 +116,12 @@ type AnimationPreset =
   | 'bounce'
   | 'scale-up'
   | 'staggered-reveal'
-  | 'type-on';
+  | 'type-on'
+  | 'wipe-from-left'
+  | 'wipe-from-right'
+  | 'wipe-from-top'
+  | 'wipe-from-bottom'
+  | 'iris-reveal';
 
 interface KgAnimNode {
   id: string;
@@ -134,6 +139,11 @@ const PRESETS: { value: AnimationPreset; label: string }[] = [
   { value: 'slide-right', label: 'Slide in from right' },
   { value: 'slide-top', label: 'Slide in from top' },
   { value: 'slide-bottom', label: 'Slide in from bottom' },
+  { value: 'wipe-from-left', label: 'Wipe in from left' },
+  { value: 'wipe-from-right', label: 'Wipe in from right' },
+  { value: 'wipe-from-top', label: 'Wipe in from top' },
+  { value: 'wipe-from-bottom', label: 'Wipe in from bottom' },
+  { value: 'iris-reveal', label: 'Iris reveal (radial)' },
 ];
 
 // Text-only presets. The per-char (char-stagger) effects only make sense on
@@ -186,6 +196,40 @@ function buildAnimation(
         stagger: 0.05,
         keyframes: [{ time: 0, value: 0 }, { time: 0.15, value: 1 }],
       };
+    // Mask-wipe family: animated clip path on the whole layer. Five directions
+    // share the same kind + keyframe shape; only `direction` differs. The
+    // wipe completes in ~min(1.2s, 40% of layer duration) — long enough to
+    // read as a deliberate reveal, short enough not to feel sluggish.
+    case 'wipe-from-left':
+      return {
+        kind: 'mask-wipe',
+        direction: 'ltr',
+        keyframes: [{ time: 0, value: 0 }, { time: Math.min(1.2, duration * 0.4), value: 1 }],
+      };
+    case 'wipe-from-right':
+      return {
+        kind: 'mask-wipe',
+        direction: 'rtl',
+        keyframes: [{ time: 0, value: 0 }, { time: Math.min(1.2, duration * 0.4), value: 1 }],
+      };
+    case 'wipe-from-top':
+      return {
+        kind: 'mask-wipe',
+        direction: 'ttb',
+        keyframes: [{ time: 0, value: 0 }, { time: Math.min(1.2, duration * 0.4), value: 1 }],
+      };
+    case 'wipe-from-bottom':
+      return {
+        kind: 'mask-wipe',
+        direction: 'btt',
+        keyframes: [{ time: 0, value: 0 }, { time: Math.min(1.2, duration * 0.4), value: 1 }],
+      };
+    case 'iris-reveal':
+      return {
+        kind: 'mask-wipe',
+        direction: 'radial',
+        keyframes: [{ time: 0, value: 0 }, { time: Math.min(1.2, duration * 0.4), value: 1 }],
+      };
     default:
       return undefined;
   }
@@ -198,6 +242,17 @@ function generateId() {
 function detectPresetFromAnimation(animation: Layer['animation'] | undefined): AnimationPreset {
   if (!animation) return 'none';
   if (animation.kind === 'char-stagger' && animation.property === 'opacity') return 'type-on';
+  if (animation.kind === 'mask-wipe') {
+    switch (animation.direction) {
+      case 'ltr':    return 'wipe-from-left';
+      case 'rtl':    return 'wipe-from-right';
+      case 'ttb':    return 'wipe-from-top';
+      case 'btt':    return 'wipe-from-bottom';
+      case 'radial': return 'iris-reveal';
+      default:       return 'wipe-from-left';
+    }
+  }
+  if (!animation.property) return 'none';
   switch (animation.property) {
     case 'opacity': {
       const frames = animation.keyframes;

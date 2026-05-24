@@ -39,13 +39,15 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
   if (values.shape === 'rectangle') values.shape = 'rect';
   if (values.shape === 'ellipse')   values.shape = 'circle';
 
-  // Skip char-stagger animations here — they're applied per-glyph in drawText,
-  // not layer-wide. Animations with no `kind` default to 'layer' for back-compat.
-  if (layer.animation && (layer.animation.kind ?? 'layer') === 'layer') {
+  // Skip non-layer animations (char-stagger, mask-wipe) here — they're applied
+  // per-glyph or via clip in drawLayer/drawText, not as layer-property mutation.
+  // Animations with no `kind` default to 'layer' for back-compat.
+  if (layer.animation && (layer.animation.kind ?? 'layer') === 'layer' && layer.animation.property) {
     values[layer.animation.property] = interpolate(layer.animation.keyframes, time);
   }
   for (const anim of layer.animations ?? []) {
     if ((anim.kind ?? 'layer') !== 'layer') continue;
+    if (!anim.property) continue;
     values[anim.property] = interpolate(anim.keyframes, time);
   }
 
@@ -96,6 +98,66 @@ function evaluateFormula(
   } catch {
     return null;
   }
+}
+
+/**
+ * If the layer carries a 'mask-wipe' animation, apply an animated clip path
+ * to the current context. The clip stays in canvas coords — call this before
+ * any layer-scale transform so the geometry isn't warped.
+ *
+ * Direction semantics (all use a 0..1 keyframe progress):
+ *   ltr    — rectangle grows from the left edge of the layer rightward
+ *   rtl    — rectangle grows from the right edge of the layer leftward
+ *   ttb    — rectangle grows from the top edge of the layer downward
+ *   btt    — rectangle grows from the bottom edge of the layer upward
+ *   radial — circle grows from layer centre to enclose the corners (iris reveal)
+ *
+ * progress = 0 → nothing rendered; progress = 1 → the full layer rect is visible.
+ */
+function applyMaskWipeClip(ctx: CanvasRenderingContext2D, layer: Layer, time: number): void {
+  // Find the first mask-wipe animation on the layer (single or in animations[]).
+  let anim: Animation | undefined;
+  if (layer.animation?.kind === 'mask-wipe') {
+    anim = layer.animation;
+  }
+  if (!anim) {
+    anim = layer.animations?.find(a => a.kind === 'mask-wipe');
+  }
+  if (!anim) return;
+
+  const raw = interpolate(anim.keyframes, time);
+  const progress = Math.max(0, Math.min(1, raw));
+  const direction = anim.direction ?? 'ltr';
+
+  const lx = layer.position.x;
+  const ly = layer.position.y;
+  const lw = layer.size.width;
+  const lh = layer.size.height;
+
+  ctx.beginPath();
+  switch (direction) {
+    case 'ltr':
+      ctx.rect(lx, ly, lw * progress, lh);
+      break;
+    case 'rtl':
+      ctx.rect(lx + lw * (1 - progress), ly, lw * progress, lh);
+      break;
+    case 'ttb':
+      ctx.rect(lx, ly, lw, lh * progress);
+      break;
+    case 'btt':
+      ctx.rect(lx, ly + lh * (1 - progress), lw, lh * progress);
+      break;
+    case 'radial': {
+      const cx = lx + lw / 2;
+      const cy = ly + lh / 2;
+      // Hypot to the corner — at progress = 1 the circle fully encloses the rect.
+      const maxR = Math.sqrt(lw * lw + lh * lh) / 2;
+      ctx.arc(cx, cy, maxR * progress, 0, Math.PI * 2);
+      break;
+    }
+  }
+  ctx.clip();
 }
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
@@ -165,6 +227,10 @@ export class CanvasRenderer {
 
     this.ctx.save();
     this.ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+
+    // Mask-wipe: applied here, BEFORE the scale transform, so the clip rect
+    // stays in unscaled canvas coordinates regardless of any layer scale anim.
+    applyMaskWipeClip(this.ctx, layer, time);
 
     if (scale !== 1) {
       const cx = layer.position.x + layer.size.width  / 2;

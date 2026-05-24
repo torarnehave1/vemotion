@@ -10,7 +10,7 @@ There is **one** unified `CompositionData` shape — no separate templates. Vari
 
 Layer `type` discriminators (the agent must use one of these):
 
-- `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`
+- `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`. **Image-fill (letters become a window onto an image): see §11.**
 - `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`
 - `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 — formulas must prepend `x0` / `y0` to position relative to the layer; otherwise the shape renders in the canvas top-left.**
 - `image` — raster, with `src`, `fit`, `offset`
@@ -48,9 +48,17 @@ type Layer = {
 };
 
 type Animation = {
-  property: string;          // 'opacity' | 'offsetX' | 'offsetY' | 'scale' | 'drawProgress'
+  // Discriminator. Defaults to 'layer' when absent (back-compat).
+  // See §10 for what each kind does.
+  kind?: 'layer' | 'char-stagger' | 'mask-wipe';
+  // Required for kind 'layer' and 'char-stagger'; unused for 'mask-wipe'.
+  property?: string;          // 'opacity' | 'offsetX' | 'offsetY' | 'scale' | 'drawProgress' | …
   keyframes: { time: number; value: unknown }[];
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+  // 'char-stagger' only — seconds of delay between successive characters.
+  stagger?: number;
+  // 'mask-wipe' only — direction of the reveal.
+  direction?: 'ltr' | 'rtl' | 'ttb' | 'btt' | 'radial';
 };
 
 type LayerGroup = {
@@ -61,12 +69,14 @@ type LayerGroup = {
 };
 ```
 
-### Animation properties supported
+### Animation properties supported (for kind = `'layer'`)
 
 - `opacity` — fade-in, fade-out, fade-in-out
 - `offsetX` / `offsetY` — slide in/out from edges, bounce
 - `scale` — scale-up from small to full size
-- `drawProgress` — for `math-shape`, animates SVG path drawing
+- `drawProgress` — for `math-shape`, animates the parametric curve draw progress 0 → 1
+
+For non-`layer` kinds (`char-stagger`, `mask-wipe`), see §10.
 
 ### Minimal valid composition
 
@@ -229,3 +239,128 @@ The same convention applies to `motionScenes[].xFormula` / `yFormula` (used by a
   "xFormula": "x0 + cos(t*2)*120",
   "yFormula": "y0 + sin(t*2)*60" }
 ```
+
+---
+
+## 10. Animation kinds — `layer`, `char-stagger`, `mask-wipe`
+
+Vemotion's `Animation` is a discriminated union via the `kind` field. Three kinds are supported. **Animations with no `kind` are treated as `'layer'`** so every composition shipped before this addition keeps working.
+
+### `kind: 'layer'` (default)
+
+The classic shape: keyframes interpolate a named layer property over time. Every layer type respects these.
+
+```json
+{ "property": "opacity",
+  "keyframes": [{ "time": 0, "value": 0 }, { "time": 0.4, "value": 1 }] }
+```
+
+Same thing with the explicit kind written out:
+
+```json
+{ "kind": "layer",
+  "property": "opacity",
+  "keyframes": [{ "time": 0, "value": 0 }, { "time": 0.4, "value": 1 }] }
+```
+
+### `kind: 'char-stagger'` — per-character text animation
+
+**Text layers only.** The renderer splits `properties.text` into characters at draw time, then applies the keyframes per-character with an offset of `index * stagger` seconds. Supported `property` values:
+
+- `opacity` — Type-on / per-char fade. *Most common.*
+- `offsetX` / `offsetY` — char-rise / char-slide.
+- `scale` — char-zoom.
+
+`property: 'color'` is **not** implemented in this kind — color interpolation needs string→numeric infra.
+
+```json
+{ "kind": "char-stagger",
+  "property": "opacity",
+  "stagger": 0.05,
+  "keyframes": [{ "time": 0, "value": 0 }, { "time": 0.15, "value": 1 }] }
+```
+
+That reads as "each character fades in over 150 ms; characters start 50 ms apart in source order." Multi-line wrapped text shares a single global character index, so the second line's first character continues right after the first line's last character.
+
+### `kind: 'mask-wipe'` — animated clip reveal
+
+**Any layer type.** The renderer applies an animated clip path to the whole layer before drawing. Keyframes drive a 0 → 1 reveal progress; `direction` controls geometry.
+
+```json
+{ "kind": "mask-wipe",
+  "direction": "ltr",
+  "keyframes": [{ "time": 0, "value": 0 }, { "time": 1, "value": 1 }] }
+```
+
+Directions:
+
+| `direction` | Behaviour |
+|---|---|
+| `ltr` | Rectangle grows from the layer's left edge rightward |
+| `rtl` | Rectangle grows from the layer's right edge leftward |
+| `ttb` | Rectangle grows from the layer's top edge downward |
+| `btt` | Rectangle grows from the layer's bottom edge upward |
+| `radial` | Circle grows from the layer's centre to enclose the corners (iris reveal) |
+
+At `progress = 0` nothing renders; at `progress = 1` the full layer rect is visible. Hand-edit the keyframes to `[{0,1},{1,0}]` to get a wipe-OUT.
+
+`mask-wipe` does **not** use `property`; it uses `direction` instead. The renderer reads only the first `mask-wipe` it finds on a layer if multiple are stacked.
+
+### Stacking and composition
+
+A layer may have one animation in `layer.animation` and any number in `layer.animations[]`. Animations of different kinds compose:
+
+- `char-stagger` on `opacity` + `mask-wipe` `ltr` — characters fade in individually while a left-to-right wipe also reveals them.
+- `layer` `opacity` + `mask-wipe` `radial` — the whole layer fades AND iris-reveals.
+- `char-stagger` on `offsetY` + `mask-wipe` `ttb` — characters drop in while a top-down wipe reveals them.
+
+Order to attach them: it doesn't matter; the renderer evaluates them on independent axes (layer-property bag, per-char loop, and the layer clip respectively).
+
+---
+
+## 11. Text fill modes — `fillMode` and `fillSource`
+
+A text layer's letterforms can act as a *window onto an image*. This is a static layer property (not an animation) and composes with every animation kind in §10.
+
+Layer property additions (text layers only):
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `fillMode` | `'solid' \| 'image'` | `'solid'` | `'solid'` uses `color` as the fill; `'image'` uses `fillSource` clipped to letter shapes |
+| `fillSource` | `string` (URL) | — | Required when `fillMode === 'image'` |
+| `fillFit` | `'cover' \| 'contain' \| 'fill'` | `'cover'` | How the image is sized into the layer bounds before being clipped to the letters |
+
+Example — title card with a photo visible inside the letters:
+
+```json
+{
+  "id": "title",
+  "type": "text",
+  "position": { "x": 80, "y": 200 },
+  "size": { "width": 1120, "height": 200 },
+  "properties": {
+    "text": "EXPLORE",
+    "fontSize": 180,
+    "fontWeight": "900",
+    "align": "center",
+    "color": "#ffffff",
+    "fillMode": "image",
+    "fillSource": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600",
+    "fillFit": "cover"
+  }
+}
+```
+
+### Implementation notes (so agents can reason about edge cases)
+
+- The image must be **CORS-accessible** (`Access-Control-Allow-Origin: *` or an explicit origin). The renderer loads it with `crossOrigin = 'anonymous'`. Failing CORS → image silently doesn't load → text falls back to solid for that frame.
+- The renderer renders text into an offscreen canvas, then uses `globalCompositeOperation = 'source-in'` to keep only the image pixels that overlap text. Pure canvas — survives ffmpeg.wasm MP4 export.
+- **Shadows are dropped** on the image-fill path. They survived `source-in` as muddy fringes. Solid path still has shadows.
+- `fillMode === 'image'` composes with: `globalAlpha` (set by `drawLayer`), `mask-wipe` clip (also `drawLayer`), `char-stagger` (renders into the same offscreen ctx). All three apply correctly to image-filled text.
+- The image is fetched once and cached per `CanvasRenderer` instance. Multiple text layers sharing the same `fillSource` URL share the load.
+
+### Common compositions worth knowing
+
+- **Title card, image inside letters:** big bold text + `fillMode: 'image'` + `fillSource: <url>` + a `mask-wipe` animation = the *Gladiator* opener.
+- **Lyric video word reveals:** image-filled text + `char-stagger` opacity = each character fades in as a window onto the video frame.
+- **Logo lockup:** image-filled text with a static `fillSource` and no animations = a wordmark with photographic fill.

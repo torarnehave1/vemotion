@@ -412,7 +412,11 @@ export class CanvasRenderer {
     const xFormula = typeof values.xFormula === 'string' ? values.xFormula : '';
     const yFormula = typeof values.yFormula === 'string' ? values.yFormula : '';
     const closePath = values.closePath !== false;
-    const drawProgress = Math.max(0, Math.min(1, Number(values.drawProgress) || 1));
+    // Use nullish coalescing, not `||` — a drawProgress of exactly 0 is the
+    // valid "nothing yet drawn" state at frame 0 of a drawProgress animation,
+    // and `Number(0) || 1` would silently flip it to 1 (the full curve flashes
+    // for one frame, vanishes, then draws — the classic symptom).
+    const drawProgress = Math.max(0, Math.min(1, Number(values.drawProgress ?? 1)));
 
     if (kind !== 'parametric' || !xFormula || !yFormula) return;
 

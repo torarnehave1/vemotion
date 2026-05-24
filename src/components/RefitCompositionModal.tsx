@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { refitComposition, type RefitMode } from '../lib/refit';
@@ -79,7 +80,11 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
 
   const modeHint = MODES.find(m => m.value === mode)?.hint;
 
-  return (
+  // createPortal escapes the transform ancestor on <aside> in Dashboard
+  // (Tailwind `translate-x-0` makes the sidebar a containing block for
+  // position:fixed descendants — without the portal the modal renders
+  // inside the sidebar bounds instead of centred on the viewport).
+  return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}
@@ -200,7 +205,8 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

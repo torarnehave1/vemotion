@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Copy, Check } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 
@@ -52,7 +53,11 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
   const layerCount = composition.layers?.length ?? 0;
   const sizeKB = (new Blob([json]).size / 1024).toFixed(1);
 
-  return (
+  // createPortal escapes the transform ancestor on <aside> in Dashboard
+  // — same reason RefitCompositionModal and AddLayerModal use it. Without
+  // the portal, position:fixed centres against the transform ancestor
+  // (the sidebar) rather than the viewport.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}
@@ -110,6 +115,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

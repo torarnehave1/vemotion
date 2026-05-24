@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2 } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
+import { RefitCompositionModal } from './RefitCompositionModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 
 const FONT_PRESETS = [
@@ -31,6 +32,7 @@ interface CompositionEditorProps {
 export const CompositionEditor: React.FC<CompositionEditorProps> = ({ composition, onChange }) => {
   const [showModal, setShowModal] = useState(false);
   const [showAnimModal, setShowAnimModal] = useState(false);
+  const [showRefitModal, setShowRefitModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const set = (patch: Partial<CompositionData>) => onChange({ ...composition, ...patch });
@@ -154,6 +156,21 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
             />
           </div>
         </div>
+
+        {/*
+          Refit — opens a dialog to scale all layers to a new canvas size.
+          Distinct from the size dropdown above (which only changes width/height
+          without touching layers). Use this when reformatting an existing
+          composition for another aspect (e.g. landscape → Instagram Square).
+        */}
+        <button
+          onClick={() => setShowRefitModal(true)}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm rounded-lg transition"
+          title="Scale all layers to a new canvas size"
+        >
+          <Maximize2 className="w-4 h-4" />
+          Refit layers to canvas…
+        </button>
       </div>
 
       {/* Layers */}
@@ -240,6 +257,14 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
             onClose={() => setShowAnimModal(false)}
             compositionWidth={composition.width}
             compositionHeight={composition.height}
+          />
+        )}
+
+        {showRefitModal && (
+          <RefitCompositionModal
+            composition={composition}
+            onApply={(next) => onChange(next)}
+            onClose={() => setShowRefitModal(false)}
           />
         )}
       </div>

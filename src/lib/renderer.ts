@@ -160,6 +160,41 @@ function applyMaskWipeClip(ctx: CanvasRenderingContext2D, layer: Layer, time: nu
   ctx.clip();
 }
 
+/**
+ * Draw an image into a target rectangle with one of three fit modes.
+ * Shared between the image layer renderer and the text image-fill path.
+ *
+ *   fill     — stretch to (w, h), aspect ignored
+ *   contain  — letterbox: image fits entirely, centred, extra space transparent
+ *   cover    — crop to fill: image fills (w, h), excess cropped (default)
+ */
+function drawImageFitted(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fit: string,
+): void {
+  if (fit === 'fill') {
+    ctx.drawImage(img, x, y, w, h);
+  } else if (fit === 'contain') {
+    const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  } else {
+    // cover (default) — crop to fill
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const sw = w / scale;
+    const sh = h / scale;
+    const sx = (img.naturalWidth - sw) / 2;
+    const sy = (img.naturalHeight - sh) / 2;
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+}
+
 // ── Renderer ──────────────────────────────────────────────────────────────────
 
 export class CanvasRenderer {
@@ -176,12 +211,20 @@ export class CanvasRenderer {
   }
 
   async preloadImages(composition: CompositionData): Promise<void> {
-    const urls = composition.layers
-      .filter(l => l.type === 'image')
-      .map(l => l.properties.src as string)
-      .filter(Boolean);
-
-    await Promise.all(urls.map(src => this.loadImageAsync(src)));
+    const urls: string[] = [];
+    for (const l of composition.layers) {
+      // Image layers — straightforward `src`.
+      if (l.type === 'image' && typeof l.properties.src === 'string') {
+        urls.push(l.properties.src);
+      }
+      // Text layers using `fillMode: 'image'` — letter-masked image source.
+      if (l.type === 'text'
+        && l.properties.fillMode === 'image'
+        && typeof l.properties.fillSource === 'string') {
+        urls.push(l.properties.fillSource);
+      }
+    }
+    await Promise.all(urls.filter(Boolean).map(src => this.loadImageAsync(src)));
   }
 
   private loadImageAsync(src: string): Promise<void> {
@@ -267,30 +310,118 @@ export class CanvasRenderer {
   private drawText(layer: Layer, values: Record<string, unknown>, time: number): void {
     const fontSize = (values.fontSize as number) ?? 48;
     const color = (values.color as string) ?? '#ffffff';
-    const text = (values.text as string) ?? '';
     const fontFamily = (values.fontFamily as string) ?? this.compositionFont;
-    const align = (values.align as CanvasTextAlign) ?? ((values.textAlign as CanvasTextAlign) ?? 'left');
     const fontWeight = (values.fontWeight as string) ?? '600';
-    const lineHeightMultiplier = (values.lineHeight as number) ?? 1.25;
 
     const offsetX = (values.offsetX as number) ?? 0;
     const offsetY = (values.offsetY as number) ?? 0;
-
     const maxWidth = layer.size.width;
     const layerLeft = layer.position.x + offsetX;
     const layerTop  = layer.position.y + offsetY;
 
-    this.ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
 
-    // ── Word-wrap ────────────────────────────────────────────────────────────
+    const applyTextStyle = (ctx: CanvasRenderingContext2D, withShadow: boolean) => {
+      ctx.font = fontStr;
+      ctx.fillStyle = color;
+      ctx.textBaseline = 'middle';
+      if (withShadow) {
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+      } else {
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      }
+    };
+
+    const fillMode = values.fillMode as string | undefined;
+    const fillSource = values.fillSource as string | undefined;
+
+    // ── Image-fill (text-as-mask) path ──────────────────────────────────────
+    // Letterforms become a window onto the source image. Renders text into an
+    // offscreen canvas at origin (0,0), then uses `source-in` compositing to
+    // keep only the image pixels that overlap the text. Finally drawImage's
+    // the offscreen onto the main canvas at the layer position.
+    if (fillMode === 'image' && fillSource) {
+      const img = this.imageCache.get(fillSource);
+      if (!img) {
+        // Kick off load; this frame falls back to the solid path so the user
+        // doesn't see an empty layer while the image fetches.
+        void this.loadImageAsync(fillSource);
+      } else if (img.complete && img.naturalWidth > 0) {
+        const lw = layer.size.width;
+        const lh = layer.size.height;
+        const off = document.createElement('canvas');
+        off.width = Math.max(1, Math.ceil(lw));
+        off.height = Math.max(1, Math.ceil(lh));
+        const offCtx = off.getContext('2d');
+        if (offCtx) {
+          // Render text onto offscreen at origin. Shadows are skipped — they
+          // produce ghost fringes that survive `source-in` and look muddy.
+          applyTextStyle(offCtx, false);
+          this.renderTextGlyphs(offCtx, layer, values, time, 0, 0);
+          // Keep only image pixels that overlap text.
+          offCtx.globalCompositeOperation = 'source-in';
+          const fit = (values.fillFit as string) ?? 'cover';
+          drawImageFitted(offCtx, img, 0, 0, off.width, off.height, fit);
+          // Composite onto main canvas at layer position. globalAlpha (from
+          // drawLayer) and any mask-wipe clip both still apply here.
+          this.ctx.drawImage(off, layerLeft, layerTop);
+          return;
+        }
+      }
+      // Else: image not ready — fall through to solid path for this frame.
+    }
+
+    // ── Solid path (existing behaviour) ─────────────────────────────────────
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(layerLeft, layerTop, maxWidth, layer.size.height);
+    this.ctx.clip();
+    applyTextStyle(this.ctx, true);
+    this.renderTextGlyphs(this.ctx, layer, values, time, layerLeft, layerTop);
+    // Reset shadow so subsequent layers' draw calls don't inherit it.
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.shadowBlur = 0;
+    this.ctx.shadowOffsetX = 0;
+    this.ctx.shadowOffsetY = 0;
+    this.ctx.restore();
+  }
+
+  /**
+   * Render the wrapped + aligned + (optionally) char-staggered text glyphs
+   * onto an arbitrary 2D context, anchored at (layerLeft, layerTop).
+   *
+   * Callers MUST have already set ctx.font, ctx.fillStyle (and any shadow
+   * properties they want) on `ctx`. This helper handles only word-wrap,
+   * vertical centring, alignment, and per-glyph stagger.
+   */
+  private renderTextGlyphs(
+    ctx: CanvasRenderingContext2D,
+    layer: Layer,
+    values: Record<string, unknown>,
+    time: number,
+    layerLeft: number,
+    layerTop: number,
+  ): void {
+    const fontSize = (values.fontSize as number) ?? 48;
+    const text = (values.text as string) ?? '';
+    const align = (values.align as CanvasTextAlign) ?? ((values.textAlign as CanvasTextAlign) ?? 'left');
+    const lineHeightMultiplier = (values.lineHeight as number) ?? 1.25;
+    const maxWidth = layer.size.width;
     const lineHeight = fontSize * lineHeightMultiplier;
+
+    // ── Word-wrap ───────────────────────────────────────────────────────────
     const words = text.split(' ');
     const lines: string[] = [];
     let current = '';
-
     for (const word of words) {
       const test = current ? `${current} ${word}` : word;
-      if (this.ctx.measureText(test).width <= maxWidth) {
+      if (ctx.measureText(test).width <= maxWidth) {
         current = test;
       } else {
         if (current) lines.push(current);
@@ -300,23 +431,7 @@ export class CanvasRenderer {
     if (current) lines.push(current);
 
     const totalTextHeight = lines.length * lineHeight;
-
-    // Clip to layer bounds so nothing bleeds outside
-    this.ctx.save();
-    this.ctx.beginPath();
-    this.ctx.rect(layerLeft, layerTop, maxWidth, layer.size.height);
-    this.ctx.clip();
-
-    // Vertically centre the text block inside the layer
     const startY = layerTop + (layer.size.height - totalTextHeight) / 2 + lineHeight / 2;
-
-    // Shared text style + shadow (applied once for all draws below)
-    this.ctx.fillStyle = color;
-    this.ctx.textBaseline = 'middle';
-    this.ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    this.ctx.shadowBlur = 8;
-    this.ctx.shadowOffsetX = 2;
-    this.ctx.shadowOffsetY = 2;
 
     // Collect any char-stagger animations targeting this layer.
     const charAnims: Animation[] = [];
@@ -332,73 +447,60 @@ export class CanvasRenderer {
       let x = layerLeft;
       if (align === 'center') x = layerLeft + maxWidth / 2;
       else if (align === 'right') x = layerLeft + maxWidth;
-      this.ctx.textAlign = align;
+      ctx.textAlign = align;
       lines.forEach((line, i) => {
-        this.ctx.fillText(line, x, startY + i * lineHeight);
+        ctx.fillText(line, x, startY + i * lineHeight);
       });
-    } else {
-      // Per-glyph path: lay out each char manually so we can drive timing
-      // (and any per-char property) by `globalCharIdx * stagger`. textAlign
-      // is forced to 'left' here because we compute absolute x for each char.
-      this.ctx.textAlign = 'left';
-      const baseAlpha = this.ctx.globalAlpha;
-      let globalCharIdx = 0;
-
-      lines.forEach((line, lineIdx) => {
-        const lineY = startY + lineIdx * lineHeight;
-        const lineWidth = this.ctx.measureText(line).width;
-        let cursorX = layerLeft;
-        if (align === 'center') cursorX = layerLeft + (maxWidth - lineWidth) / 2;
-        else if (align === 'right') cursorX = layerLeft + (maxWidth - lineWidth);
-
-        for (let i = 0; i < line.length; i++) {
-          const ch = line[i];
-          const charWidth = this.ctx.measureText(ch).width;
-
-          // Per-char animated values. The renderer understands these
-          // numeric properties out of the box; other properties (e.g.
-          // 'color') would need their own interpolator and are skipped here.
-          let charOpacity = 1;
-          let charOffsetX = 0;
-          let charOffsetY = 0;
-          let charScale = 1;
-          for (const anim of charAnims) {
-            const delay = globalCharIdx * (anim.stagger ?? 0);
-            const charTime = time - delay;
-            const val = interpolate(anim.keyframes, charTime);
-            switch (anim.property) {
-              case 'opacity':  charOpacity = Math.max(0, Math.min(1, val)); break;
-              case 'offsetX':  charOffsetX = val; break;
-              case 'offsetY':  charOffsetY = val; break;
-              case 'scale':    charScale   = val; break;
-              // Other properties (color etc.) intentionally not handled
-              // in this slice — splitter + opacity is what type-on needs.
-            }
-          }
-
-          this.ctx.save();
-          this.ctx.globalAlpha = baseAlpha * charOpacity;
-          if (charScale !== 1) {
-            const cx = cursorX + charWidth / 2;
-            const cy = lineY;
-            this.ctx.translate(cx, cy);
-            this.ctx.scale(charScale, charScale);
-            this.ctx.translate(-cx, -cy);
-          }
-          this.ctx.fillText(ch, cursorX + charOffsetX, lineY + charOffsetY);
-          this.ctx.restore();
-
-          cursorX += charWidth;
-          globalCharIdx++;
-        }
-      });
+      return;
     }
 
-    this.ctx.shadowColor = 'transparent';
-    this.ctx.shadowBlur = 0;
-    this.ctx.shadowOffsetX = 0;
-    this.ctx.shadowOffsetY = 0;
-    this.ctx.restore();
+    // Per-glyph path (char-stagger).
+    ctx.textAlign = 'left';
+    const baseAlpha = ctx.globalAlpha;
+    let globalCharIdx = 0;
+    lines.forEach((line, lineIdx) => {
+      const lineY = startY + lineIdx * lineHeight;
+      const lineWidth = ctx.measureText(line).width;
+      let cursorX = layerLeft;
+      if (align === 'center') cursorX = layerLeft + (maxWidth - lineWidth) / 2;
+      else if (align === 'right') cursorX = layerLeft + (maxWidth - lineWidth);
+
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        const charWidth = ctx.measureText(ch).width;
+
+        let charOpacity = 1;
+        let charOffsetX = 0;
+        let charOffsetY = 0;
+        let charScale = 1;
+        for (const anim of charAnims) {
+          const delay = globalCharIdx * (anim.stagger ?? 0);
+          const charTime = time - delay;
+          const val = interpolate(anim.keyframes, charTime);
+          switch (anim.property) {
+            case 'opacity':  charOpacity = Math.max(0, Math.min(1, val)); break;
+            case 'offsetX':  charOffsetX = val; break;
+            case 'offsetY':  charOffsetY = val; break;
+            case 'scale':    charScale   = val; break;
+          }
+        }
+
+        ctx.save();
+        ctx.globalAlpha = baseAlpha * charOpacity;
+        if (charScale !== 1) {
+          const cx = cursorX + charWidth / 2;
+          const cy = lineY;
+          ctx.translate(cx, cy);
+          ctx.scale(charScale, charScale);
+          ctx.translate(-cx, -cy);
+        }
+        ctx.fillText(ch, cursorX + charOffsetX, lineY + charOffsetY);
+        ctx.restore();
+
+        cursorX += charWidth;
+        globalCharIdx++;
+      }
+    });
   }
 
   private drawKgShape(layer: Layer, values: Record<string, unknown>): void {
@@ -638,22 +740,7 @@ export class CanvasRenderer {
 
     if (!img.complete || img.naturalWidth === 0) return;
 
-    if (fit === 'fill') {
-      this.ctx.drawImage(img, x, y, w, h);
-    } else if (fit === 'contain') {
-      const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
-      const dw = img.naturalWidth * scale;
-      const dh = img.naturalHeight * scale;
-      this.ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-    } else {
-      // cover (default) — crop to fill
-      const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-      const sw = w / scale;
-      const sh = h / scale;
-      const sx = (img.naturalWidth - sw) / 2;
-      const sy = (img.naturalHeight - sh) / 2;
-      this.ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
-    }
+    drawImageFitted(this.ctx, img, x, y, w, h, fit);
   }
 
   // Word-wrap helper — returns array of lines that fit within maxWidth

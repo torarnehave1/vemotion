@@ -508,6 +508,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [cardFontFamily, setCardFontFamily] = useState((editingLayer?.properties.fontFamily as string) ?? '');
   const [motionScenesJson, setMotionScenesJson] = useState(formatMotionScenes(editingLayer?.properties.motionScenes));
   const [motionScenesError, setMotionScenesError] = useState('');
+  // Text fill mode (slice 3 — text-as-mask). Default 'solid' = unchanged behaviour.
+  // When 'image', the letter shapes mask the source image via offscreen canvas
+  // + globalCompositeOperation='source-in' in the renderer.
+  const [fillMode, setFillMode] = useState<'solid' | 'image'>(
+    (editingLayer?.properties.fillMode === 'image' ? 'image' : 'solid')
+  );
+  const [fillSource, setFillSource] = useState((editingLayer?.properties.fillSource as string) ?? '');
 
   // Card edit state
   const [cardTitle,    setCardTitle]    = useState((editingLayer?.properties.title as string) ?? 'Title');
@@ -723,6 +730,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             opacity: opacityValue,
             ...(fontFamily ? { fontFamily } : {}),
             ...(motionScenes ? { motionScenes } : {}),
+            ...(fillMode === 'image' && fillSource.trim()
+              ? { fillMode: 'image', fillSource: fillSource.trim() }
+              : {}),
           }
         : layerType === 'shape'
           ? { shape, color, opacity: opacityValue, ...(motionScenes ? { motionScenes } : {}) }
@@ -1280,6 +1290,32 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                       ))}
                     </select>
                   </div>
+                  {/* Text fill — solid (uses Color above) or image (letters become a window onto the URL) */}
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Text fill</label>
+                    <select
+                      value={fillMode}
+                      onChange={e => setFillMode(e.target.value as 'solid' | 'image')}
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    >
+                      <option value="solid">Solid color</option>
+                      <option value="image">Image (letters mask image)</option>
+                    </select>
+                  </div>
+                  {fillMode === 'image' && (
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Image URL</label>
+                      <input
+                        value={fillSource}
+                        onChange={e => setFillSource(e.target.value)}
+                        placeholder="https://example.com/image.jpg"
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        The image is cover-fit into the layer bounds and clipped to the letter shapes. Must be CORS-accessible.
+                      </p>
+                    </div>
+                  )}
                 </>
               ) : layerType === 'shape' ? (
                 <div>

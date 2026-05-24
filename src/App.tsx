@@ -1,8 +1,9 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, useMemo, createContext, useContext } from 'react';
 import { AuthBar, EcosystemNav } from 'vegvisr-ui-kit';
 import { readStoredUser, type AuthUser } from './lib/auth';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
+import { EmbedView } from './components/EmbedView';
 
 const MAGIC_BASE = 'https://cookie.vegvisr.org';
 const DASHBOARD_BASE = 'https://dashboard.vegvisr.org';
@@ -11,6 +12,15 @@ const AuthContext = createContext<AuthUser | null>(null);
 export const useAuth = () => useContext(AuthContext);
 
 function App() {
+  // Embed mode: when `?embed=1` is present, render only the player and bypass
+  // all editor chrome (AuthBar, EcosystemNav, Login, Dashboard, FileMenu, etc).
+  // The frame-ancestors CSP in public/_headers allows iframing from
+  // *.vegvisr.org subdomains (e.g. agent.vegvisr.org).
+  const isEmbed = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('embed') === '1';
+  }, []);
+
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authStatus, setAuthStatus] = useState<'checking' | 'authed' | 'anonymous'>('checking');
 
@@ -156,6 +166,14 @@ function App() {
     }
     return () => { isMounted = false; };
   }, []);
+
+  // Embed mode short-circuits the auth flow — no Login screen, no AuthBar,
+  // no EcosystemNav. The composition fetch inside EmbedView uses whatever
+  // X-API-Token is in localStorage today; if absent, EmbedView surfaces a
+  // load error instead of redirecting to a login page.
+  if (isEmbed) {
+    return <EmbedView />;
+  }
 
   if (authStatus === 'checking') {
     return (

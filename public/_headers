@@ -1,0 +1,5 @@
+# Cloudflare Pages custom headers.
+# Vite copies public/_headers → dist/_headers at build time; Pages serves it.
+
+/*
+  Content-Security-Policy: frame-ancestors 'self' https://*.vegvisr.org

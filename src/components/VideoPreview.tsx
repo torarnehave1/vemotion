@@ -7,9 +7,15 @@ interface VideoPreviewProps {
   composition: CompositionData;
   onFrameChange?: (frame: number) => void;
   externalSeekFrame?: number;
+  /**
+   * When true, hide editor-only affordances (zoom selector, Export MP4 button).
+   * Play/Pause/Stop, scrub bar, frame counter, and composition info row remain.
+   * Used by the iframe-embed flow (see ?embed=1 in App.tsx / EmbedView).
+   */
+  embed?: boolean;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -129,20 +135,22 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
 
       {/* Canvas */}
       <div className="space-y-3">
-        <div className="flex items-center justify-end gap-2">
-          <label htmlFor="preview-zoom" className="text-xs font-medium text-slate-400">Zoom</label>
-          <select
-            id="preview-zoom"
-            value={zoom}
-            onChange={(e) => setZoom(parseFloat(e.target.value))}
-            className="bg-slate-800 border border-slate-700 text-white rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
-          >
-            <option value={1}>1x</option>
-            <option value={1.5}>1.5x</option>
-            <option value={2}>2x</option>
-            <option value={3}>3x</option>
-          </select>
-        </div>
+        {!embed && (
+          <div className="flex items-center justify-end gap-2">
+            <label htmlFor="preview-zoom" className="text-xs font-medium text-slate-400">Zoom</label>
+            <select
+              id="preview-zoom"
+              value={zoom}
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+              className="bg-slate-800 border border-slate-700 text-white rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value={1}>1x</option>
+              <option value={1.5}>1.5x</option>
+              <option value={2}>2x</option>
+              <option value={3}>3x</option>
+            </select>
+          </div>
+        )}
 
         <div
           ref={viewportRef}
@@ -212,11 +220,13 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         >
           <Square className="w-4 h-4" /> Stop
         </button>
-        <div className="ml-auto">
-          <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition">
-            <Download className="w-4 h-4" /> Export MP4
-          </button>
-        </div>
+        {!embed && (
+          <div className="ml-auto">
+            <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition">
+              <Download className="w-4 h-4" /> Export MP4
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Composition info */}

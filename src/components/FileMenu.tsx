@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FilePlus, Save, Upload, FolderOpen, Trash2, Loader2 } from 'lucide-react';
+import { ChevronDown, FilePlus, FileJson, Save, Upload, FolderOpen, Trash2, Loader2 } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { getCompositionFromCloud, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
 import { movementOverTimeExample, neyLessonExample } from '../lib/examples';
+import { CompositionJsonModal } from './CompositionJsonModal';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -44,6 +45,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [showJson, setShowJson] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -216,6 +218,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
                 <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load flute solfège demo" onClick={loadNeyLessonExample} />
                 <div className="h-px bg-slate-800 mx-3" />
                 <MenuItem icon={<Save className="w-4 h-4" />} label="Save to computer" onClick={saveToComputer} />
+                <MenuItem icon={<FileJson className="w-4 h-4" />} label="View JSON" onClick={() => { setShowJson(true); close(); }} />
                 <MenuItem icon={<Upload className="w-4 h-4" />} label="Load from computer" onClick={loadFromComputer} />
                 <div className="h-px bg-slate-800 mx-3" />
                 <MenuItem icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />} label="Open from cloud" onClick={openCloud} />
@@ -274,6 +277,10 @@ export const FileMenu: React.FC<FileMenuProps> = ({
       )}
 
       <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
+
+      {showJson && (
+        <CompositionJsonModal composition={composition} onClose={() => setShowJson(false)} />
+      )}
     </div>
   );
 };

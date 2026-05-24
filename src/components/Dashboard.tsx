@@ -6,7 +6,7 @@ import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
-import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
+import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeCompositionIdToUrl, writeLastCompositionRef } from '../lib/cloud-compositions';
 
 const DEFAULT_SIDEBAR_WIDTH = 420;
 const MIN_SIDEBAR_WIDTH = 260;
@@ -72,6 +72,13 @@ export const Dashboard: React.FC = () => {
   const isResizing = useRef(false);
   const lastSavedSnapshotRef = useRef(JSON.stringify(defaultComposition));
   const autosaveTimerRef = useRef<number | null>(null);
+  // URL <-> composition sync: track what the URL currently reflects so the
+  // sync effect only pushes a history entry on real user-driven changes.
+  const urlSyncedIdRef = useRef<string | null>(null);
+  // When we apply a change that already wrote the URL ourselves (initial
+  // restore, deep-link, popstate handler), set this true so the sync effect
+  // skips its next run.
+  const skipUrlSyncRef = useRef(false);
 
   const handleTimelineSeek = (frame: number) => {
     setSeekFrame(frame);
@@ -114,6 +121,10 @@ export const Dashboard: React.FC = () => {
       setDeepLinkError(null);
       getCompositionFromCloud(deepLinkId)
         .then((data) => {
+          // URL already carries the param — just sync our tracking ref and
+          // tell the URL-sync effect to skip its next run.
+          urlSyncedIdRef.current = data.id;
+          skipUrlSyncRef.current = true;
           setComposition(data.composition);
           setCloudCompositionId(data.id);
           setCloudCompositionName(data.name || 'Untitled composition');
@@ -139,6 +150,11 @@ export const Dashboard: React.FC = () => {
     setRestoreState('loading');
     getCompositionFromCloud(lastRef.id)
       .then((data) => {
+        // Auto-restore: write the URL via replaceState (no new history entry)
+        // and suppress the next URL-sync effect run.
+        writeCompositionIdToUrl(data.id, 'replace');
+        urlSyncedIdRef.current = data.id;
+        skipUrlSyncRef.current = true;
         setComposition(data.composition);
         setCloudCompositionId(data.id);
         setCloudCompositionName(data.name || lastRef.name || 'Untitled composition');
@@ -151,6 +167,71 @@ export const Dashboard: React.FC = () => {
         writeLastCompositionRef(null);
         setRestoreState('error');
       });
+  }, [auth?.email]);
+
+  // URL sync: whenever cloudCompositionId changes via a user-driven action
+  // (FileMenu open, autosave-creates-id, New), push a new history entry so
+  // browser back/forward navigates between compositions.
+  useEffect(() => {
+    if (skipUrlSyncRef.current) {
+      skipUrlSyncRef.current = false;
+      urlSyncedIdRef.current = cloudCompositionId;
+      return;
+    }
+    if (urlSyncedIdRef.current === cloudCompositionId) return;
+    writeCompositionIdToUrl(cloudCompositionId, 'push');
+    urlSyncedIdRef.current = cloudCompositionId;
+  }, [cloudCompositionId]);
+
+  // popstate handler: when the user uses browser back/forward, read the URL
+  // and load whichever composition it now points at. Suppress the URL-sync
+  // effect's pushState (the browser already updated the URL).
+  useEffect(() => {
+    const handler = () => {
+      const urlId = readCompositionIdFromUrl();
+      if (urlId === urlSyncedIdRef.current) return;
+
+      // Back to blank
+      if (!urlId) {
+        urlSyncedIdRef.current = null;
+        skipUrlSyncRef.current = true;
+        setComposition(defaultComposition);
+        setCloudCompositionId(null);
+        setCloudCompositionName('Untitled composition');
+        setAutosaveVersion(0);
+        lastSavedSnapshotRef.current = JSON.stringify(defaultComposition);
+        setAutosaveState('idle');
+        setCurrentFrame(0);
+        setSeekFrame(0);
+        return;
+      }
+
+      if (!auth?.email || !hasCloudToken()) return;
+
+      setRestoreState('loading');
+      setDeepLinkError(null);
+      getCompositionFromCloud(urlId)
+        .then((data) => {
+          urlSyncedIdRef.current = data.id;
+          skipUrlSyncRef.current = true;
+          setComposition(data.composition);
+          setCloudCompositionId(data.id);
+          setCloudCompositionName(data.name || 'Untitled composition');
+          setAutosaveVersion(data.version ?? 1);
+          lastSavedSnapshotRef.current = JSON.stringify(data.composition);
+          writeLastCompositionRef({ id: data.id, name: data.name || 'Untitled composition' });
+          setAutosaveState('idle');
+          setRestoreState('ready');
+          setCurrentFrame(0);
+          setSeekFrame(0);
+        })
+        .catch((err) => {
+          setDeepLinkError(`Couldn't load composition ${urlId}: ${err instanceof Error ? err.message : 'unknown error'}`);
+          setRestoreState('error');
+        });
+    };
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
   }, [auth?.email]);
 
   useEffect(() => {

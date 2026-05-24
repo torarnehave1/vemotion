@@ -64,6 +64,39 @@ export const readCompositionIdFromUrl = (): string | null => {
   }
 };
 
+/**
+ * Sync the URL's `?compositionId=` query param.
+ * - `id = string`  → sets the param.
+ * - `id = null`    → removes the param.
+ * - `mode = 'push'`    → adds a history entry (back/forward navigates between compositions).
+ * - `mode = 'replace'` → updates the URL without a new history entry (used for auto-restore on mount).
+ * No-ops when the URL already matches.
+ */
+export const writeCompositionIdToUrl = (
+  id: string | null,
+  mode: 'push' | 'replace' = 'push',
+): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('compositionId');
+    if (id) {
+      if (current === id) return;
+      url.searchParams.set('compositionId', id);
+    } else {
+      if (!current) return;
+      url.searchParams.delete('compositionId');
+    }
+    if (mode === 'push') {
+      window.history.pushState({}, '', url.toString());
+    } else {
+      window.history.replaceState({}, '', url.toString());
+    }
+  } catch {
+    /* ignore */
+  }
+};
+
 export const getCompositionFromCloud = async (id: string) => {
   const token = getToken();
   if (!token) {

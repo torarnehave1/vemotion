@@ -12,7 +12,7 @@ Layer `type` discriminators (the agent must use one of these):
 
 - `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`
 - `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`
-- `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`
+- `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 — formulas must prepend `x0` / `y0` to position relative to the layer; otherwise the shape renders in the canvas top-left.**
 - `image` — raster, with `src`, `fit`, `offset`
 - `video` — type exists in schema; not yet exposed in Add Layer UI
 - `kg-shape` — SVG snapshotted from KG graph `vemotion-shapes`
@@ -186,3 +186,46 @@ To fetch the full composition body (with layers and animations), call `GET /comp
 - Composition `version` is returned by the list endpoint but `composition.save` handles version conflicts server-side — pass the `id` to update, omit to create.
 - Layer `position` and `size` are in canvas pixels, not normalized.
 - Keyframe `time` is in seconds, not frames.
+
+---
+
+## 9. math-shape formulas — the `x0` / `y0` convention
+
+**math-shape `xFormula` and `yFormula` return ABSOLUTE canvas coordinates, not coordinates relative to the layer's `position`.** This is a footgun if you forget — the shape will render in the canvas top-left regardless of what `position.x` / `position.y` say.
+
+To position a math-shape correctly, the formulas **must** reference the per-sample context variables `x0` and `y0`, which the renderer binds to `layer.position.x` / `layer.position.y` before each evaluation.
+
+**Available context variables** (renderer.ts:74–96):
+
+| Var | Meaning |
+|---|---|
+| `t` | Parametric value, swept from `tStart` to `tEnd` |
+| `p` | Normalised progress, `(t - tStart) / (tEnd - tStart)` |
+| `start`, `end`, `duration` | The configured `tStart`, `tEnd`, and `tEnd - tStart` |
+| `x0`, `y0` | `layer.position.x`, `layer.position.y` — **always prepend these to position the curve** |
+| `w`, `h` | `layer.size.width`, `layer.size.height` |
+| `sin`, `cos`, `tan`, `abs`, `min`, `max`, `pow`, `sqrt`, `pi` | Math helpers |
+
+**Right** (built-in presets all follow this):
+
+```json
+"xFormula": "x0 + w/2 + min(w,h)*0.35*cos(t)",
+"yFormula": "y0 + h/2 + min(w,h)*0.35*sin(t)"
+```
+
+**Wrong** — renders in the top-left no matter what `position` says:
+
+```json
+"xFormula": "t * 60",
+"yFormula": "Math.sin(t * 0.8) * 30 + 40"
+```
+
+**Fix for an existing broken layer:** prepend `x0 + ` to `xFormula` and `y0 + ` to `yFormula`.
+
+The same convention applies to `motionScenes[].xFormula` / `yFormula` (used by any layer type for procedural motion paths). Quote from a working example:
+
+```json
+{ "start": 0, "end": 2.5,
+  "xFormula": "x0 + cos(t*2)*120",
+  "yFormula": "y0 + sin(t*2)*60" }
+```

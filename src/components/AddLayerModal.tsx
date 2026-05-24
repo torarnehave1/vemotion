@@ -115,7 +115,8 @@ type AnimationPreset =
   | 'slide-bottom'
   | 'bounce'
   | 'scale-up'
-  | 'staggered-reveal';
+  | 'staggered-reveal'
+  | 'type-on';
 
 interface KgAnimNode {
   id: string;
@@ -133,6 +134,15 @@ const PRESETS: { value: AnimationPreset; label: string }[] = [
   { value: 'slide-right', label: 'Slide in from right' },
   { value: 'slide-top', label: 'Slide in from top' },
   { value: 'slide-bottom', label: 'Slide in from bottom' },
+];
+
+// Text-only presets. The per-char (char-stagger) effects only make sense on
+// text layers — they're silently dropped by the renderer on other layer types,
+// so we keep them out of the universal PRESETS list and only show them in the
+// text-layer dropdown.
+const TEXT_PRESETS: { value: AnimationPreset; label: string }[] = [
+  ...PRESETS,
+  { value: 'type-on', label: 'Type-on (per character)' },
 ];
 
 function buildAnimation(
@@ -166,6 +176,16 @@ function buildAnimation(
       return { property: 'scale', keyframes: [{ time: 0, value: 0.05 }, { time: Math.min(1, duration * 0.4), value: 1 }] };
     case 'staggered-reveal':
       return { property: 'opacity', keyframes: [{ time: 0, value: 0 }, { time: 0.2, value: 0 }, { time: 0.8, value: 1 }, { time: Math.min(2.1, duration), value: 1 }] };
+    case 'type-on':
+      // Per-character reveal: each glyph fades in over 150ms with a 50ms
+      // delay between successive characters. The renderer multiplies the
+      // delay by the glyph index. Wired only for text layers in the UI.
+      return {
+        kind: 'char-stagger',
+        property: 'opacity',
+        stagger: 0.05,
+        keyframes: [{ time: 0, value: 0 }, { time: 0.15, value: 1 }],
+      };
     default:
       return undefined;
   }
@@ -177,6 +197,7 @@ function generateId() {
 
 function detectPresetFromAnimation(animation: Layer['animation'] | undefined): AnimationPreset {
   if (!animation) return 'none';
+  if (animation.kind === 'char-stagger' && animation.property === 'opacity') return 'type-on';
   switch (animation.property) {
     case 'opacity': {
       const frames = animation.keyframes;
@@ -1334,12 +1355,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {opacityField}
               {motionScenesField}
 
-              {/* Animation preset */}
+              {/* Animation preset — text layers get char-stagger effects (Type-on etc.) in addition to PRESETS */}
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Animation</label>
                 <select value={preset} onChange={e => setPreset(e.target.value as AnimationPreset)}
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
-                  {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  {(layerType === 'text' ? TEXT_PRESETS : PRESETS).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
 

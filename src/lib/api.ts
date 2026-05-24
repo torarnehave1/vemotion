@@ -30,9 +30,21 @@ export type Layer = {
 };
 
 export type Animation = {
+  /**
+   * Discriminates how the animation is applied:
+   * - 'layer' (default, also assumed when absent for backward compat): the
+   *   resolved keyframe value replaces the named property on the whole layer.
+   * - 'char-stagger': only valid on text layers. The renderer splits the
+   *   layer's `properties.text` into characters at draw time and applies the
+   *   keyframes per-character with an offset of `index * stagger` seconds.
+   *   `stagger` is required when `kind === 'char-stagger'`.
+   */
+  kind?: 'layer' | 'char-stagger';
   property: string;
   keyframes: Keyframe[];
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+  /** Seconds of delay between successive characters. Used only when kind === 'char-stagger'. */
+  stagger?: number;
 };
 
 export type MotionScene = {

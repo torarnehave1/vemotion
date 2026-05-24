@@ -1,4 +1,4 @@
-import type { CompositionData, Layer, Keyframe, MotionScene } from './api';
+import type { Animation, CompositionData, Layer, Keyframe, MotionScene } from './api';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -39,10 +39,13 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
   if (values.shape === 'rectangle') values.shape = 'rect';
   if (values.shape === 'ellipse')   values.shape = 'circle';
 
-  if (layer.animation) {
+  // Skip char-stagger animations here — they're applied per-glyph in drawText,
+  // not layer-wide. Animations with no `kind` default to 'layer' for back-compat.
+  if (layer.animation && (layer.animation.kind ?? 'layer') === 'layer') {
     values[layer.animation.property] = interpolate(layer.animation.keyframes, time);
   }
   for (const anim of layer.animations ?? []) {
+    if ((anim.kind ?? 'layer') !== 'layer') continue;
     values[anim.property] = interpolate(anim.keyframes, time);
   }
 
@@ -173,7 +176,7 @@ export class CanvasRenderer {
 
     switch (layer.type) {
       case 'text':
-        this.drawText(layer, values);
+        this.drawText(layer, values, time);
         break;
       case 'shape':
         this.drawShape(layer, values);
@@ -195,7 +198,7 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
-  private drawText(layer: Layer, values: Record<string, unknown>): void {
+  private drawText(layer: Layer, values: Record<string, unknown>, time: number): void {
     const fontSize = (values.fontSize as number) ?? 48;
     const color = (values.color as string) ?? '#ffffff';
     const text = (values.text as string) ?? '';
@@ -238,25 +241,92 @@ export class CanvasRenderer {
     this.ctx.rect(layerLeft, layerTop, maxWidth, layer.size.height);
     this.ctx.clip();
 
-    // Anchor x depending on alignment
-    let x = layerLeft;
-    if (align === 'center') x = layerLeft + maxWidth / 2;
-    else if (align === 'right') x = layerLeft + maxWidth;
-
     // Vertically centre the text block inside the layer
     const startY = layerTop + (layer.size.height - totalTextHeight) / 2 + lineHeight / 2;
 
+    // Shared text style + shadow (applied once for all draws below)
     this.ctx.fillStyle = color;
     this.ctx.textBaseline = 'middle';
-    this.ctx.textAlign = align;
     this.ctx.shadowColor = 'rgba(0,0,0,0.5)';
     this.ctx.shadowBlur = 8;
     this.ctx.shadowOffsetX = 2;
     this.ctx.shadowOffsetY = 2;
 
-    lines.forEach((line, i) => {
-      this.ctx.fillText(line, x, startY + i * lineHeight);
-    });
+    // Collect any char-stagger animations targeting this layer.
+    const charAnims: Animation[] = [];
+    if (layer.animation && layer.animation.kind === 'char-stagger') {
+      charAnims.push(layer.animation);
+    }
+    for (const a of layer.animations ?? []) {
+      if (a.kind === 'char-stagger') charAnims.push(a);
+    }
+
+    if (charAnims.length === 0) {
+      // Fast path: line-by-line fillText with native alignment.
+      let x = layerLeft;
+      if (align === 'center') x = layerLeft + maxWidth / 2;
+      else if (align === 'right') x = layerLeft + maxWidth;
+      this.ctx.textAlign = align;
+      lines.forEach((line, i) => {
+        this.ctx.fillText(line, x, startY + i * lineHeight);
+      });
+    } else {
+      // Per-glyph path: lay out each char manually so we can drive timing
+      // (and any per-char property) by `globalCharIdx * stagger`. textAlign
+      // is forced to 'left' here because we compute absolute x for each char.
+      this.ctx.textAlign = 'left';
+      const baseAlpha = this.ctx.globalAlpha;
+      let globalCharIdx = 0;
+
+      lines.forEach((line, lineIdx) => {
+        const lineY = startY + lineIdx * lineHeight;
+        const lineWidth = this.ctx.measureText(line).width;
+        let cursorX = layerLeft;
+        if (align === 'center') cursorX = layerLeft + (maxWidth - lineWidth) / 2;
+        else if (align === 'right') cursorX = layerLeft + (maxWidth - lineWidth);
+
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          const charWidth = this.ctx.measureText(ch).width;
+
+          // Per-char animated values. The renderer understands these
+          // numeric properties out of the box; other properties (e.g.
+          // 'color') would need their own interpolator and are skipped here.
+          let charOpacity = 1;
+          let charOffsetX = 0;
+          let charOffsetY = 0;
+          let charScale = 1;
+          for (const anim of charAnims) {
+            const delay = globalCharIdx * (anim.stagger ?? 0);
+            const charTime = time - delay;
+            const val = interpolate(anim.keyframes, charTime);
+            switch (anim.property) {
+              case 'opacity':  charOpacity = Math.max(0, Math.min(1, val)); break;
+              case 'offsetX':  charOffsetX = val; break;
+              case 'offsetY':  charOffsetY = val; break;
+              case 'scale':    charScale   = val; break;
+              // Other properties (color etc.) intentionally not handled
+              // in this slice — splitter + opacity is what type-on needs.
+            }
+          }
+
+          this.ctx.save();
+          this.ctx.globalAlpha = baseAlpha * charOpacity;
+          if (charScale !== 1) {
+            const cx = cursorX + charWidth / 2;
+            const cy = lineY;
+            this.ctx.translate(cx, cy);
+            this.ctx.scale(charScale, charScale);
+            this.ctx.translate(-cx, -cy);
+          }
+          this.ctx.fillText(ch, cursorX + charOffsetX, lineY + charOffsetY);
+          this.ctx.restore();
+
+          cursorX += charWidth;
+          globalCharIdx++;
+        }
+      });
+    }
 
     this.ctx.shadowColor = 'transparent';
     this.ctx.shadowBlur = 0;

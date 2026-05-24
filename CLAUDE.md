@@ -87,6 +87,8 @@ Can we build a composable, AI-assisted video generation system that is lightweig
 
 **Worker:** `https://api.vegvisr.org/vemotion/*` — deployed via `npx wrangler deploy` from `/Users/torarnehave/Documents/GitHub/vegvisr-frontend/vemotion-worker/`
 
+**Worker deploy policy:** `npx wrangler deploy` from the worker dir is the *entire* publish path — that puts the code live on `api.vegvisr.org`. **Git commits in the worker repo are managed by the user separately and are NOT part of the deploy flow.** Do NOT auto-commit or auto-push the worker repo from this project. After editing + deploying + verifying the live endpoint, stop. The "Commit, push, and report — MANDATORY" rule below applies only to this repo (`github.com/torarnehave1/vemotion`); the worker is a different repo with a different lifecycle.
+
 **Vemotion Worker OpenAPI spec:** `https://api.vegvisr.org/vemotion/openapi.json`
 
 **Auth token** (`X-API-Token` header): `b1ca2967e8165ec02fdf039d9e916af4005f7388` (torarnehave@gmail.com `emailVerificationToken` from D1)

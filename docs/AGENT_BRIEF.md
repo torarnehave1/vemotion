@@ -123,6 +123,7 @@ Base URL: `https://api.vegvisr.org/vemotion`. All endpoints require `X-API-Token
 | GET | `/compositions` | List user compositions (returns id, name, duration, fps, width, height, layerCount, createdAt, updatedAt, version) |
 | GET | `/composition?id=<id>` | Fetch a single composition with full layer/animation data |
 | POST | `/composition/save` | Save / update — body `{ id?, name, composition }` |
+| POST | `/composition/refit` | Reformat for a new canvas size — body `{ compositionId? \| composition, targetWidth, targetHeight, mode, name? }`. See §12 for the algorithm and curl recipes. |
 | DELETE | `/composition?id=<id>` | Delete composition |
 | GET | `/projects` | List projects |
 | POST | `/project` | Create / update project |

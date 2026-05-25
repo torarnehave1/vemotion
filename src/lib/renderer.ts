@@ -236,6 +236,16 @@ export class CanvasRenderer {
    */
   selectedLayerId: string | null = null;
 
+  /**
+   * Smart-guide flags. When `vertical` is true, renderFrame draws a magenta
+   * vertical line at `x = composition.width / 2`. When `horizontal` is true,
+   * a magenta horizontal line at `y = composition.height / 2`. Both can be
+   * on simultaneously when a dragged layer is centred on both axes. Set by
+   * VideoPreview during edit-mode drags; cleared on mouseup. Exporter
+   * never sets it, so MP4 output stays guide-free.
+   */
+  snapGuides: { vertical: boolean; horizontal: boolean } | null = null;
+
   onImageLoad?: () => void;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -295,9 +305,15 @@ export class CanvasRenderer {
       this.drawLayer(layer, localTime);
     }
 
-    // Editor-only selection overlay. Drawn last so it sits above content.
+    // Editor-only selection overlay. Drawn above content.
     if (this.selectedLayerId) {
       this.drawSelectionOverlay(composition, time);
+    }
+
+    // Editor-only smart guides (centre snap indicators). Drawn after the
+    // selection overlay so they sit on top — easier to spot at a glance.
+    if (this.snapGuides) {
+      this.drawSnapGuides(composition);
     }
   }
 
@@ -355,6 +371,37 @@ export class CanvasRenderer {
     const corners: Array<[number, number]> = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]];
     for (const [dx, dy] of corners) {
       this.ctx.fillRect(dx - dot / 2, dy - dot / 2, dot, dot);
+    }
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw the smart-guide lines (magenta) through the canvas centre on each
+   * axis the dragged layer is currently centred on. Illustrator / Figma idiom.
+   * Solid 1-pixel line spanning the full canvas; doesn't bleed past the layer
+   * (callers may want that someday, but full-span is more legible at a glance).
+   */
+  private drawSnapGuides(composition: CompositionData): void {
+    if (!this.snapGuides) return;
+    const { vertical, horizontal } = this.snapGuides;
+    if (!vertical && !horizontal) return;
+    this.ctx.save();
+    this.ctx.strokeStyle = '#ec4899'; // pink-500 / magenta — same convention as Illustrator smart guides
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([]);
+    if (vertical) {
+      const x = composition.width / 2;
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, 0);
+      this.ctx.lineTo(x, composition.height);
+      this.ctx.stroke();
+    }
+    if (horizontal) {
+      const y = composition.height / 2;
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, y);
+      this.ctx.lineTo(composition.width, y);
+      this.ctx.stroke();
     }
     this.ctx.restore();
   }

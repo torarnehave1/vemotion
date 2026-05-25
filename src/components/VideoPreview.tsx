@@ -257,13 +257,39 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       finalY: layer.position.y,
     };
 
+    // Smart-guide snap threshold in canvas pixels. Not zoom-aware in v1 —
+    // if it ever feels too sticky at high zoom (or too loose at low zoom),
+    // scale by `1/zoom` here.
+    const SNAP_THRESHOLD = 8;
+
     const onDragMove = (moveEvent: MouseEvent) => {
       const drag = draggingRef.current;
       if (!drag) return;
       const now = toCanvasCoords(moveEvent.clientX, moveEvent.clientY);
       if (!now) return;
-      const newX = now.x - drag.clickOffsetX;
-      const newY = now.y - drag.clickOffsetY;
+      let newX = now.x - drag.clickOffsetX;
+      let newY = now.y - drag.clickOffsetY;
+
+      // Centre-snap (Illustrator / Figma idiom). The centre we check is the
+      // layer's BASE bounding-rect centre (position + size/2), NOT the
+      // animated-offset centre — drag pauses playback, so for typical
+      // compositions (no persistent offsetX/Y at the current frame) these
+      // coincide. Documented caveat: a layer with a constant offset
+      // animation will snap its BASE centre, not its visual centre, which
+      // matters only if both offsets are non-zero at the dragged frame.
+      const layerRef = composition.layers.find(l => l.id === drag.layerId);
+      const layerW = layerRef?.size.width ?? 0;
+      const layerH = layerRef?.size.height ?? 0;
+      const canvasCx = composition.width / 2;
+      const canvasCy = composition.height / 2;
+      const centreX = newX + layerW / 2;
+      const centreY = newY + layerH / 2;
+
+      const showVerticalGuide = Math.abs(centreX - canvasCx) < SNAP_THRESHOLD;
+      const showHorizontalGuide = Math.abs(centreY - canvasCy) < SNAP_THRESHOLD;
+      if (showVerticalGuide) newX = canvasCx - layerW / 2;
+      if (showHorizontalGuide) newY = canvasCy - layerH / 2;
+
       drag.finalX = newX;
       drag.finalY = newY;
 
@@ -280,6 +306,9 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           : l),
       };
       renderer.selectedLayerId = drag.layerId;
+      renderer.snapGuides = (showVerticalGuide || showHorizontalGuide)
+        ? { vertical: showVerticalGuide, horizontal: showHorizontalGuide }
+        : null;
       void renderer.renderFrame(tempComp, currentFrame);
     };
 
@@ -288,6 +317,13 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       draggingRef.current = null;
       document.removeEventListener('mousemove', onDragMove);
       document.removeEventListener('mouseup', onDragUp);
+      // Guides only appear while dragging — clear and re-render so the
+      // final frame doesn't keep a stale magenta line.
+      const renderer = rendererRef.current;
+      if (renderer) {
+        renderer.snapGuides = null;
+        void renderer.renderFrame(composition, currentFrame);
+      }
       if (!drag) return;
       // Only commit if the position actually changed (avoid a noisy
       // composition mutation on bare clicks).

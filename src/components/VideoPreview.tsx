@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2 } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import type { CompositionData } from '../lib/api';
 
@@ -13,9 +13,15 @@ interface VideoPreviewProps {
    * Used by the iframe-embed flow (see ?embed=1 in App.tsx / EmbedView).
    */
   embed?: boolean;
+  /**
+   * Commit a new layer position after a drag in Edit mode. Called once on
+   * mouseup. During the drag itself, the renderer is updated optimistically
+   * without going through React state.
+   */
+  onLayerMove?: (layerId: string, position: { x: number; y: number }) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -27,13 +33,35 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
+  // Edit mode (Q2β): explicit toggle. When on, mousedown on a layer selects
+  // it and starts a drag-to-move; click on empty canvas deselects. Pan / zoom
+  // remain available on empty canvas only when edit mode is OFF.
+  const [editMode, setEditMode] = useState(false);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [hoverLayerId, setHoverLayerId] = useState<string | null>(null);
+  // Drag in-flight state. Tracks final committed position; on mouseup we
+  // call onLayerMove once so React state mutation happens exactly once per drag.
+  const draggingRef = useRef<{
+    layerId: string;
+    clickOffsetX: number;
+    clickOffsetY: number;
+    finalX: number;
+    finalY: number;
+  } | null>(null);
+
   const totalFrames = Math.floor(composition.duration * composition.fps);
 
   useEffect(() => {
     setPan({ x: 0, y: 0 });
   }, [zoom, composition.width, composition.height]);
 
-  // Initialise renderer when canvas is ready
+  // Mount-once: create renderer + controller.
+  //
+  // Previously this effect was keyed on [composition], which recreated the
+  // renderer and reset currentFrame to 0 on EVERY composition mutation —
+  // making every property edit (and now every Edit-mode drag commit) snap
+  // the preview to frame 0. That's a pre-existing bug; fixing it as part of
+  // this slice because the drag flow makes it impossible to ignore.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -50,12 +78,55 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     rendererRef.current = renderer;
     controllerRef.current = controller;
 
-    // Render first frame immediately
+    // Render first frame immediately.
     void renderer.renderFrame(composition, 0);
     setCurrentFrame(0);
 
-    return () => controller.pause();
+    return () => {
+      controller.pause();
+      rendererRef.current = null;
+      controllerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Composition-update: feed the latest composition into the existing
+  // controller and re-render at the CURRENT frame (clamped to the new total).
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    const controller = controllerRef.current;
+    if (!renderer || !controller) return;
+    controller.composition = composition;
+    const total = Math.max(1, Math.floor(composition.duration * composition.fps));
+    const safeFrame = Math.max(0, Math.min(currentFrame, total - 1));
+    void renderer.renderFrame(composition, safeFrame);
+    if (safeFrame !== currentFrame) setCurrentFrame(safeFrame);
+    // currentFrame intentionally NOT in deps — we read it but don't want to
+    // re-render every frame tick (PlaybackController already handles that).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composition]);
+
+  // Selection change: sync renderer's selectedLayerId and re-render so the
+  // overlay appears / disappears immediately.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.selectedLayerId = selectedLayerId;
+    void renderer.renderFrame(composition, currentFrame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLayerId]);
+
+  // Entering edit mode pauses playback. Leaving leaves playback wherever it is
+  // (the user picks Play themselves to resume).
+  useEffect(() => {
+    if (editMode) {
+      controllerRef.current?.pause();
+      setIsPlaying(false);
+    } else {
+      setSelectedLayerId(null);
+      setHoverLayerId(null);
+    }
+  }, [editMode]);
 
   // Seek when timeline sends a frame
   useEffect(() => {
@@ -127,6 +198,122 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     document.addEventListener('mouseup', onUp);
   }, [clampPan, pan, zoom]);
 
+  // Convert a client-space mouse event to canvas-pixel coordinates. The canvas
+  // is rendered at the composition's native resolution but displayed at a
+  // smaller CSS size; getBoundingClientRect already accounts for the wrapper's
+  // CSS transform (zoom + pan), so this single ratio handles everything.
+  const toCanvasCoords = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }, []);
+
+  // Combined mousedown — edit-mode hit test gets priority; otherwise fall
+  // through to the existing pan handler.
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editMode || !rendererRef.current) {
+      handlePanStart(e);
+      return;
+    }
+
+    const coords = toCanvasCoords(e.clientX, e.clientY);
+    if (!coords) {
+      handlePanStart(e);
+      return;
+    }
+
+    const time = currentFrame / composition.fps;
+    const hitId = rendererRef.current.hitTest(coords.x, coords.y, composition, time);
+
+    if (!hitId) {
+      // Empty canvas click in edit mode → deselect. Don't start a pan;
+      // edit mode should feel like a separate interaction layer.
+      setSelectedLayerId(null);
+      return;
+    }
+
+    // Selected and ready to drag.
+    const layer = composition.layers.find(l => l.id === hitId);
+    if (!layer) return;
+    e.preventDefault();
+    setSelectedLayerId(hitId);
+
+    // Capture the click offset relative to the layer's BASE position
+    // (not its animated-offset position). On move, new base = click_now -
+    // offset; animation offsets stay intact.
+    const clickOffsetX = coords.x - layer.position.x;
+    const clickOffsetY = coords.y - layer.position.y;
+
+    draggingRef.current = {
+      layerId: hitId,
+      clickOffsetX,
+      clickOffsetY,
+      finalX: layer.position.x,
+      finalY: layer.position.y,
+    };
+
+    const onDragMove = (moveEvent: MouseEvent) => {
+      const drag = draggingRef.current;
+      if (!drag) return;
+      const now = toCanvasCoords(moveEvent.clientX, moveEvent.clientY);
+      if (!now) return;
+      const newX = now.x - drag.clickOffsetX;
+      const newY = now.y - drag.clickOffsetY;
+      drag.finalX = newX;
+      drag.finalY = newY;
+
+      // Optimistic render: synthesize a composition with the dragged layer
+      // moved to its new position and re-render at the current frame. React
+      // state is untouched until mouseup, so the [composition] effect
+      // doesn't re-run on every move.
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      const tempComp: CompositionData = {
+        ...composition,
+        layers: composition.layers.map(l => l.id === drag.layerId
+          ? { ...l, position: { x: newX, y: newY } }
+          : l),
+      };
+      renderer.selectedLayerId = drag.layerId;
+      void renderer.renderFrame(tempComp, currentFrame);
+    };
+
+    const onDragUp = () => {
+      const drag = draggingRef.current;
+      draggingRef.current = null;
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragUp);
+      if (!drag) return;
+      // Only commit if the position actually changed (avoid a noisy
+      // composition mutation on bare clicks).
+      const layerNow = composition.layers.find(l => l.id === drag.layerId);
+      if (!layerNow) return;
+      if (layerNow.position.x === drag.finalX && layerNow.position.y === drag.finalY) return;
+      onLayerMove?.(drag.layerId, { x: drag.finalX, y: drag.finalY });
+    };
+
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragUp);
+  }, [editMode, composition, currentFrame, handlePanStart, onLayerMove, toCanvasCoords]);
+
+  // Cursor feedback: in edit mode, show grab when hovering a layer.
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editMode || !rendererRef.current || draggingRef.current) {
+      if (hoverLayerId !== null) setHoverLayerId(null);
+      return;
+    }
+    const coords = toCanvasCoords(e.clientX, e.clientY);
+    if (!coords) return;
+    const time = currentFrame / composition.fps;
+    const hitId = rendererRef.current.hitTest(coords.x, coords.y, composition, time);
+    if (hitId !== hoverLayerId) setHoverLayerId(hitId);
+  }, [editMode, composition, currentFrame, hoverLayerId, toCanvasCoords]);
+
   const currentTime = (currentFrame / composition.fps).toFixed(2);
   const totalTime = composition.duration.toFixed(2);
   const progressPct = totalFrames > 0 ? (currentFrame / totalFrames) * 100 : 0;
@@ -164,9 +351,15 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               width: `min(100%, calc(50vh * ${composition.width} / ${composition.height}))`,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: 'center center',
-              cursor: zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
+              cursor: draggingRef.current
+                ? 'grabbing'
+                : editMode
+                ? (hoverLayerId ? 'grab' : 'crosshair')
+                : zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
             }}
-            onMouseDown={handlePanStart}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={() => setHoverLayerId(null)}
           >
             <canvas ref={canvasRef} className="w-full h-full" />
           </div>
@@ -221,11 +414,31 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           <Square className="w-4 h-4" /> Stop
         </button>
         {!embed && (
-          <div className="ml-auto">
-            <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition">
-              <Download className="w-4 h-4" /> Export MP4
+          <>
+            <button
+              onClick={() => setEditMode(v => !v)}
+              className={[
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
+                editMode
+                  ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+              ].join(' ')}
+              title={editMode ? 'Exit edit mode (deselects, returns to preview)' : 'Enter edit mode (click layers to select and drag to move)'}
+            >
+              <MousePointer2 className="w-4 h-4" />
+              {editMode ? 'Editing' : 'Edit'}
             </button>
-          </div>
+            {editMode && selectedLayerId && (
+              <span className="text-xs font-mono text-slate-400 truncate max-w-[10rem]" title={selectedLayerId}>
+                Selected: {selectedLayerId}
+              </span>
+            )}
+            <div className="ml-auto">
+              <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition">
+                <Download className="w-4 h-4" /> Export MP4
+              </button>
+            </div>
+          </>
         )}
       </div>
 

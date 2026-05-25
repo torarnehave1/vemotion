@@ -161,6 +161,31 @@ function applyMaskWipeClip(ctx: CanvasRenderingContext2D, layer: Layer, time: nu
 }
 
 /**
+ * Compute the visual bounding rect of a layer at a given local time, including
+ * offsetX/Y and scale (around centre). Returns null if the layer has zero or
+ * negative size. Used by both the selection overlay and the hit-test.
+ */
+function computeLayerBounds(layer: Layer, localTime: number): { x: number; y: number; w: number; h: number } | null {
+  const values = resolveLayerValues(layer, localTime);
+  const offsetX = typeof values.offsetX === 'number' ? values.offsetX : 0;
+  const offsetY = typeof values.offsetY === 'number' ? values.offsetY : 0;
+  const scale = typeof values.scale === 'number' ? values.scale : 1;
+  const baseW = layer.size.width;
+  const baseH = layer.size.height;
+  if (!(baseW > 0) || !(baseH > 0)) return null;
+  const cx = layer.position.x + baseW / 2;
+  const cy = layer.position.y + baseH / 2;
+  const w = baseW * scale;
+  const h = baseH * scale;
+  return {
+    x: cx - w / 2 + offsetX,
+    y: cy - h / 2 + offsetY,
+    w,
+    h,
+  };
+}
+
+/**
  * Draw an image into a target rectangle with one of three fit modes.
  * Shared between the image layer renderer and the text image-fill path.
  *
@@ -202,6 +227,14 @@ export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private compositionFont = 'Inter, system-ui, sans-serif';
   private imageCache = new Map<string, HTMLImageElement>();
+
+  /**
+   * Id of the layer currently selected in the editor. When non-null,
+   * renderFrame draws a selection overlay (dashed rectangle + corner dots)
+   * around that layer at the end of the frame. The exporter never sets
+   * this, so MP4 output never includes the overlay.
+   */
+  selectedLayerId: string | null = null;
 
   onImageLoad?: () => void;
 
@@ -261,6 +294,69 @@ export class CanvasRenderer {
       const localTime = time - startTime;
       this.drawLayer(layer, localTime);
     }
+
+    // Editor-only selection overlay. Drawn last so it sits above content.
+    if (this.selectedLayerId) {
+      this.drawSelectionOverlay(composition, time);
+    }
+  }
+
+  /**
+   * Hit-test a click against the composition at a given time. Returns the
+   * topmost (last-drawn) layer's id whose post-animation bounding rect
+   * contains the point, or null.
+   *
+   * Coordinates are in canvas pixel space (not screen space) — callers
+   * convert via `getBoundingClientRect()` + the canvas width/height ratio.
+   *
+   * Bounding rect for v1 = layer.position + size scaled around the layer
+   * centre + offsetX/Y. No path-accurate hit test on kg-shape / math-shape
+   * geometry yet — those use the bounding rect.
+   */
+  hitTest(canvasX: number, canvasY: number, composition: CompositionData, time: number): string | null {
+    for (let i = composition.layers.length - 1; i >= 0; i--) {
+      const layer = composition.layers[i];
+      if (layer.visible === false) continue;
+      const startTime = layer.startTime ?? 0;
+      const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
+      if (time < startTime || time > startTime + layerDuration) continue;
+      const localTime = time - startTime;
+      const bounds = computeLayerBounds(layer, localTime);
+      if (bounds === null) continue;
+      if (canvasX >= bounds.x && canvasX <= bounds.x + bounds.w
+        && canvasY >= bounds.y && canvasY <= bounds.y + bounds.h) {
+        return layer.id;
+      }
+    }
+    return null;
+  }
+
+  private drawSelectionOverlay(composition: CompositionData, time: number): void {
+    const layer = composition.layers.find(l => l.id === this.selectedLayerId);
+    if (!layer || layer.visible === false) return;
+    const startTime = layer.startTime ?? 0;
+    const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
+    if (time < startTime || time > startTime + layerDuration) return;
+    const localTime = time - startTime;
+    const bounds = computeLayerBounds(layer, localTime);
+    if (bounds === null) return;
+
+    const { x, y, w, h } = bounds;
+    this.ctx.save();
+    // Dashed sky-blue outline.
+    this.ctx.strokeStyle = '#38bdf8'; // sky-400
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([8, 4]);
+    this.ctx.strokeRect(x, y, w, h);
+    // Corner dots (filled).
+    this.ctx.setLineDash([]);
+    this.ctx.fillStyle = '#38bdf8';
+    const dot = 8;
+    const corners: Array<[number, number]> = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]];
+    for (const [dx, dy] of corners) {
+      this.ctx.fillRect(dx - dot / 2, dy - dot / 2, dot, dot);
+    }
+    this.ctx.restore();
   }
 
   private drawLayer(layer: Layer, time: number): void {
@@ -766,7 +862,10 @@ export class CanvasRenderer {
 
 export class PlaybackController {
   private renderer: CanvasRenderer;
-  private composition: CompositionData;
+  // Public so VideoPreview can swap in a new composition without recreating
+  // the controller (and without resetting frameNumber to 0). All reads happen
+  // on each tick / seek so the swap takes effect immediately.
+  composition: CompositionData;
   private frameNumber = 0;
   private rafId: number | null = null;
   private lastTimestamp: number | null = null;

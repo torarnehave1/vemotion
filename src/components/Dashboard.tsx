@@ -416,6 +416,16 @@ export const Dashboard: React.FC = () => {
               composition={composition}
               onFrameChange={setCurrentFrame}
               externalSeekFrame={seekFrame}
+              onLayerMove={(layerId, position) => {
+                // Commit the post-drag position into composition state. Flows
+                // through the existing autosave pipeline automatically.
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => l.id === layerId
+                    ? { ...l, position }
+                    : l),
+                }));
+              }}
             />
           </div>
           <TimelineEditor

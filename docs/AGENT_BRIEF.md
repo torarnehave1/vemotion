@@ -11,7 +11,7 @@ There is **one** unified `CompositionData` shape — no separate templates. Vari
 Layer `type` discriminators (the agent must use one of these):
 
 - `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`. **Image-fill (letters become a window onto an image): see §11.**
-- `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`. Any layer (including this one) can carry `motionScenes` to follow a formula-driven path over time — see §13.
+- `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`. Optional `strokeColor` + `strokeWidth` for an outline (both required; stroke is drawn on top of fill). Optional `borderRadius` on rect for rounded corners. Any layer (including this one) can carry `motionScenes` to follow a formula-driven path over time — see §13.
 - `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 (the `x0`/`y0` convention — required) and §13 (authoring patterns + worked example).**
 - `image` — raster, with `src`, `fit`, `offset`
 - `video` — type exists in schema; not yet exposed in Add Layer UI
@@ -767,5 +767,163 @@ Reading it:
 - **Using `easing: 'easeOut'` and wondering why the curve still has acceleration at the start.** Easing applies PER SEGMENT, not across the whole animation. A 5-segment animation with `easeOut` eases each segment independently — each segment starts fast and ends slow.
 - **Authoring `value` as a string for a numeric property.** The renderer coerces via `Number()` in some paths but generally expects numbers. `{ time: 0, value: "0" }` is fragile — write `value: 0`.
 - **Trying to animate `color` via keyframes.** Not implemented today. Colour interpolation needs string→numeric infra (hex parse + per-channel interpolation). Documented limitation.
+
+---
+
+## 15. Worked composition: Venn-style overlap + choreographed dots
+
+A real composition pattern that mixes several primitives at once. Demonstrates:
+
+1. **Translucent overlapping `shape:circle` layers** stacked to create the visual depth of a Venn-style diagram. Each circle has both `color` (the translucent fill) and `strokeColor` + `strokeWidth` (a fully-opaque outline at the same colour, which gives the disc a defined edge against the soft fill).
+2. **A `text` layer rendered above the shapes** as a title — the layer-drawing-order convention (later = on top).
+3. **Multiple coordinated `shape:circle` "dots"** scattered around the canvas, each driven by an independent `offsetY` keyframe sequence with different amplitudes and timings — choreography by stagger rather than by formula.
+4. **A `math-shape` "drawing dot"** with `drawProgress` keyframe-animated 0 → 1, so its outline writes itself on during the first portion of the composition. Mixes parametric shapes with primitive shapes in one composition.
+
+Anatomy below is a focused subset — three Venn circles, three bouncing dots, one drawing dot, one title — 5 s @ 30 fps, 1280×720. Scaling up to 5 circles and 7 dots (the full real-world composition the patterns came from) is mechanical.
+
+```jsonc
+{
+  "duration": 5, "fps": 30, "width": 1280, "height": 720,
+  "fontFamily": "Inter",
+  "layers": [
+    // —— Venn-style overlapping circles ——
+    // Each: translucent fill + opaque outline at the same colour for a
+    // defined edge. Three circles overlapping at a shared region.
+    {
+      "id": "venn-a", "type": "shape",
+      "position": { "x": 380, "y": 200 }, "size": { "width": 280, "height": 280 },
+      "properties": {
+        "shape": "circle",
+        "color": "#ff6b6b", "opacity": 0.3,
+        "strokeColor": "#ff6b6b", "strokeWidth": 2
+      }
+    },
+    {
+      "id": "venn-b", "type": "shape",
+      "position": { "x": 620, "y": 200 }, "size": { "width": 280, "height": 280 },
+      "properties": {
+        "shape": "circle",
+        "color": "#4ecdc4", "opacity": 0.3,
+        "strokeColor": "#4ecdc4", "strokeWidth": 2
+      }
+    },
+    {
+      "id": "venn-c", "type": "shape",
+      "position": { "x": 500, "y": 320 }, "size": { "width": 280, "height": 280 },
+      "properties": {
+        "shape": "circle",
+        "color": "#95e1d3", "opacity": 0.3,
+        "strokeColor": "#95e1d3", "strokeWidth": 2
+      }
+    },
+
+    // —— Title (drawn after circles → renders on top) ——
+    {
+      "id": "title", "type": "text",
+      "position": { "x": 390, "y": 40 }, "size": { "width": 500, "height": 80 },
+      "properties": {
+        "text": "Community",
+        "fontSize": 48, "fontFamily": "Inter",
+        "color": "#e2e8f0",
+        "align": "center", "fontWeight": "700"
+      }
+    },
+
+    // —— Three bouncing dots, each with a different vertical amplitude
+    //     and a different cycle count. Same evaluation kind (layer +
+    //     offsetY) — keyframe arrays are what makes them look different. ——
+    {
+      "id": "dot-small", "type": "shape",
+      "position": { "x": 200, "y": 310 }, "size": { "width": 6, "height": 6 },
+      "properties": { "shape": "circle", "color": "#9f831d", "opacity": 1 },
+      "animation": {
+        "kind": "layer", "property": "offsetY",
+        "keyframes": [
+          { "time": 0,    "value":   0 },
+          { "time": 1.25, "value": -67 },
+          { "time": 2.5,  "value":   0 },
+          { "time": 3.75, "value":  67 },
+          { "time": 5,    "value":   0 }
+        ]
+      }
+    },
+    {
+      "id": "dot-mid", "type": "shape",
+      "position": { "x": 250, "y": 310 }, "size": { "width": 8, "height": 8 },
+      "properties": { "shape": "circle", "color": "#b94b4b", "opacity": 1 },
+      "animation": {
+        "kind": "layer", "property": "offsetY",
+        "keyframes": [
+          { "time": 0,    "value":    0 },
+          { "time": 1.25, "value": -147 },
+          { "time": 2.5,  "value":    0 },
+          { "time": 3.75, "value":  147 },
+          { "time": 5,    "value":    0 }
+        ]
+      }
+    },
+    {
+      "id": "dot-big", "type": "shape",
+      "position": { "x": 300, "y": 310 }, "size": { "width": 10, "height": 10 },
+      "properties": { "shape": "circle", "color": "#c65d5d", "opacity": 1 },
+      "animation": {
+        "kind": "layer", "property": "offsetY",
+        "easing": "linear",
+        "keyframes": [
+          { "time": 0,     "value":    0 },
+          { "time": 1.667, "value": -120 },
+          { "time": 3.334, "value":    0 },
+          { "time": 5,     "value":    0 }
+        ]
+      }
+    },
+
+    // —— Drawing dot: a math-shape circle that "writes itself on" over
+    //     the first 3.2 s via keyframed drawProgress 0 → 1. ——
+    {
+      "id": "drawing-dot", "type": "math-shape",
+      "position": { "x": 900, "y": 270 }, "size": { "width": 80, "height": 80 },
+      "animation": {
+        "property": "drawProgress",
+        "keyframes": [
+          { "time": 0,   "value": 0 },
+          { "time": 3.2, "value": 1 }
+        ]
+      },
+      "properties": {
+        "mathKind": "parametric",
+        "xFormula": "x0 + w/2 + min(w,h)*0.35*cos(t)",
+        "yFormula": "y0 + h/2 + min(w,h)*0.35*sin(t)",
+        "tStart": 0, "tEnd": 6.283185, "samples": 180,
+        "stroke": "#ffffff", "strokeWidth": 3,
+        "fill": null, "closePath": true
+      }
+    }
+  ]
+}
+```
+
+### Why each pattern shows up
+
+- **Translucent fill + matching opaque stroke** (`opacity: 0.3` on the fill colour, `strokeColor` at the same hex). The fill softens the disc; the stroke draws a clean edge. Without the stroke each disc would be a fuzzy gradient blob; without the translucent fill the Venn overlap regions wouldn't blend visually. Both are needed for the Venn look.
+- **Layer ordering = z-order.** The title is placed after the three Venn circles in the `layers` array, so it renders ON TOP. Reversing the order would put it behind the discs.
+- **Coordinated dots via independent keyframe arrays.** All three dots share the same `kind: 'layer'` / `property: 'offsetY'` shape. Each has DIFFERENT timing (`dot-small`: 4 segments of equal length; `dot-big`: 3 segments + a settle, with `easing: 'linear'`). Mixing `easeInOut` (default) and `'linear'` gives different "feel" per dot without changing the choreography pattern.
+- **A `math-shape` next to primitive shapes.** Same composition can mix shape `kind`s. The drawing-dot demonstrates `drawProgress` as a temporal effect that primitive `shape:circle` doesn't have — useful when you want "writes itself on" mid-composition without keyframing every property.
+- **Settle at `layerDuration`.** Every dot's last keyframe is anchored at `time: 5` (the composition duration), value 0 — so each dot returns to rest before the composition loops, instead of clamping at a peak position.
+
+### Scaling this pattern up
+
+The real-world composition this came from has **5** Venn circles (red, teal, mint, salmon, lavender — clustered around a centre point with offsets of ±80 px in each axis to form the classic 5-set Venn arrangement) and **7** dots (3 on the left of the circles, 4 on the right) with mixed amplitudes / cycle counts. The recipe is mechanical: add more layers with the same shape, vary `position.x` / `position.y`, and pick non-identical keyframe arrays so the dots don't all bounce in lockstep.
+
+For an interactive runnable example, save the JSON above via:
+
+```bash
+curl -sS -X POST https://api.vegvisr.org/vemotion/composition/save \
+  -H "X-API-Token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Venn + dots example", "composition": { … paste the JSON above … } }'
+```
+
+Then open at `https://vemotion.vegvisr.org/?compositionId=<returned-id>`.
 
 Error codes: 400 (missing required field / invalid mode / both compositionId+composition / inline composition missing width/height/layers), 403 (compositionId belongs to another user), 404 (compositionId not found).

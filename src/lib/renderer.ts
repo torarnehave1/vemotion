@@ -719,6 +719,14 @@ export class CanvasRenderer {
     const x = layer.position.x + ((values.offsetX as number) ?? 0);
     const y = layer.position.y + ((values.offsetY as number) ?? 0);
     const borderRadius = (values.borderRadius as number) ?? 0;
+    // Stroke is optional — requires BOTH strokeColor (truthy string) and
+    // strokeWidth > 0, matching the math-shape / kg-shape convention.
+    // Stroked AFTER fill so the outline sits on top of the fill colour.
+    const strokeColor = (typeof values.strokeColor === 'string' && values.strokeColor)
+      ? (values.strokeColor as string)
+      : null;
+    const strokeWidth = typeof values.strokeWidth === 'number' ? values.strokeWidth as number : 0;
+    const willStroke = strokeColor !== null && strokeWidth > 0;
 
     this.ctx.fillStyle = color;
 
@@ -726,11 +734,26 @@ export class CanvasRenderer {
       this.ctx.beginPath();
       this.ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
       this.ctx.fill();
+      if (willStroke) {
+        this.ctx.strokeStyle = strokeColor!;
+        this.ctx.lineWidth = strokeWidth;
+        this.ctx.stroke();
+      }
     } else if (borderRadius > 0) {
       this.roundedRect(x, y, w, h, borderRadius);
       this.ctx.fill();
+      if (willStroke) {
+        this.ctx.strokeStyle = strokeColor!;
+        this.ctx.lineWidth = strokeWidth;
+        this.ctx.stroke();
+      }
     } else {
       this.ctx.fillRect(x, y, w, h);
+      if (willStroke) {
+        this.ctx.strokeStyle = strokeColor!;
+        this.ctx.lineWidth = strokeWidth;
+        this.ctx.strokeRect(x, y, w, h);
+      }
     }
   }
 

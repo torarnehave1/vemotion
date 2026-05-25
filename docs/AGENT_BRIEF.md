@@ -541,22 +541,30 @@ Reusable formula patterns (same set the editor preset dropdown uses):
 
 ### 13.2 — Motion paths on any layer: `motionScenes`
 
-`motionScenes` is an optional property on **any** layer type (text, shape, image, math-shape, kg-shape, card). Each scene defines a time window and the formula that drives the layer's position during that window:
+`motionScenes` is an optional property on **any** layer type (text, shape, image, math-shape, kg-shape, card). Each scene defines a time window and the formula(s) that drive the layer's position — and optionally scale — during that window:
 
 ```ts
 type MotionScene = {
   start: number;          // seconds (in composition time)
   end: number;            // seconds
-  xFormula?: string;      // returns absolute canvas X for the layer's top-left
-  yFormula?: string;      // returns absolute canvas Y for the layer's top-left
+  xFormula?:     string;  // returns absolute canvas X for the layer's top-left
+  yFormula?:     string;  // returns absolute canvas Y for the layer's top-left
+  scaleFormula?: string;  // returns scale (1 = native size). OVERRIDES any keyframe/static scale during the scene window.
 };
 ```
 
 Semantics:
-- When the current time `t` is inside `[start, end]`, the renderer evaluates `xFormula` / `yFormula` and overrides the layer's `position` with the result (technically: sets `offsetX = sceneX - position.x` and `offsetY = sceneY - position.y`, so the visual position equals the formula output).
-- Outside the scene window, the layer renders at its base `position`.
+- When the current time `t` is inside `[start, end]`, the renderer evaluates each formula that's present and overrides the corresponding layer state:
+  - `xFormula` / `yFormula` → set `offsetX` / `offsetY` so the layer's visual position equals the formula output.
+  - `scaleFormula` → replaces the layer's `scale` for the duration of the scene window. Compose with the position formulas in one place — e.g. an orbiting dot that also grows/shrinks.
+- Outside the scene window, the layer renders at its base `position` and whatever scale the keyframe / static property gives it.
 - Multiple scenes can stitch together: the FIRST scene whose window contains the current time is used. To make a smooth multi-segment path, ensure consecutive scenes meet at the same `(x, y)` at the join.
 - Same evaluator as math-shape — same variables: `t` (seconds since scene start), `p` (normalised 0..1 across the scene), `x0`, `y0`, `w`, `h`, `sin`, `cos`, `tan`, `pi`, etc.
+- `scaleFormula` example shapes:
+  - **Sine-wave pulse** (one cycle per scene): `"1 + 0.5 * sin(p * 2 * pi)"` — scale oscillates between 0.5 and 1.5.
+  - **Pulse N times per scene**: `"1 + 0.5 * sin(p * N * 2 * pi)"`.
+  - **Grow linearly**: `"1 + p * 2"` — starts at 1, ends at 3.
+  - **Heartbeat (asymmetric)**: `"1 + 0.3 * abs(sin(p * 2 * pi * 4))"` — sharper peaks via `abs()`.
 
 ### 13.3 — Worked example: small circle orbiting a larger circle's edge
 
@@ -650,6 +658,41 @@ curl -sS -X POST https://api.vegvisr.org/vemotion/composition/save \
 ```
 
 Then open the editor at `https://vemotion.vegvisr.org/?compositionId=<id>` and press Play — the dot orbits the circle's edge for the full 5 seconds, then loops.
+
+### 13.3b — Variant: orbiter that also pulses size
+
+Same orbiter as above with one extra `scaleFormula` so the dot grows and shrinks twice per revolution. Position and size are driven in a single `motionScenes` entry:
+
+```jsonc
+{
+  "id": "orbiter",
+  "type": "shape",
+  "position": { "x": 625, "y": 345 },
+  "size":     { "width": 30, "height": 30 },
+  "properties": {
+    "shape": "circle",
+    "color": "#38bdf8",
+    "motionScenes": [
+      {
+        "start": 0, "end": 5,
+        "xFormula":     "x0 + 200 * cos(p * 2 * pi)",
+        "yFormula":     "y0 + 200 * sin(p * 2 * pi)",
+        "scaleFormula": "1 + 0.5 * sin(p * 4 * pi)"
+      }
+    ]
+  }
+}
+```
+
+Reading the `scaleFormula`:
+- `p` is normalised 0..1 across the scene.
+- `p * 4 * pi` sweeps two full sine periods (`4π = 2·2π`).
+- `0.5 * sin(...)` gives a wave in `[-0.5, +0.5]`.
+- `1 + 0.5 * sin(...)` is therefore in `[0.5, 1.5]` — the dot scales between half and 1.5× its native size, twice per orbit.
+
+Substitute `p * 2 * pi` for one pulse per orbit, `p * 6 * pi` for three, etc.
+
+Composing with a `scale` keyframe animation: `scaleFormula` OVERRIDES any keyframe scale during the scene window (same rule as `xFormula`/`yFormula` override position). Outside the window, the keyframe value applies again.
 
 ### 13.4 — Common patterns for motion formulas
 

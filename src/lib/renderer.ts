@@ -96,6 +96,11 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
       const sceneY = evaluateFormula(currentScene.yFormula, context);
       if (sceneX !== null) values.offsetX = sceneX - layer.position.x;
       if (sceneY !== null) values.offsetY = sceneY - layer.position.y;
+      // Optional formula-driven scale. Overrides any keyframe/static scale
+      // for the duration of the scene window — same override convention as
+      // x/y formulas.
+      const sceneScale = evaluateFormula(currentScene.scaleFormula, context);
+      if (sceneScale !== null) values.scale = sceneScale;
     }
   }
 

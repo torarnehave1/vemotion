@@ -56,8 +56,19 @@ export type Animation = {
 export type MotionScene = {
   start: number;
   end: number;
+  /** Returns absolute canvas X. Same evaluator vocabulary as scaleFormula. */
   xFormula?: string;
+  /** Returns absolute canvas Y. */
   yFormula?: string;
+  /**
+   * Optional. Returns the layer's scale (1 = native size). When present
+   * and the time is inside [start, end], OVERRIDES any other scale source
+   * (static property, keyframe animation) for the duration of the scene —
+   * same convention as xFormula/yFormula override position.
+   * Same evaluator context as xFormula/yFormula (t, p, x0, y0, w, h,
+   * sin, cos, pi, …). Pulse two times per scene: '1 + 0.5 * sin(p*4*pi)'.
+   */
+  scaleFormula?: string;
 };
 
 export type Keyframe = {

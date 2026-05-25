@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2 } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
@@ -61,6 +61,31 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
   const removeLayer = (id: string) => {
     onChange({ ...composition, layers: composition.layers.filter(l => l.id !== id) });
+  };
+
+  /**
+   * Duplicate a layer. Insert the copy immediately AFTER the original so the
+   * duplicate sits on top in z-order (Figma / Keynote convention). Offset by
+   * (+20, +20) px so the user can see it's a separate layer instead of
+   * stacked invisibly on the source. New unique id via the same timestamp
+   * pattern AddLayerModal uses for new-layer creation.
+   */
+  const duplicateLayer = (id: string) => {
+    const idx = composition.layers.findIndex(l => l.id === id);
+    if (idx === -1) return;
+    const source = composition.layers[idx];
+    // Deep clone — animations, properties (including motionScenes), keyframes,
+    // and nested objects all get their own references so editing the copy
+    // doesn't mutate the source.
+    const clone: Layer = JSON.parse(JSON.stringify(source));
+    clone.id = `layer-${Date.now().toString(36)}`;
+    clone.position = { x: source.position.x + 20, y: source.position.y + 20 };
+    const layers = [
+      ...composition.layers.slice(0, idx + 1),
+      clone,
+      ...composition.layers.slice(idx + 1),
+    ];
+    onChange({ ...composition, layers });
   };
 
   const toggleLayerVisibility = (id: string) => {
@@ -196,7 +221,14 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
                 >
                   {layer.visible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
-                <button onClick={() => removeLayer(layer.id)} className="text-slate-500 hover:text-red-400 transition">
+                <button
+                  onClick={() => duplicateLayer(layer.id)}
+                  className="text-slate-500 hover:text-emerald-400 transition"
+                  title="Duplicate layer (insert copy right after, offset +20, +20)"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => removeLayer(layer.id)} className="text-slate-500 hover:text-red-400 transition" title="Delete layer">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>

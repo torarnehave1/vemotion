@@ -2,7 +2,21 @@ import type { Animation, CompositionData, Layer, Keyframe, MotionScene } from '.
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
-export function interpolate(keyframes: Keyframe[], time: number): number {
+export type EasingMode = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+
+/**
+ * Interpolate a keyframe sequence at the given local time using the chosen
+ * easing curve between adjacent keyframes. Boundary clamp: any time at or
+ * before the first keyframe returns the first value; any time at or after
+ * the last keyframe returns the last. Default easing is 'easeInOut' for
+ * back-compat — animations authored before easing was honoured continue to
+ * render identically.
+ */
+export function interpolate(
+  keyframes: Keyframe[],
+  time: number,
+  easing: EasingMode = 'easeInOut',
+): number {
   if (keyframes.length === 0) return 0;
   if (keyframes.length === 1) return keyframes[0].value as number;
 
@@ -15,13 +29,25 @@ export function interpolate(keyframes: Keyframe[], time: number): number {
   const before = sorted[sorted.indexOf(after) - 1];
 
   const progress = (time - before.time) / (after.time - before.time);
-  const eased = easeInOut(progress);
+  const eased = applyEasing(progress, easing);
 
   return (before.value as number) + ((after.value as number) - (before.value as number)) * eased;
 }
 
-function easeInOut(t: number): number {
-  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+/**
+ * All easing functions take normalised input `t` in [0, 1] and return a
+ * value in [0, 1] (slight overshoot is mathematically possible at the
+ * extremes for some curves but quadratic ease-in/out stay bounded). Curves
+ * chosen for predictability + cheap computation, not for fancy motion.
+ */
+function applyEasing(t: number, mode: EasingMode): number {
+  switch (mode) {
+    case 'linear':    return t;
+    case 'easeIn':    return t * t;
+    case 'easeOut':   return 1 - (1 - t) * (1 - t);
+    case 'easeInOut':
+    default:          return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+  }
 }
 
 // Resolve all animated properties for a layer at a given time.
@@ -43,12 +69,12 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
   // per-glyph or via clip in drawLayer/drawText, not as layer-property mutation.
   // Animations with no `kind` default to 'layer' for back-compat.
   if (layer.animation && (layer.animation.kind ?? 'layer') === 'layer' && layer.animation.property) {
-    values[layer.animation.property] = interpolate(layer.animation.keyframes, time);
+    values[layer.animation.property] = interpolate(layer.animation.keyframes, time, layer.animation.easing);
   }
   for (const anim of layer.animations ?? []) {
     if ((anim.kind ?? 'layer') !== 'layer') continue;
     if (!anim.property) continue;
-    values[anim.property] = interpolate(anim.keyframes, time);
+    values[anim.property] = interpolate(anim.keyframes, time, anim.easing);
   }
 
   const motionScenes = Array.isArray(values.motionScenes) ? values.motionScenes as MotionScene[] : [];
@@ -125,7 +151,7 @@ function applyMaskWipeClip(ctx: CanvasRenderingContext2D, layer: Layer, time: nu
   }
   if (!anim) return;
 
-  const raw = interpolate(anim.keyframes, time);
+  const raw = interpolate(anim.keyframes, time, anim.easing);
   const progress = Math.max(0, Math.min(1, raw));
   const direction = anim.direction ?? 'ltr';
 
@@ -619,7 +645,7 @@ export class CanvasRenderer {
         for (const anim of charAnims) {
           const delay = globalCharIdx * (anim.stagger ?? 0);
           const charTime = time - delay;
-          const val = interpolate(anim.keyframes, charTime);
+          const val = interpolate(anim.keyframes, charTime, anim.easing);
           switch (anim.property) {
             case 'opacity':  charOpacity = Math.max(0, Math.min(1, val)); break;
             case 'offsetX':  charOffsetX = val; break;

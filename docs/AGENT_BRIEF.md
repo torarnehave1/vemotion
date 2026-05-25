@@ -54,7 +54,9 @@ type Animation = {
   // Required for kind 'layer' and 'char-stagger'; unused for 'mask-wipe'.
   property?: string;          // 'opacity' | 'offsetX' | 'offsetY' | 'scale' | 'drawProgress' | …
   keyframes: { time: number; value: unknown }[];
-  easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+  // Easing curve applied BETWEEN adjacent keyframes (see §14 for the full
+  // table). Default 'easeInOut' for back-compat. Honoured by the renderer.
+  easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
   // 'char-stagger' only — seconds of delay between successive characters.
   stagger?: number;
   // 'mask-wipe' only — direction of the reveal.
@@ -661,5 +663,109 @@ Then open the editor at `https://vemotion.vegvisr.org/?compositionId=<id>` and p
 | Sine wave horizontal traversal | `x0 + p*w` | `y0 + h/2 + h*0.3 * sin(p * 4 * pi)` |
 
 For all of these, set the layer's base `position` such that the FORMULA OUTPUT for `p = 0` matches where you want the layer to start. The renderer evaluates the formula and translates the layer there; `position` is the anchor everything is relative to.
+
+---
+
+## 14. Keyframes — the timing primitive every animation rests on
+
+`keyframes` is the universal contract for time-based change across every animation `kind` (`layer`, `char-stagger`, `mask-wipe`) and `motionScenes`. Same shape, same evaluator, predictable boundary behaviour. If `keyframes` is in scope, this section defines what it means.
+
+### 14.1 — Authoring contract
+
+```ts
+type Keyframe = {
+  time: number;     // SECONDS, in the layer's LOCAL time (relative to layer.startTime).
+  value: unknown;   // For animatable numeric properties this is a number.
+                    // String values (e.g. colour) are NOT interpolated today —
+                    // only the values at exact keyframe times are honoured,
+                    // intermediate frames clamp to the previous keyframe.
+};
+```
+
+Rules:
+- **`time` is in seconds, local to the layer's `startTime`.** A keyframe at `time: 0` triggers when the layer first becomes active (i.e. at composition time `= layer.startTime`).
+- **The array can be in any order.** The renderer sorts by `time` ascending before evaluating, so the JSON can be written in whatever order is most readable.
+- **Anchor the LAST keyframe at the layer's effective duration** if you want the value to "settle" cleanly when the layer ends. Otherwise the value is held constant past the last keyframe (boundary clamp — see §14.3).
+- **Numbers, please.** `opacity`, `offsetX`, `offsetY`, `scale`, `drawProgress`, `mask-wipe` reveal progress, `char-stagger`'s targeted property — all numeric. The renderer interpolates linearly between them then applies the easing curve.
+
+### 14.2 — Easing (`easing` field)
+
+`Animation.easing` controls the curve applied between adjacent keyframes. Honoured by the renderer.
+
+| Mode | Curve | Use when |
+|---|---|---|
+| `'easeInOut'` *(default)* | `t < 0.5 ? 2t² : 1 − 2(1−t)²` | The standard "natural" feel. Slow start, fast middle, slow end. Default for back-compat — animations authored without an `easing` field continue to behave as before. |
+| `'linear'` | `t` | Constant rate of change. Use for mechanical motion, looping cycles, or when you want predictable per-segment speed (e.g. a metronome tick or a uniformly-rotating element). |
+| `'easeIn'` | `t²` | Slow start, fast finish. Use for "departures" — a layer accelerating off-screen. |
+| `'easeOut'` | `1 − (1−t)²` | Fast start, slow finish. Use for "arrivals" — a layer decelerating into its final position. |
+
+The curve is applied **per segment** (between each pair of adjacent keyframes), not across the whole animation. A 5-keyframe bounce with `easing: 'easeInOut'` eases between kf1↔kf2, then again between kf2↔kf3, etc.
+
+### 14.3 — Boundary behaviour
+
+```
+time < first keyframe.time   →  value = first keyframe.value (CLAMP)
+time = first keyframe.time   →  value = first keyframe.value (exact)
+time between adjacent kfs    →  value = lerp + easing
+time = last keyframe.time    →  value = last keyframe.value (exact)
+time > last keyframe.time    →  value = last keyframe.value (CLAMP, NOT extrapolation)
+```
+
+**The renderer never extrapolates past the last keyframe.** It holds the last value indefinitely until either the layer ends or the next kind of override kicks in (e.g. a `motionScenes` window). Practical consequence: a fade-in animation `[{0,0}, {0.4,1}]` on a layer whose `layerDuration` is 3 s will fade in over the first 0.4 s and STAY at opacity 1 for the remaining 2.6 s. No need to add a trailing `{3, 1}` keyframe to keep the layer visible.
+
+### 14.4 — Multi-keyframe authoring patterns
+
+| Pattern | Shape | When to use |
+|---|---|---|
+| **Single segment** (fade, slide, scale-up) | `[{0, A}, {t1, B}]` | One-shot reveal or exit. Most common. |
+| **Settle after move** | `[{0, A}, {t1, B}, {layerDuration, B}]` | A `0→B` move followed by an explicit hold (rarely needed thanks to boundary clamp, but useful for clarity). |
+| **Bounce there-and-back** | `[{0, 0}, {t/2, peak}, {t, 0}]` | Vertical hop, pulse, breathing scale. |
+| **Oscillation (N cycles)** | `[{0,0}, {t/2N, +A}, {t/N, 0}, {3t/2N, -A}, {2t/N, 0}, …]` ending at `{t, 0}` | Wobble, jitter, pendulum. |
+| **Dwell-then-move-then-dwell** | `[{0, A}, {t1, A}, {t2, B}, {layerDuration, B}]` | Layer holds at A, transitions to B over `t1→t2`, then holds at B. |
+| **Asymmetric three-stage** | `[{0, A}, {t1, B}, {t2, C}]` with non-uniform `t1`, `t2` | Choreographed sequences where each segment has its own duration. |
+
+### 14.5 — Worked example: triple-bounce dot (asymmetric multi-segment)
+
+This is `dot-6` from a real composition — 7 keyframes drive a vertical oscillation with three distinct amplitudes over 5 s. Reads as: "two full bounces (down) of equal amplitude, then one big up-bounce, then settle."
+
+```jsonc
+{
+  "id": "dot-6",
+  "type": "shape",
+  "position": { "x": 800, "y": 310 },
+  "size":     { "width": 8, "height": 8 },
+  "startTime": 0,
+  "layerDuration": 5,
+  "properties": { "shape": "circle", "color": "#f38181", "opacity": 1 },
+  "animation": {
+    "kind": "layer",
+    "property": "offsetY",
+    "keyframes": [
+      { "time": 0,     "value":  0   },   // start at rest
+      { "time": 0.833, "value": -90  },   // peak of up-bounce #1
+      { "time": 1.667, "value":  0   },   // back to rest
+      { "time": 2.5,   "value":  90  },   // peak of down-bounce
+      { "time": 3.334, "value":  0   },   // back to rest
+      { "time": 4.167, "value": -90  },   // peak of up-bounce #2
+      { "time": 5,     "value":  0   }    // settle exactly at layer end
+    ]
+  }
+}
+```
+
+Reading it:
+- **Six 0.833 s segments** (5 s / 6 = 0.833) divide the timeline evenly. Each segment uses the default `easeInOut`, so the dot decelerates into each peak / rest position.
+- **`offsetY` semantics:** negative = up (canvas Y axis points down). So `-90` is 90 px above the base position.
+- **The last keyframe `{5, 0}` is critical** — it anchors the dot back at rest exactly when the layer ends. Without it, the dot would interpolate to the previous keyframe value and then clamp there, leaving the dot 90 px above its base for the final frame.
+- **Linear instead of eased?** Change `easing` on the animation to `'linear'` for a mechanical sawtooth feel. The peaks become pointy instead of rounded.
+
+### 14.6 — Common authoring mistakes
+
+- **Putting `time` in frames.** It's seconds. `{ time: 30 }` on a 30 fps composition means "30 seconds from layer start", not "frame 30 (= 1 second)".
+- **Forgetting the layer's `startTime` shifts the time origin.** A keyframe at `time: 0` on a layer with `startTime: 2` fires at composition time 2 s, not 0 s.
+- **Expecting extrapolation past the last keyframe.** Doesn't happen — value clamps. If you want continued motion, add more keyframes.
+- **Using `easing: 'easeOut'` and wondering why the curve still has acceleration at the start.** Easing applies PER SEGMENT, not across the whole animation. A 5-segment animation with `easeOut` eases each segment independently — each segment starts fast and ends slow.
+- **Authoring `value` as a string for a numeric property.** The renderer coerces via `Number()` in some paths but generally expects numbers. `{ time: 0, value: "0" }` is fragile — write `value: 0`.
+- **Trying to animate `color` via keyframes.** Not implemented today. Colour interpolation needs string→numeric infra (hex parse + per-channel interpolation). Documented limitation.
 
 Error codes: 400 (missing required field / invalid mode / both compositionId+composition / inline composition missing width/height/layers), 403 (compositionId belongs to another user), 404 (compositionId not found).

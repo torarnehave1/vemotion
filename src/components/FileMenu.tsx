@@ -1,19 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FilePlus, FileJson, Save, Upload, FolderOpen, Trash2, Loader2 } from 'lucide-react';
+import { ChevronDown, FilePlus, FileJson, Save, Upload, FolderOpen, Loader2 } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
-import { getCompositionFromCloud, saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
+import { saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
 import { movementOverTimeExample, neyLessonExample } from '../lib/examples';
 import { CompositionJsonModal } from './CompositionJsonModal';
-
-const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
-
-interface SavedComposition {
-  id: string;
-  name: string;
-  updatedAt: string;
-  layerCount?: number;
-}
+import { PortfolioModal } from './PortfolioModal';
 
 interface FileMenuProps {
   composition: CompositionData;
@@ -38,14 +30,12 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   onCloudSaved,
 }) => {
   const [open, setOpen] = useState(false);
-  const [showCloud, setShowCloud] = useState(false);
-  const [cloudList, setCloudList] = useState<SavedComposition[]>([]);
   const [saveName, setSaveName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
+  const [showPortfolio, setShowPortfolio] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -58,7 +48,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
     }
   }, [currentCloudName]);
 
-  const close = () => { setOpen(false); setShowCloud(false); setError(''); };
+  const close = () => { setOpen(false); setError(''); };
 
   // ── Computer ────────────────────────────────────────────────────────────────
 
@@ -117,29 +107,12 @@ export const FileMenu: React.FC<FileMenuProps> = ({
     close();
   };
 
-  // ── Cloud ───────────────────────────────────────────────────────────────────
+  // ── Cloud save ──────────────────────────────────────────────────────────────
+  // The "open / browse / delete" surface lives in PortfolioModal now; this
+  // helper only handles the inline "Save to cloud" button at the bottom of
+  // the File menu.
 
   const getToken = () => readStoredUser()?.emailVerificationToken ?? null;
-
-  const openCloud = async () => {
-    const token = getToken();
-    if (!token) { setError('Sign in to use cloud save.'); return; }
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${VEMOTION_API}/compositions`, {
-        headers: { 'X-API-Token': token },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setCloudList(data.compositions ?? []);
-      setShowCloud(true);
-    } catch {
-      setError('Failed to load compositions from cloud.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const saveToCloud = async () => {
     if (!getToken()) { setError('Sign in to use cloud save.'); return; }
@@ -165,43 +138,11 @@ export const FileMenu: React.FC<FileMenuProps> = ({
     }
   };
 
-  const loadFromCloud = async (id: string) => {
-    const token = getToken();
-    if (!token) { setError('Sign in to use cloud save.'); return; }
-    setLoading(true);
-    setError('');
-    try {
-      const data = await getCompositionFromCloud(id);
-      onLoad(data.composition);
-      setCurrentId(data.id);
-      setSaveName(data.name);
-      writeLastCompositionRef({ id: data.id, name: data.name });
-      onCloudMetaChange?.({ id: data.id, name: data.name });
-      close();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteFromCloud = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('Delete this composition?')) return;
-    const token = getToken();
-    if (!token) return;
-    await fetch(`${VEMOTION_API}/composition?id=${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: { 'X-API-Token': token },
-    });
-    setCloudList(prev => prev.filter(c => c.id !== id));
-  };
-
   return (
     <div className="relative">
       <button
         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm rounded-lg border border-slate-700 transition"
-        onClick={() => { setOpen(o => !o); setShowCloud(false); setError(''); }}
+        onClick={() => { setOpen(o => !o); setError(''); }}
       >
         File <ChevronDown className="w-3.5 h-3.5" />
       </button>
@@ -211,67 +152,39 @@ export const FileMenu: React.FC<FileMenuProps> = ({
           <div className="fixed inset-0 z-40" onClick={close} />
           <div className="absolute left-0 top-full mt-1 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
 
-            {!showCloud ? (
-              <>
-                <MenuItem icon={<FilePlus className="w-4 h-4" />} label="New composition" onClick={() => { onNew(); close(); }} />
-                <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load movement graph demo" onClick={loadMovementGraphExample} />
-                <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load flute solfège demo" onClick={loadNeyLessonExample} />
-                <div className="h-px bg-slate-800 mx-3" />
-                <MenuItem icon={<Save className="w-4 h-4" />} label="Save to computer" onClick={saveToComputer} />
-                <MenuItem icon={<FileJson className="w-4 h-4" />} label="View JSON" onClick={() => { setShowJson(true); close(); }} />
-                <MenuItem icon={<Upload className="w-4 h-4" />} label="Load from computer" onClick={loadFromComputer} />
-                <div className="h-px bg-slate-800 mx-3" />
-                <MenuItem icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />} label="Open from cloud" onClick={openCloud} />
-                <div className="p-3 border-t border-slate-800 space-y-2">
-                  <input
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    placeholder="Composition name…"
-                    value={saveName}
-                    onChange={e => setSaveName(e.target.value)}
-                  />
-                  <button
-                    className="w-full flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white text-xs font-medium rounded-lg py-1.5 transition"
-                    onClick={saveToCloud}
-                    disabled={saving || !userEmail}
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    {currentId ? 'Update in cloud' : 'Save to cloud'}
-                  </button>
-                  {error && <p className="text-red-400 text-xs">{error}</p>}
-                  {!userEmail && <p className="text-slate-500 text-xs">Sign in to save to cloud</p>}
-                </div>
-              </>
-            ) : (
-              <div className="p-3 space-y-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-slate-300">Saved compositions</span>
-                  <button className="text-xs text-slate-500 hover:text-slate-300" onClick={() => setShowCloud(false)}>Back</button>
-                </div>
-                {cloudList.length === 0 ? (
-                  <p className="text-slate-500 text-xs text-center py-4">No saved compositions yet.</p>
-                ) : (
-                  cloudList.map(c => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800 cursor-pointer group"
-                      onClick={() => loadFromCloud(c.id)}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm text-slate-200 truncate">{c.name}</p>
-                        <p className="text-xs text-slate-500">{new Date(c.updatedAt).toLocaleDateString()}</p>
-                      </div>
-                      <button
-                        className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition flex-shrink-0"
-                        onClick={e => deleteFromCloud(c.id, e)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-                {error && <p className="text-red-400 text-xs">{error}</p>}
-              </div>
-            )}
+            {/*
+              Cloud-list panel (showCloud) replaced by PortfolioModal — opens
+              full-screen on top of the editor with search / sort / tag /
+              category / metaArea filters + per-card edit. The File menu
+              entry just toggles the modal now.
+            */}
+            <MenuItem icon={<FilePlus className="w-4 h-4" />} label="New composition" onClick={() => { onNew(); close(); }} />
+            <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load movement graph demo" onClick={loadMovementGraphExample} />
+            <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Load flute solfège demo" onClick={loadNeyLessonExample} />
+            <div className="h-px bg-slate-800 mx-3" />
+            <MenuItem icon={<Save className="w-4 h-4" />} label="Save to computer" onClick={saveToComputer} />
+            <MenuItem icon={<FileJson className="w-4 h-4" />} label="View JSON" onClick={() => { setShowJson(true); close(); }} />
+            <MenuItem icon={<Upload className="w-4 h-4" />} label="Load from computer" onClick={loadFromComputer} />
+            <div className="h-px bg-slate-800 mx-3" />
+            <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Open Portfolio…" onClick={() => { setShowPortfolio(true); close(); }} />
+            <div className="p-3 border-t border-slate-800 space-y-2">
+              <input
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                placeholder="Composition name…"
+                value={saveName}
+                onChange={e => setSaveName(e.target.value)}
+              />
+              <button
+                className="w-full flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white text-xs font-medium rounded-lg py-1.5 transition"
+                onClick={saveToCloud}
+                disabled={saving || !userEmail}
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                {currentId ? 'Update in cloud' : 'Save to cloud'}
+              </button>
+              {error && <p className="text-red-400 text-xs">{error}</p>}
+              {!userEmail && <p className="text-slate-500 text-xs">Sign in to save to cloud</p>}
+            </div>
           </div>
         </>
       )}
@@ -280,6 +193,22 @@ export const FileMenu: React.FC<FileMenuProps> = ({
 
       {showJson && (
         <CompositionJsonModal composition={composition} onClose={() => setShowJson(false)} />
+      )}
+
+      {showPortfolio && (
+        <PortfolioModal
+          userEmail={userEmail}
+          onClose={() => setShowPortfolio(false)}
+          onOpen={(comp, id, name) => {
+            // Mirror the existing loadFromCloud flow: hand the composition to
+            // the parent and update cloud metadata so autosave knows the id.
+            onLoad(comp);
+            setCurrentId(id);
+            setSaveName(name);
+            writeLastCompositionRef({ id, name });
+            onCloudMetaChange?.({ id, name });
+          }}
+        />
       )}
     </div>
   );

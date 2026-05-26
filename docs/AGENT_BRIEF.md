@@ -980,9 +980,14 @@ type CompositionData = {
   // ... duration, fps, width, height, fontFamily, layers, groups ...
   meta?: {
     description?: string;   // one paragraph explaining the composition
+    tags?: string[];        // free-form labels — 'animation', 'title-card', 'demo' (lowercase, hyphen-separated, no leading #)
+    category?: string;      // single classification — 'Title cards', 'Lyric videos', 'Explainers'
+    metaArea?: string;      // single area / domain — 'Marketing', 'Education', 'Research'
   };
 };
 ```
+
+All four meta fields are surfaced in the Portfolio modal in the editor (File → Open Portfolio…) where the user can filter by `category` / `metaArea` (sidebar), tag-chip-filter by `tags`, and free-text search across `name` / `description` / `tags` / `category` / `metaArea`. `description` is the prose summary an agent uses to orient.
 
 ### Convention
 

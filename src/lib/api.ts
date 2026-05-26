@@ -25,6 +25,24 @@ export type CompositionMeta = {
    * (e.g. "circles intentionally overlap to suggest Venn-style intersection").
    */
   description?: string;
+  /**
+   * Free-form labels for cross-cutting concerns — "animation", "title-card",
+   * "demo", "client-x", "draft". Used by the Portfolio modal as filter chips.
+   * Convention: lowercase, hyphen-separated, no leading #.
+   */
+  tags?: string[];
+  /**
+   * Single free-form classification — "Title cards", "Lyric videos",
+   * "Explainers", "Demos". Used by the Portfolio modal as a sidebar filter.
+   * Convention: human-friendly capitalised noun phrase.
+   */
+  category?: string;
+  /**
+   * Single free-form area / domain — "Marketing", "Education", "Research".
+   * Used by the Portfolio modal as a sidebar filter (separate axis from
+   * category). Convention: human-friendly capitalised noun.
+   */
+  metaArea?: string;
 };
 
 export type LayerGroup = {

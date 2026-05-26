@@ -13,6 +13,7 @@ Layer `type` discriminators (the agent must use one of these):
 - `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`. **Image-fill (letters become a window onto an image): see §11.**
 - `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`. Optional `strokeColor` + `strokeWidth` for an outline (both required; stroke is drawn on top of fill). Optional `borderRadius` on rect for rounded corners. Any layer (including this one) can carry `motionScenes` to follow a formula-driven path over time — see §13.
 - `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 (the `x0`/`y0` convention — required) and §13 (authoring patterns + worked example).**
+- `path` — hand-authored polyline or cubic-Bezier curve, drawn as a stroke + usable as a motion source by other layers. **See §18.** Authored via the Pen tool in the editor; programmatic via `properties.anchors[]`. Coexists with `math-shape` (formula curves) and `motionScenes` formulas — pick the tool that fits.
 - `audio` — sound layer (voice-over, music, sound effects). Reuses the existing vegvisr audio-portfolio + transcription workers — see §17.
 - `image` — raster, with `src`, `fit`, `offset`
 - `video` — type exists in schema; not yet exposed in Add Layer UI
@@ -1130,5 +1131,143 @@ One paragraph. Don't write a novel — agents are good at making inferences from
 ### Rule for agents
 
 **When you author or edit a composition, set `meta.description`.** If you're editing an existing composition, don't blank an existing `meta.description` unless the edit fundamentally changes what the composition depicts.
+
+---
+
+## 18. Path layers + path-following motion
+
+A `type: 'path'` layer is a hand-authored polyline or cubic-Bezier curve. It serves two purposes:
+
+1. **As a drawable element** — strokes the curve onto the canvas, like any other shape.
+2. **As a motion source** — other layers can reference it via `motionScene.pathLayerId` and ride along the curve. The most useful case: a `shape: 'circle'` dot that "drives" along a curve traced over a background image.
+
+**This is additive.** It coexists with `math-shape` (formula curves), `motionScenes` formulas (`xFormula` / `yFormula` for orbits, oscillations, sines), and keyframe animations on `offsetX` / `offsetY`. Pick the tool that fits the motion: formulas for math-expressible curves; the path tool for hand-shaped curves over arbitrary backgrounds.
+
+### 18.1 — Schema
+
+```ts
+type PathAnchor = {
+  x: number;
+  y: number;
+  in?:  { x: number; y: number };  // incoming control handle offset (relative to x, y)
+  out?: { x: number; y: number };  // outgoing control handle offset (relative to x, y)
+};
+
+// Layer of type 'path' carries this in properties:
+{
+  type: 'path',
+  properties: {
+    anchors: PathAnchor[],           // ≥ 2 entries
+    closed?: boolean,                // default false; if true, closes the path back to anchors[0]
+    strokeColor?: string,            // default '#94a3b8'
+    strokeWidth?: number,            // default 2
+    showInPreview?: boolean,         // default true; set false to hide the stroke (path is invisible motion source only)
+  }
+}
+```
+
+Per-segment behaviour:
+- If `anchors[i].out` AND `anchors[i+1].in` are both set → that segment renders as a **cubic Bezier** via `ctx.bezierCurveTo`, using the handles as control points.
+- Otherwise → straight line via `ctx.lineTo`.
+- You can mix corner anchors (no handles) and smooth anchors (handles) freely in the same path.
+
+### 18.2 — Authoring (editor)
+
+- Top-right of the preview, click the **Pen** button. Mutually exclusive with **Edit** (drag-to-move) — turning one on disables the other.
+- Click on the canvas to drop anchors. Each click extends the path with a new corner anchor.
+- **Enter** or click **Finish** to commit. **Esc** or **Cancel** to discard. **Backspace** to undo the last anchor.
+- On commit, two layers are added atomically: the path layer + a sky-blue follower dot whose `motionScene.pathLayerId` references the path. The dot starts driving along the path immediately on the next playback.
+
+V1 of the Pen tool emits polyline anchors only (no handles). Bezier-handle authoring (drag-while-clicking to set tangents, smooth/corner anchor types, post-hoc handle dragging) is a follow-up GUI slice — the schema and renderer already support Bezier paths, so anchors with `in` / `out` handles authored via JSON or by a future GUI render correctly today.
+
+### 18.3 — Motion: `motionScene.pathLayerId`
+
+Add a motionScene to any layer (typically a small `shape: 'circle'`) that references the path id:
+
+```jsonc
+{
+  "id": "dot",
+  "type": "shape",
+  "position": { "x": 0, "y": 0 },
+  "size": { "width": 14, "height": 14 },
+  "properties": {
+    "shape": "circle",
+    "color": "#38bdf8",
+    "motionScenes": [
+      {
+        "start": 0,
+        "end": 8,
+        "pathLayerId": "path-1"
+      }
+    ]
+  }
+}
+```
+
+Sampling semantics:
+- The scene covers `[start, end]` seconds of LAYER-LOCAL time.
+- Inside the window, `p` sweeps 0..1 across the scene; the dot's CENTRE rides the path at `samplePath(anchors, p)`.
+- Outside the window, the layer renders at its base `position` (so park the dot off-screen at `position: (0, 0)` if you don't want it visible before/after).
+- **Linear-t sampling**, not arc-length: each segment between adjacent anchors gets equal share of `t`. Speed therefore varies with segment length (longer segments → faster). Arc-length-parameterised (constant velocity) sampling is a future improvement.
+- `pathLayerId` takes precedence over `xFormula` / `yFormula` if both are set in the same scene.
+
+### 18.4 — Hiding the path stroke
+
+If you want the dot to drive but DON'T want the curve drawn behind it (e.g. you traced a road over a background image and only want the dot visible), set `showInPreview: false` on the path layer. The motion still works; only the visible stroke is suppressed.
+
+### 18.5 — Worked example
+
+A dot drives along a hand-traced curve over a 1280×720 composition with 4 anchors (linear). The path is shown for reference; in production you might set `showInPreview: false`.
+
+```jsonc
+{
+  "duration": 8, "fps": 30, "width": 1280, "height": 720,
+  "layers": [
+    { "id": "bg", "type": "shape",
+      "position": { "x": 0, "y": 0 }, "size": { "width": 1280, "height": 720 },
+      "properties": { "shape": "rect", "color": "#0f172a" } },
+    { "id": "route-1", "type": "path",
+      "position": { "x": 0, "y": 0 }, "size": { "width": 1280, "height": 720 },
+      "properties": {
+        "anchors": [
+          { "x": 100, "y": 360 },
+          { "x": 500, "y": 200 },
+          { "x": 900, "y": 500 },
+          { "x": 1180, "y": 300 }
+        ],
+        "closed": false,
+        "strokeColor": "#fbbf24",
+        "strokeWidth": 3,
+        "showInPreview": true
+      }
+    },
+    { "id": "dot", "type": "shape",
+      "position": { "x": 0, "y": 0 }, "size": { "width": 14, "height": 14 },
+      "properties": {
+        "shape": "circle",
+        "color": "#38bdf8",
+        "motionScenes": [
+          { "start": 0, "end": 8, "pathLayerId": "route-1" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+### 18.6 — Smooth example with Bezier handles
+
+To turn the same path into a smooth curve, give each anchor `in` + `out` handles. Handle offsets are RELATIVE to the anchor — typically symmetric (`out = -in`) for smooth tangents, or asymmetric for kinks.
+
+```jsonc
+"anchors": [
+  { "x": 100,  "y": 360, "out": { "x":  150, "y":  -80 } },
+  { "x": 500,  "y": 200, "in":  { "x": -150, "y":  -50 }, "out": { "x": 150, "y": 50 } },
+  { "x": 900,  "y": 500, "in":  { "x": -150, "y":  100 }, "out": { "x": 150, "y": -100 } },
+  { "x": 1180, "y": 300, "in":  { "x": -100, "y":   80 } }
+]
+```
+
+A future Pen-tool GUI iteration will let you drag these handles directly; today they're JSON-authored only.
 
 Error codes: 400 (missing required field / invalid mode / both compositionId+composition / inline composition missing width/height/layers), 403 (compositionId belongs to another user), 404 (compositionId not found).

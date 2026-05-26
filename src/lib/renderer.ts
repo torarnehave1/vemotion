@@ -1,4 +1,5 @@
-import type { Animation, CompositionData, Layer, Keyframe, MotionScene } from './api';
+import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnchor } from './api';
+import { samplePath } from './pathSampling';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ function applyEasing(t: number, mode: EasingMode): number {
 // Also normalises property aliases produced by external generators (e.g. Codex):
 //   fill  → color   (shape fill colour)
 //   rectangle → rect, ellipse → circle (shape type names)
-function resolveLayerValues(layer: Layer, time: number): Record<string, unknown> {
+function resolveLayerValues(layer: Layer, time: number, composition?: CompositionData): Record<string, unknown> {
   const values: Record<string, unknown> = { ...layer.properties };
 
   // Alias: fill → color
@@ -101,6 +102,25 @@ function resolveLayerValues(layer: Layer, time: number): Record<string, unknown>
       // x/y formulas.
       const sceneScale = evaluateFormula(currentScene.scaleFormula, context);
       if (sceneScale !== null) values.scale = sceneScale;
+      // Path-follow: if pathLayerId is set on the scene, look up the path
+      // layer in the composition, sample it at scene-local p, and set
+      // offsetX/offsetY so the layer's CENTRE rides the path. Takes
+      // precedence over xFormula/yFormula (it's the more specific intent).
+      if (currentScene.pathLayerId && composition) {
+        const pathLayer = composition.layers.find((l) => l.id === currentScene.pathLayerId);
+        if (pathLayer && pathLayer.type === 'path') {
+          const anchors = (pathLayer.properties as Record<string, unknown>).anchors as PathAnchor[] | undefined;
+          const closed = ((pathLayer.properties as Record<string, unknown>).closed === true);
+          if (Array.isArray(anchors) && anchors.length > 0) {
+            const sampled = samplePath(anchors, context.p, closed);
+            // The layer's CENTRE follows the path → top-left = centre - half size.
+            const halfW = (layer.size.width  ?? 0) / 2;
+            const halfH = (layer.size.height ?? 0) / 2;
+            values.offsetX = (sampled.x - halfW) - layer.position.x;
+            values.offsetY = (sampled.y - halfH) - layer.position.y;
+          }
+        }
+      }
     }
   }
 
@@ -196,8 +216,8 @@ function applyMaskWipeClip(ctx: CanvasRenderingContext2D, layer: Layer, time: nu
  * offsetX/Y and scale (around centre). Returns null if the layer has zero or
  * negative size. Used by both the selection overlay and the hit-test.
  */
-function computeLayerBounds(layer: Layer, localTime: number): { x: number; y: number; w: number; h: number } | null {
-  const values = resolveLayerValues(layer, localTime);
+function computeLayerBounds(layer: Layer, localTime: number, composition?: CompositionData): { x: number; y: number; w: number; h: number } | null {
+  const values = resolveLayerValues(layer, localTime, composition);
   const offsetX = typeof values.offsetX === 'number' ? values.offsetX : 0;
   const offsetY = typeof values.offsetY === 'number' ? values.offsetY : 0;
   const scale = typeof values.scale === 'number' ? values.scale : 1;
@@ -333,7 +353,7 @@ export class CanvasRenderer {
       const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
       if (time < startTime || time > startTime + layerDuration) continue;
       const localTime = time - startTime;
-      this.drawLayer(layer, localTime);
+      this.drawLayer(layer, localTime, composition);
     }
 
     // Editor-only selection overlay. Drawn above content.
@@ -437,8 +457,8 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
-  private drawLayer(layer: Layer, time: number): void {
-    const values = resolveLayerValues(layer, time);
+  private drawLayer(layer: Layer, time: number, composition?: CompositionData): void {
+    const values = resolveLayerValues(layer, time, composition);
     const opacity = typeof values.opacity === 'number' ? values.opacity : 1;
     const scale   = typeof values.scale   === 'number' ? values.scale   : 1;
 
@@ -476,8 +496,56 @@ export class CanvasRenderer {
       case 'card':
         this.drawCard(layer, values);
         break;
+      case 'path':
+        this.drawPath(layer, values);
+        break;
     }
 
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw a `type: 'path'` layer — a polyline / Bezier curve defined by
+   * an `anchors` array. Each segment is straight if either endpoint
+   * lacks the relevant handle (anchor[i].out + anchor[i+1].in); cubic
+   * Bezier via ctx.bezierCurveTo if both handles are present. `closed`
+   * adds a closing segment from the last anchor back to the first.
+   *
+   * If `showInPreview` is false, the path is invisible at render time —
+   * useful when the path exists only as a motion source for a dot.
+   */
+  private drawPath(_layer: Layer, values: Record<string, unknown>): void {
+    const anchors = values.anchors as PathAnchor[] | undefined;
+    if (!Array.isArray(anchors) || anchors.length < 2) return;
+    const showInPreview = values.showInPreview !== false; // default true
+    if (!showInPreview) return;
+    const stroke = (values.strokeColor as string) ?? '#94a3b8';
+    const strokeWidth = (values.strokeWidth as number) ?? 2;
+    const closed = (values.closed as boolean) ?? false;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = stroke;
+    this.ctx.lineWidth = strokeWidth;
+    this.ctx.beginPath();
+    this.ctx.moveTo(anchors[0].x, anchors[0].y);
+    const drawSegment = (a: PathAnchor, b: PathAnchor) => {
+      if (a.out && b.in) {
+        this.ctx.bezierCurveTo(
+          a.x + a.out.x, a.y + a.out.y,
+          b.x + b.in.x,  b.y + b.in.y,
+          b.x, b.y,
+        );
+      } else {
+        this.ctx.lineTo(b.x, b.y);
+      }
+    };
+    for (let i = 1; i < anchors.length; i += 1) {
+      drawSegment(anchors[i - 1], anchors[i]);
+    }
+    if (closed) {
+      drawSegment(anchors[anchors.length - 1], anchors[0]);
+    }
+    this.ctx.stroke();
     this.ctx.restore();
   }
 

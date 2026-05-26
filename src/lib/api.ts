@@ -54,7 +54,7 @@ export type LayerGroup = {
 
 export type Layer = {
   id: string;
-  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio';
+  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio' | 'path';
   groupId?: string;
   /**
    * Required for visual layer types. For 'audio' layers position/size are
@@ -111,11 +111,42 @@ export type MotionScene = {
    * sin, cos, pi, …). Pulse two times per scene: '1 + 0.5 * sin(p*4*pi)'.
    */
   scaleFormula?: string;
+  /**
+   * Optional. Reference a `type: 'path'` layer by id. During the scene
+   * window, the layer's visual position is sampled from the path at
+   * parameter p (0..1 across the scene). Mutually exclusive with
+   * xFormula/yFormula in practice — when both are present, pathLayerId
+   * takes precedence (it's the more specific intent).
+   */
+  pathLayerId?: string;
 };
 
 export type Keyframe = {
   time: number;
   value: unknown;
+};
+
+/**
+ * Anchor in a `type: 'path'` layer's `properties.anchors` array.
+ * Anchors carry their position plus optional Bezier control handles.
+ *
+ * - No `in` / `out` handles → the anchor is a CORNER. Segments meeting at
+ *   it render as straight lines.
+ * - Both adjacent anchors of a segment have `out` (on the prior anchor) +
+ *   `in` (on the next anchor) → that segment renders as a cubic Bezier
+ *   curve via ctx.bezierCurveTo. Mixing corner + smooth anchors is fine.
+ *
+ * Handles are RELATIVE offsets from the anchor's (x, y) — same convention
+ * SVG paths use after normalising. Lets you drag the anchor without
+ * recomputing the handles.
+ */
+export type PathAnchor = {
+  x: number;
+  y: number;
+  /** Incoming handle offset relative to (x, y). */
+  in?: { x: number; y: number };
+  /** Outgoing handle offset relative to (x, y). */
+  out?: { x: number; y: number };
 };
 
 export const api = {

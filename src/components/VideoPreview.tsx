@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download, MousePointer2 } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2, PenTool } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
-import type { CompositionData } from '../lib/api';
+import type { CompositionData, Layer } from '../lib/api';
+import { PenToolOverlay } from './PenToolOverlay';
 
 interface VideoPreviewProps {
   composition: CompositionData;
@@ -20,9 +21,17 @@ interface VideoPreviewProps {
    * without going through React state.
    */
   onLayerMove?: (layerId: string, position: { x: number; y: number }) => void;
+  /**
+   * Append one or more new layers (in render order — last is drawn on top).
+   * Used by the Pen Tool when finishing a path: it emits two layers
+   * atomically — the path itself plus a default follower dot whose
+   * motionScene references the path id. Caller decides where the layers
+   * land (typically just appended to composition.layers).
+   */
+  onAddLayers?: (layers: Layer[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -42,6 +51,9 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   // it and starts a drag-to-move; click on empty canvas deselects. Pan / zoom
   // remain available on empty canvas only when edit mode is OFF.
   const [editMode, setEditMode] = useState(false);
+  // Pen Mode — mutually exclusive with Edit Mode. Switching one on turns
+  // the other off (see the toggle effects below).
+  const [penMode, setPenMode] = useState(false);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [hoverLayerId, setHoverLayerId] = useState<string | null>(null);
   // Drag in-flight state. Tracks final committed position; on mouseup we
@@ -142,11 +154,61 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     if (editMode) {
       controllerRef.current?.pause();
       setIsPlaying(false);
+      // Mutually exclusive with Pen Mode.
+      setPenMode(false);
     } else {
       setSelectedLayerId(null);
       setHoverLayerId(null);
     }
   }, [editMode]);
+
+  // Pen Mode toggle effects. Mutually exclusive with Edit Mode + pauses
+  // playback so the canvas is steady while you're authoring.
+  useEffect(() => {
+    if (penMode) {
+      controllerRef.current?.pause();
+      setIsPlaying(false);
+      setEditMode(false);
+      setSelectedLayerId(null);
+      setHoverLayerId(null);
+    }
+  }, [penMode]);
+
+  // Pen-tool finish handler: receives the path layer authored in the
+  // overlay and emits two layers atomically — the path + a default
+  // follower dot whose motionScene references the path id. Reuses the
+  // existing onAddLayers wire so autosave catches the change.
+  const handlePenFinish = useCallback((pathLayer: Layer) => {
+    if (!onAddLayers) {
+      setPenMode(false);
+      return;
+    }
+    const dotId = `layer-${Date.now().toString(36)}-dot`;
+    const dotLayer: Layer = {
+      id: dotId,
+      type: 'shape',
+      position: { x: 0, y: 0 },
+      size: { width: 14, height: 14 },
+      startTime: 0,
+      layerDuration: composition.duration,
+      properties: {
+        shape: 'circle',
+        color: '#38bdf8',           // sky-400 to match the editor accent
+        opacity: 1,
+        strokeColor: '#0c4a6e',     // sky-900
+        strokeWidth: 2,
+        motionScenes: [
+          {
+            start: 0,
+            end: composition.duration,
+            pathLayerId: pathLayer.id,
+          },
+        ],
+      },
+    };
+    onAddLayers([pathLayer, dotLayer]);
+    setPenMode(false);
+  }, [composition.duration, onAddLayers]);
 
   // Seek when timeline sends a frame
   useEffect(() => {
@@ -423,6 +485,14 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
             onMouseLeave={() => setHoverLayerId(null)}
           >
             <canvas ref={canvasRef} className="w-full h-full" />
+            {penMode && (
+              <PenToolOverlay
+                compositionWidth={composition.width}
+                compositionHeight={composition.height}
+                onFinish={handlePenFinish}
+                onCancel={() => setPenMode(false)}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -488,6 +558,19 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
             >
               <MousePointer2 className="w-4 h-4" />
               {editMode ? 'Editing' : 'Edit'}
+            </button>
+            <button
+              onClick={() => setPenMode(v => !v)}
+              className={[
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
+                penMode
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+              ].join(' ')}
+              title={penMode ? 'Exit pen mode' : 'Pen tool — click on canvas to drop anchors, Enter to finish (auto-adds a follower dot)'}
+            >
+              <PenTool className="w-4 h-4" />
+              {penMode ? 'Drawing' : 'Pen'}
             </button>
             {editMode && selectedLayerId && (
               <span className="text-xs font-mono text-slate-400 truncate max-w-[10rem]" title={selectedLayerId}>

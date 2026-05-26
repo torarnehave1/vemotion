@@ -426,6 +426,16 @@ export const Dashboard: React.FC = () => {
                     : l),
                 }));
               }}
+              onAddLayers={(layers) => {
+                // Append new layers to the composition (in order — last is
+                // on top). Used by the Pen Tool: emits [pathLayer, dotLayer]
+                // so the user immediately sees the dot drive along the path
+                // they just authored.
+                setComposition(prev => ({
+                  ...prev,
+                  layers: [...prev.layers, ...layers],
+                }));
+              }}
             />
           </div>
           <TimelineEditor

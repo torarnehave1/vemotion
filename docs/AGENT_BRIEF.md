@@ -13,6 +13,7 @@ Layer `type` discriminators (the agent must use one of these):
 - `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`. **Image-fill (letters become a window onto an image): see §11.**
 - `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`. Optional `strokeColor` + `strokeWidth` for an outline (both required; stroke is drawn on top of fill). Optional `borderRadius` on rect for rounded corners. Any layer (including this one) can carry `motionScenes` to follow a formula-driven path over time — see §13.
 - `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 (the `x0`/`y0` convention — required) and §13 (authoring patterns + worked example).**
+- `audio` — sound layer (voice-over, music, sound effects). Reuses the existing vegvisr audio-portfolio + transcription workers — see §17.
 - `image` — raster, with `src`, `fit`, `offset`
 - `video` — type exists in schema; not yet exposed in Add Layer UI
 - `kg-shape` — SVG snapshotted from KG graph `vemotion-shapes`
@@ -988,6 +989,112 @@ type CompositionData = {
 ```
 
 All four meta fields are surfaced in the Portfolio modal in the editor (File → Open Portfolio…) where the user can filter by `category` / `metaArea` (sidebar), tag-chip-filter by `tags`, and free-text search across `name` / `description` / `tags` / `category` / `metaArea`. `description` is the prose summary an agent uses to orient.
+
+---
+
+## 17. Audio layers — voice-over, music, sound effects
+
+Vemotion supports a dedicated `'audio'` layer type that plays back in the editor preview AND is muxed into the MP4 export. Audio files live in the **existing vegvisr audio infrastructure** — Vemotion does not stand up its own R2 bucket.
+
+### Layer schema
+
+```ts
+{
+  id: 'narration-1',
+  type: 'audio',
+  position: { x: 0, y: 0 },  // unused for audio; schema requires them
+  size:     { width: 0, height: 0 },
+  startTime: 0,              // composition seconds — when the audio starts playing
+  layerDuration: 12.5,       // seconds — audio is trimmed (or held silent) at this boundary
+  properties: {
+    r2Url: 'https://.../recording.webm',  // REQUIRED — the playable URL
+    r2Key: '...',              // optional, returned by the upload worker
+    displayName: 'Opening narration',  // optional, shown in the editor UI
+    duration: 12.5,           // optional, source-file duration in seconds (informational)
+    volume: 0.8,              // optional, 0..1, default 1
+  }
+}
+```
+
+`position` and `size` are kept for schema uniformity (refit etc. don't have to special-case audio) but the renderer ignores them — audio is sound, not pixels.
+
+### Where audio comes from — the two-worker pattern
+
+Vemotion reuses the same audio infrastructure as the Contacts app and the Norwegian transcription flow:
+
+| Worker | URL | Role |
+|---|---|---|
+| `norwegian-transcription-worker` | `https://norwegian-transcription-worker.torarnehave.workers.dev` | **Binary upload**. `POST /upload` with header `X-File-Name: <encoded>` and the audio blob as body. Returns `{ audioUrl, r2Key }`. The `audioUrl` is directly playable cross-origin. |
+| `audio-portfolio-worker` | `https://audio-portfolio-worker.torarnehave.workers.dev` | **Metadata KV**. `POST /save-recording` registers a recording (best-effort — failures don't block upload). `GET /list-recordings?userEmail=<email>` lists a user's recordings. |
+
+Despite the names, neither worker is locked to Norwegian content. Vemotion tags its uploads with `['vemotion', 'voice-over']` + category `'Vemotion'` so they're distinguishable in the picker.
+
+### Authoring an audio layer
+
+**In the editor (AddLayerModal → Audio tab):** two modes — *Record new* (browser mic → upload → registers in portfolio → builds layer) and *Pick from portfolio* (lists user's Vemotion-tagged recordings, click to attach without re-recording). Common per-layer fields: display name, volume slider (0–1), start time, duration.
+
+**Programmatically (API agent):**
+
+```bash
+# 1. Upload the binary
+curl -X POST https://norwegian-transcription-worker.torarnehave.workers.dev/upload \
+  -H "X-File-Name: my-narration.webm" \
+  --data-binary @my-narration.webm
+# → { "audioUrl": "https://.../my-narration.webm", "r2Key": "norwegian-audio/my-narration.webm" }
+
+# 2. (Optional) Register in the portfolio so it shows up in the editor's Pick mode
+curl -X POST https://audio-portfolio-worker.torarnehave.workers.dev/save-recording \
+  -H "Content-Type: application/json" \
+  -H "X-User-Email: you@example.com" \
+  -d '{
+    "userEmail": "you@example.com",
+    "fileName": "my-narration.webm",
+    "displayName": "Opening narration",
+    "r2Key": "norwegian-audio/my-narration.webm",
+    "r2Url": "https://.../my-narration.webm",
+    "fileSize": 123456,
+    "duration": 12.5,
+    "tags": ["vemotion", "voice-over"],
+    "category": "Vemotion",
+    "audioFormat": "webm"
+  }'
+
+# 3. Add to a composition's `layers` array
+{
+  "id": "narration-1",
+  "type": "audio",
+  "position": { "x": 0, "y": 0 },
+  "size":     { "width": 0, "height": 0 },
+  "startTime": 0, "layerDuration": 12.5,
+  "properties": {
+    "r2Url": "https://.../my-narration.webm",
+    "displayName": "Opening narration",
+    "duration": 12.5,
+    "volume": 1
+  }
+}
+```
+
+### Playback semantics
+
+- **Editor preview**: a hidden `<audio>` element is created per audio layer. The clock is the visual `PlaybackController` — when frame-time enters `[startTime, startTime+layerDuration]`, the audio plays from `currentTime = 0`. Outside the window it pauses + resets. Drift correction every frame tick: if visual vs audio time differ by > 100 ms, the audio is re-synced.
+- **Multiple audio layers**: each plays independently on its own schedule. No mixing in the editor — browser audio output mixes them naturally.
+- **MP4 export** *(`Export MP4` button in the editor)*: each audio layer is fetched, written to ffmpeg.wasm's virtual filesystem, and combined via a `filter_complex` graph — `atrim` to cap at `layerDuration`, `asetpts` to reset timestamps, `adelay` for `startTime`, `volume` for the layer's volume, and `amix=normalize=0` to combine multiple tracks without auto-attenuation. Output is AAC at 192 kbps. The video duration is capped at `composition.duration` via `-t` (audio that ends earlier just drops out).
+
+### Conventions for agents
+
+- **Tag every Vemotion-uploaded recording with `['vemotion', 'voice-over']`** so the editor's Pick mode (which filters to `vemotion`-tagged only) shows it.
+- **Set `category: 'Vemotion'`** for the same reason and to be searchable from the Vegvisr-side AudioPortfolio.
+- **`r2Url` is the only required property** for playback. Everything else is for UX / introspection / future features.
+- **Don't trust `composition.layers[i].size` or `position` for audio layers** — they're zero defaults.
+- **Audio file format**: the recording flow always writes webm/opus (browser default). ffmpeg.wasm handles webm input natively, so no conversion needed before export.
+
+### Known limitations
+
+- **No multi-take / clip-trim UI** — pick or re-record. Edits to `startTime` / `layerDuration` are the only timing controls today.
+- **`audio-portfolio-worker` `/list-recordings` is per-user** — no cross-user browsing in Pick mode. `/list-recordings-public` exists for "published" recordings if you ever want a shared library.
+- **Autoplay browser policy** — playback must be initiated by user gesture (clicking Play). The editor handles this; agents using `<audio>` elements outside this flow must also respect it.
+- **Mix is "naive"** in the export — no fades, no ducking, no normalisation across tracks. If you stack a loud background music with quiet narration, the music drowns the narration. Adjust per-layer `volume` to balance.
 
 ### Convention
 

@@ -43,6 +43,40 @@ export async function exportToMp4(
   onProgress?.({ stage: 'loading', percent: 10, message: 'Preloading images...' });
   await renderer.preloadImages(composition);
 
+  // ── Audio layers: fetch each one into the ffmpeg vFS up front so the
+  //     final mux command can reference them by name. Each layer becomes
+  //     a separate -i input in the ffmpeg command and a filter-complex
+  //     branch that adelays + trims + volumes its track. Failed fetches
+  //     are skipped silently and the layer is omitted from the output —
+  //     same fail-soft posture the editor playback takes.
+  const audioInputs: AudioInput[] = [];
+  const audioLayers = composition.layers.filter(l => l.type === 'audio' && l.visible !== false);
+  if (audioLayers.length > 0) {
+    onProgress?.({ stage: 'loading', percent: 15, message: `Fetching ${audioLayers.length} audio track(s)...` });
+    for (let i = 0; i < audioLayers.length; i++) {
+      const layer = audioLayers[i];
+      const props = layer.properties as Record<string, unknown>;
+      const url = typeof props.r2Url === 'string' ? props.r2Url : '';
+      if (!url) continue;
+      try {
+        const fetched = await fetchFile(url);
+        // .webm is the recording format Contacts uses; the extension hint
+        // helps ffmpeg pick a demuxer though it'll usually probe correctly.
+        const inputName = `audio_${i}.webm`;
+        await ffmpeg.writeFile(inputName, fetched);
+        const volRaw = props.volume;
+        audioInputs.push({
+          inputName,
+          startSec: layer.startTime ?? 0,
+          durationSec: layer.layerDuration ?? (composition.duration - (layer.startTime ?? 0)),
+          volume: typeof volRaw === 'number' ? Math.max(0, Math.min(1, volRaw)) : 1,
+        });
+      } catch {
+        /* fail-soft — that layer is silent in the export */
+      }
+    }
+  }
+
   // Render each frame and write to ffmpeg virtual filesystem
   for (let frame = 0; frame < totalFrames; frame++) {
     renderer.renderFrame(composition, frame);
@@ -64,14 +98,8 @@ export async function exportToMp4(
 
   onProgress?.({ stage: 'encoding', percent: 70, message: 'Encoding MP4...' });
 
-  await ffmpeg.exec([
-    '-framerate', String(composition.fps),
-    '-i', 'frame_%06d.png',
-    '-c:v', 'libx264',
-    '-pix_fmt', 'yuv420p',
-    '-movflags', '+faststart',
-    'output.mp4',
-  ]);
+  const ffmpegCmd = buildFfmpegCommand(composition.fps, composition.duration, audioInputs);
+  await ffmpeg.exec(ffmpegCmd);
 
   onProgress?.({ stage: 'encoding', percent: 95, message: 'Finalising...' });
 
@@ -89,7 +117,99 @@ export async function exportToMp4(
   for (let frame = 0; frame < totalFrames; frame++) {
     await ffmpeg.deleteFile(`frame_${String(frame).padStart(6, '0')}.png`);
   }
+  for (const a of audioInputs) {
+    try { await ffmpeg.deleteFile(a.inputName); } catch { /* ignore */ }
+  }
   await ffmpeg.deleteFile('output.mp4');
 
   onProgress?.({ stage: 'done', percent: 100, message: 'Export complete!' });
+}
+
+// ── Audio mux helpers ──────────────────────────────────────────────────────────
+
+interface AudioInput {
+  inputName: string;
+  startSec: number;
+  durationSec: number;
+  volume: number;
+}
+
+/**
+ * Build the ffmpeg arg array. Three cases:
+ *   - No audio inputs: just video, same command as before.
+ *   - One audio input: -i audio + simple filter chain (adelay/atrim/volume),
+ *     map [a0]. AAC encode at 192k. Output capped at composition.duration via -t.
+ *   - Multiple audio inputs: each track gets its own filter branch, all
+ *     branches feed into amix=normalize=0 for unattenuated mixing.
+ *
+ * `-shortest` is intentionally NOT used — we want the output to be exactly
+ * composition.duration even if some audio tracks are shorter.
+ */
+function buildFfmpegCommand(fps: number, durationSec: number, audioInputs: AudioInput[]): string[] {
+  const args: string[] = [
+    '-framerate', String(fps),
+    '-i', 'frame_%06d.png',
+  ];
+  for (const a of audioInputs) {
+    args.push('-i', a.inputName);
+  }
+
+  if (audioInputs.length === 0) {
+    args.push(
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-t', String(durationSec),
+      'output.mp4',
+    );
+    return args;
+  }
+
+  // Build the filter graph. Each audio input becomes [aN] = adelay → atrim → volume.
+  // For multiple inputs we then amix them into [mixed]. Input indices for audio
+  // start at 1 because input 0 is the image sequence.
+  const branches: string[] = [];
+  const branchLabels: string[] = [];
+  audioInputs.forEach((a, i) => {
+    const ffmpegInputIdx = i + 1;
+    const startMs = Math.max(0, Math.round(a.startSec * 1000));
+    const label = `a${i}`;
+    // adelay needs `ms|ms` for stereo (most common); for mono it ignores the
+    // second value. atrim caps the audio at layerDuration so the layer
+    // stops playing when its window ends. asetpts resets timestamps so the
+    // delayed track aligns correctly.
+    const branch =
+      `[${ffmpegInputIdx}:a]` +
+      `atrim=duration=${a.durationSec.toFixed(3)},` +
+      `asetpts=PTS-STARTPTS,` +
+      `adelay=${startMs}|${startMs},` +
+      `volume=${a.volume.toFixed(3)}` +
+      `[${label}]`;
+    branches.push(branch);
+    branchLabels.push(`[${label}]`);
+  });
+
+  let finalAudioLabel: string;
+  if (audioInputs.length === 1) {
+    finalAudioLabel = branchLabels[0];
+  } else {
+    // amix with normalize=0 keeps each track at its own (volume-filtered) level
+    // instead of attenuating by 1/N (the default normalize=1 behaviour).
+    branches.push(`${branchLabels.join('')}amix=inputs=${audioInputs.length}:normalize=0[mixed]`);
+    finalAudioLabel = '[mixed]';
+  }
+
+  args.push(
+    '-filter_complex', branches.join(';'),
+    '-map', '0:v',
+    '-map', finalAudioLabel,
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-t', String(durationSec),
+    'output.mp4',
+  );
+  return args;
 }

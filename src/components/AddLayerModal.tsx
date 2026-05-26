@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { AudioLayerForm } from './AudioLayerForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload } from 'lucide-react';
 import type { Layer, MotionScene } from '../lib/api';
@@ -326,7 +327,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const isKgShape  = editingLayer?.type === 'kg-shape';
   const isKgCard   = editingLayer?.type === 'card';
   const isImgLayer = editingLayer?.type === 'image';
-  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images' | 'animations'>('manual');
+  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images' | 'animations' | 'audio'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
   const [kgAnims,  setKgAnims]  = useState<KgAnimNode[]>([]);
@@ -876,6 +877,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               className={`flex-1 py-3 text-sm font-medium transition ${tab === 'animations' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
             >
               Animations
+            </button>
+            <button
+              onClick={() => setTab('audio')}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'audio' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Audio
             </button>
             <button
               onClick={() => setTab('ai')}
@@ -1461,6 +1468,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 {isEditing ? 'Save Changes' : 'Add Layer'}
               </button>
             </>
+          ) : tab === 'audio' ? (
+            <AudioLayerForm
+              compositionDuration={compositionDuration}
+              editingLayer={editingLayer?.type === 'audio' ? editingLayer : undefined}
+              onAdd={(layer) => { onAdd(layer); onClose(); }}
+            />
           ) : tab === 'animations' ? (
             <>
               <p className="text-xs text-slate-400 mb-4">Pick an animation from the library. It will be applied to the selected layer, or you can add a new text/shape layer with it.</p>

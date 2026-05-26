@@ -54,8 +54,13 @@ export type LayerGroup = {
 
 export type Layer = {
   id: string;
-  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape';
+  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio';
   groupId?: string;
+  /**
+   * Required for visual layer types. For 'audio' layers position/size are
+   * still in the JSON (so the schema stays uniform and refit doesn't crash)
+   * but are unused by the renderer — audio is sound, not pixels.
+   */
   position: { x: number; y: number };
   size: { width: number; height: number };
   visible?: boolean;

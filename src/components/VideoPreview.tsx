@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Square, Download, MousePointer2 } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
+import { AudioPlaybackController } from '../lib/audioPlayback';
 import type { CompositionData } from '../lib/api';
 
 interface VideoPreviewProps {
@@ -26,6 +27,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const controllerRef = useRef<PlaybackController | null>(null);
+  // Audio companion to PlaybackController. One controller per VideoPreview
+  // mount, swapped composition reference on edits. Driven by onFrameChange
+  // and the play/pause/stop/seek handlers below — see audioPlayback.ts.
+  const audioCtrlRef = useRef<AudioPlaybackController | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -68,24 +73,36 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
 
     const renderer = new CanvasRenderer(canvas);
     const controller = new PlaybackController(renderer, composition);
+    const audioCtrl = new AudioPlaybackController(composition);
 
     controller.onFrameChange = (frame) => {
       setCurrentFrame(frame);
       onFrameChange?.(frame);
+      // Drive audio in lockstep with the visual clock. PlaybackController
+      // already knows its composition and fps, but we recompute time here so
+      // the audio sync uses the SAME frame number React is about to render.
+      audioCtrl.syncToTime(frame / composition.fps, true);
     };
-    controller.onEnd = () => setIsPlaying(false);
+    controller.onEnd = () => {
+      setIsPlaying(false);
+      audioCtrl.pauseAll();
+    };
 
     rendererRef.current = renderer;
     controllerRef.current = controller;
+    audioCtrlRef.current = audioCtrl;
 
     // Render first frame immediately.
     void renderer.renderFrame(composition, 0);
     setCurrentFrame(0);
+    audioCtrl.syncToTime(0, false);
 
     return () => {
       controller.pause();
+      audioCtrl.destroy();
       rendererRef.current = null;
       controllerRef.current = null;
+      audioCtrlRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -95,14 +112,17 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   useEffect(() => {
     const renderer = rendererRef.current;
     const controller = controllerRef.current;
+    const audioCtrl = audioCtrlRef.current;
     if (!renderer || !controller) return;
     controller.composition = composition;
+    audioCtrl?.setComposition(composition);
     const total = Math.max(1, Math.floor(composition.duration * composition.fps));
     const safeFrame = Math.max(0, Math.min(currentFrame, total - 1));
     void renderer.renderFrame(composition, safeFrame);
     if (safeFrame !== currentFrame) setCurrentFrame(safeFrame);
-    // currentFrame intentionally NOT in deps — we read it but don't want to
-    // re-render every frame tick (PlaybackController already handles that).
+    audioCtrl?.syncToTime(safeFrame / composition.fps, isPlaying);
+    // currentFrame / isPlaying intentionally NOT in deps — we read but don't
+    // want to refire on every frame tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composition]);
 
@@ -133,33 +153,38 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     if (externalSeekFrame === undefined) return;
     controllerRef.current?.pause();
     controllerRef.current?.seekToFrame(externalSeekFrame);
+    audioCtrlRef.current?.syncToTime(externalSeekFrame / composition.fps, false);
     setIsPlaying(false);
     setCurrentFrame(externalSeekFrame);
-  }, [externalSeekFrame]);
+  }, [externalSeekFrame, composition.fps]);
 
   const handlePlay = useCallback(() => {
     controllerRef.current?.play();
     setIsPlaying(true);
-  }, []);
+    audioCtrlRef.current?.syncToTime(currentFrame / composition.fps, true);
+  }, [composition.fps, currentFrame]);
 
   const handlePause = useCallback(() => {
     controllerRef.current?.pause();
     setIsPlaying(false);
+    audioCtrlRef.current?.pauseAll();
   }, []);
 
   const handleStop = useCallback(() => {
     controllerRef.current?.stop();
     setIsPlaying(false);
     setCurrentFrame(0);
+    audioCtrlRef.current?.stopAll();
   }, []);
 
   const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const frame = parseInt(e.target.value);
     controllerRef.current?.pause();
     controllerRef.current?.seekToFrame(frame);
+    audioCtrlRef.current?.syncToTime(frame / composition.fps, false);
     setIsPlaying(false);
     setCurrentFrame(frame);
-  }, []);
+  }, [composition.fps]);
 
   const clampPan = useCallback((nextX: number, nextY: number) => {
     const viewport = viewportRef.current;

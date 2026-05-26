@@ -300,21 +300,22 @@ function parseMotionScenes(json: string): MotionScene[] | undefined {
     if (!scene || typeof scene !== 'object') {
       throw new Error(`Scene ${index + 1} must be an object.`);
     }
-    const start = Number((scene as Record<string, unknown>).start);
-    const end = Number((scene as Record<string, unknown>).end);
+    const sceneObj = scene as Record<string, unknown>;
+    const start = Number(sceneObj.start);
+    const end = Number(sceneObj.end);
     if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
       throw new Error(`Scene ${index + 1} must have valid start/end values.`);
     }
+    // Preserve any optional fields the editor doesn't know about
+    // (scaleFormula, future additions) by spreading the source object first,
+    // then overriding the validated numeric start/end. Saves the editor from
+    // silently stripping unknown fields when an agent or the JSON editor
+    // authors a richer MotionScene than this form has UI for.
     return {
+      ...sceneObj,
       start,
       end,
-      xFormula: typeof (scene as Record<string, unknown>).xFormula === 'string'
-        ? (scene as Record<string, unknown>).xFormula as string
-        : undefined,
-      yFormula: typeof (scene as Record<string, unknown>).yFormula === 'string'
-        ? (scene as Record<string, unknown>).yFormula as string
-        : undefined,
-    };
+    } as MotionScene;
   });
 }
 

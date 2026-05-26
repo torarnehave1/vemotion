@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save } from 'lucide-react';
+import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save, Image as ImageIcon } from 'lucide-react';
 import type { CompositionData, CompositionMeta } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { getCompositionFromCloud, saveCompositionToCloud } from '../lib/cloud-compositions';
+import { renderThumbnail } from '../lib/thumbnail';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -70,6 +71,11 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [openingId, setOpeningId] = useState<string | null>(null);
+
+  // Thumbnail cache. Keyed by composition id. Sentinel strings indicate
+  // not-ready / loading / failed; otherwise the value is a PNG data URL.
+  // Persists for the lifetime of the modal — closing + reopening rerenders.
+  const [thumbnails, setThumbnails] = useState<Map<string, ThumbState>>(new Map());
 
   const getToken = useCallback(() => readStoredUser()?.emailVerificationToken ?? null, []);
 
@@ -170,6 +176,29 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
       return next;
     });
   };
+
+  // ── Thumbnail lazy-loader ───────────────────────────────────────────────────
+  // Triggered per card via IntersectionObserver (see CardThumbnail below).
+  // Fetches the full composition (the list endpoint only returns summaries —
+  // no layers), renders frame 0 to an offscreen canvas, downscales to a
+  // ~320px-wide PNG data URL, caches by id. Failed renders cache an 'error'
+  // sentinel so we don't retry forever.
+  const requestThumbnail = useCallback(async (id: string) => {
+    // Functional update so concurrent requests don't race.
+    let alreadyRequested = false;
+    setThumbnails(prev => {
+      if (prev.has(id)) { alreadyRequested = true; return prev; }
+      return new Map(prev).set(id, { kind: 'loading' });
+    });
+    if (alreadyRequested) return;
+    try {
+      const full = await getCompositionFromCloud(id);
+      const dataUrl = await renderThumbnail(full.composition, 320);
+      setThumbnails(prev => new Map(prev).set(id, { kind: 'ready', dataUrl }));
+    } catch {
+      setThumbnails(prev => new Map(prev).set(id, { kind: 'error' }));
+    }
+  }, []);
 
   // ── Per-card actions ────────────────────────────────────────────────────────
   const handleOpen = async (id: string, name: string) => {
@@ -385,11 +414,20 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                 {visible.map(item => {
                   const isEditing = editingId === item.id;
                   const isOpening = openingId === item.id;
+                  const aspectRatio = (item.width && item.height && item.height > 0)
+                    ? item.width / item.height
+                    : 16 / 9;
                   return (
                     <div
                       key={item.id}
                       className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 flex flex-col gap-2"
                     >
+                      <CardThumbnail
+                        compositionId={item.id}
+                        state={thumbnails.get(item.id) ?? { kind: 'pending' }}
+                        aspectRatio={aspectRatio}
+                        onRequest={requestThumbnail}
+                      />
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-sm font-medium text-slate-100 truncate" title={item.name}>
                           {item.name || '(untitled)'}
@@ -521,6 +559,65 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
 };
 
 // ── Small inline helpers (kept local so the file is one self-contained slice) ─
+
+type ThumbState =
+  | { kind: 'pending' }     // not yet requested (default for cards never scrolled into view)
+  | { kind: 'loading' }     // request in flight
+  | { kind: 'error' }       // request failed; do not retry
+  | { kind: 'ready'; dataUrl: string };
+
+/**
+ * Per-card lazy thumbnail. Uses IntersectionObserver — only fires the
+ * render request when the card scrolls within ~200 px of the viewport,
+ * so portfolio open is cheap regardless of catalogue size.
+ *
+ * Reserves the aspect-ratio box before the thumbnail loads so cards don't
+ * jump as previews populate.
+ */
+const CardThumbnail: React.FC<{
+  compositionId: string;
+  state: ThumbState;
+  aspectRatio: number;
+  onRequest: (id: string) => void;
+}> = ({ compositionId, state, aspectRatio, onRequest }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (state.kind !== 'pending' || !ref.current) return;
+    const el = ref.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            onRequest(compositionId);
+            observer.disconnect();
+          }
+        }
+      },
+      { rootMargin: '200px' }, // start fetching slightly before fully visible
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [compositionId, state.kind, onRequest]);
+
+  return (
+    <div
+      ref={ref}
+      className="w-full bg-slate-950/80 border border-slate-700/50 rounded overflow-hidden flex items-center justify-center"
+      style={{ aspectRatio: `${aspectRatio}` }}
+    >
+      {state.kind === 'ready' ? (
+        <img src={state.dataUrl} alt="" className="w-full h-full object-contain" />
+      ) : state.kind === 'error' ? (
+        <ImageIcon className="w-6 h-6 text-slate-600" />
+      ) : state.kind === 'loading' ? (
+        <Loader2 className="w-5 h-5 text-slate-600 animate-spin" />
+      ) : (
+        <ImageIcon className="w-6 h-6 text-slate-700/50" />
+      )}
+    </div>
+  );
+};
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>

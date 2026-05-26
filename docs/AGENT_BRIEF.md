@@ -969,4 +969,54 @@ curl -sS -X POST https://api.vegvisr.org/vemotion/composition/save \
 
 Then open at `https://vemotion.vegvisr.org/?compositionId=<returned-id>`.
 
+---
+
+## 16. Composition metadata — `meta.description`
+
+Every composition can carry a `meta` block at the top level. The point: bake the composition's intent into the JSON so a future agent reading it doesn't need an out-of-band explanation.
+
+```ts
+type CompositionData = {
+  // ... duration, fps, width, height, fontFamily, layers, groups ...
+  meta?: {
+    description?: string;   // one paragraph explaining the composition
+  };
+};
+```
+
+### Convention
+
+Write `meta.description` the way you would explain the composition to a fresh AI agent that has never seen it before:
+
+- **What it depicts.** What's on screen.
+- **What animates.** What moves, fades, scales, draws on.
+- **What the purpose is.** Title card / lyric video / explainer / orbit demo / etc.
+- **Non-obvious authoring choices.** Things a future editor might "fix" without realising they're intentional (e.g. "circles deliberately overlap to suggest Venn-style set intersection", "the small dot's pulse is 2× per orbit because the composition loops").
+
+One paragraph. Don't write a novel — agents are good at making inferences from a tight prose summary plus the JSON.
+
+### Worked example
+
+```jsonc
+{
+  "duration": 5, "fps": 30, "width": 1280, "height": 720,
+  "fontFamily": "Inter",
+  "meta": {
+    "description": "Big red circle (150px diameter, centred) with a small blue dot (10px) orbiting its edge once over 5 seconds. The orbit goes counter-clockwise starting from 3 o'clock. The dot also pulses size twice per revolution via scaleFormula (1+0.7·sin(p·4π)) so it grows and shrinks visibly as it travels. Used as a teaching example for §13.3b — formula-driven position + scale on motionScenes."
+  },
+  "layers": [ /* big-red-circle, small-blue-orbiter */ ]
+}
+```
+
+### What's preserved, what's not (today)
+
+- **Round-trips through save / load / refit / autosave** — `meta` is a top-level field; every code path that touches the composition spreads top-level fields preserved.
+- **Not editable in the UI yet.** Agents read/write directly. Users can view it via File → View JSON. If a "Composition info" panel ships later it'll edit `meta.description` first.
+- **Not searchable yet** — the list endpoint `GET /vemotion/compositions` returns summaries without `meta`. Open a composition with `GET /vemotion/composition?id=<id>` to see its meta. (Adding meta to the list summary is a small follow-up if you want to scan a catalogue.)
+- **Future fields go HERE** — `tags`, `purpose`, `agentInstructions`, `references` are obvious extensions but not in v1. Add them only when there's a concrete need; until then `description` is enough for an agent to orient.
+
+### Rule for agents
+
+**When you author or edit a composition, set `meta.description`.** If you're editing an existing composition, don't blank an existing `meta.description` unless the edit fundamentally changes what the composition depicts.
+
 Error codes: 400 (missing required field / invalid mode / both compositionId+composition / inline composition missing width/height/layers), 403 (compositionId belongs to another user), 404 (compositionId not found).

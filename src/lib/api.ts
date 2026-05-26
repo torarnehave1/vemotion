@@ -6,6 +6,25 @@ export type CompositionData = {
   fontFamily?: string;
   groups?: LayerGroup[];
   layers: Layer[];
+  /**
+   * Optional prose metadata for the composition. Lets the author (often an
+   * AI agent or another tool) bake intent + context into the composition
+   * itself so a future agent reading the JSON doesn't need an out-of-band
+   * explanation of what the composition does. Preserved round-trip through
+   * autosave; no editor UI in v1 — agents read/write directly.
+   */
+  meta?: CompositionMeta;
+};
+
+export type CompositionMeta = {
+  /**
+   * One paragraph explaining what the composition is and what it animates.
+   * Convention: write it the way you would explain the composition to a
+   * fresh AI agent that has never seen it before. Include what it depicts,
+   * what moves, what the purpose is, and any non-obvious authoring choices
+   * (e.g. "circles intentionally overlap to suggest Venn-style intersection").
+   */
+  description?: string;
 };
 
 export type LayerGroup = {

@@ -192,7 +192,16 @@ export const FileMenu: React.FC<FileMenuProps> = ({
       <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
 
       {showJson && (
-        <CompositionJsonModal composition={composition} onClose={() => setShowJson(false)} />
+        <CompositionJsonModal
+          composition={composition}
+          onClose={() => setShowJson(false)}
+          onSave={c => {
+            // Same path as Load File / Load Example — hand the parsed
+            // composition to the parent. Autosave (debounced 2.5s in
+            // Dashboard) carries it to the cloud automatically.
+            onLoad(c);
+          }}
+        />
       )}
 
       {showPortfolio && (

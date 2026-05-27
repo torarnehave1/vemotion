@@ -1195,6 +1195,21 @@ Visual feedback while authoring:
 - Handle endpoints render as small amber squares connected by thin slate lines to their anchors.
 - Live cursor preview shows where the next segment would land before you commit it.
 
+### 18.2b — Post-commit editing (Edit Mode)
+
+Once a path is committed, switch to **Edit Mode** (the Edit button in the preview controls). All path layers' anchors and handles render as a clickable overlay on top of the canvas. Same gesture vocabulary as the Pen tool, but no new-anchor placement (Edit Mode is for refining existing geometry):
+
+| Gesture | Effect |
+|---|---|
+| Drag an anchor | Move it. Handles ride along. |
+| Drag a handle endpoint | Reshape that side. Opposite handle mirrors. |
+| **Alt** + drag a handle endpoint | Break the mirror (independent in / out) |
+| Right-click an anchor | Toggle smooth ⇄ corner |
+
+The overlay is implemented with `pointer-events: none` on the SVG root and `pointer-events: auto` on individual anchor / handle elements. Effect: only clicks on the editable bits hit the overlay; clicks on empty canvas pass through to the existing Edit-Mode layer-drag handler. So non-path layers still drag normally in Edit Mode.
+
+Per-mousemove updates flow through autosave (debounced 2.5 s). You can scrub the timeline + drag handles at the same time to fine-tune a path against its surrounding animation.
+
 ### 18.3 — Motion: `motionScene.pathLayerId`
 
 Add a motionScene to any layer (typically a small `shape: 'circle'`) that references the path id:

@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Square, Download, MousePointer2, PenTool } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
-import type { CompositionData, Layer } from '../lib/api';
+import type { CompositionData, Layer, PathAnchor } from '../lib/api';
 import { PenToolOverlay } from './PenToolOverlay';
+import { PathEditOverlay } from './PathEditOverlay';
 
 interface VideoPreviewProps {
   composition: CompositionData;
@@ -29,9 +30,16 @@ interface VideoPreviewProps {
    * land (typically just appended to composition.layers).
    */
   onAddLayers?: (layers: Layer[]) => void;
+  /**
+   * Replace a single path layer's `properties.anchors` array. Called
+   * during post-commit path editing (PathEditOverlay) on each
+   * mousemove of an anchor / handle drag. Autosave debounces the
+   * server write.
+   */
+  onUpdatePathAnchors?: (layerId: string, anchors: PathAnchor[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -491,6 +499,12 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 compositionHeight={composition.height}
                 onFinish={handlePenFinish}
                 onCancel={() => setPenMode(false)}
+              />
+            )}
+            {editMode && !penMode && onUpdatePathAnchors && (
+              <PathEditOverlay
+                composition={composition}
+                onUpdatePath={onUpdatePathAnchors}
               />
             )}
           </div>

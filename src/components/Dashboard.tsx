@@ -436,6 +436,17 @@ export const Dashboard: React.FC = () => {
                   layers: [...prev.layers, ...layers],
                 }));
               }}
+              onUpdatePathAnchors={(layerId, anchors) => {
+                // Post-commit path editing — write a new anchors array into
+                // the specified path layer's properties. Drives through the
+                // existing autosave pipeline (debounced 2.5s).
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => l.id === layerId
+                    ? { ...l, properties: { ...l.properties, anchors } }
+                    : l),
+                }));
+              }}
             />
           </div>
           <TimelineEditor

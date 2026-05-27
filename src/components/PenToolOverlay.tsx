@@ -316,8 +316,14 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     for (let i = 1; i < anchors.length; i++) {
       const a = anchors[i - 1];
       const b = anchors[i];
-      if (a.out && b.in) {
-        d += ` C ${a.x + a.out.x},${a.y + a.out.y} ${b.x + b.in.x},${b.y + b.in.y} ${b.x},${b.y}`;
+      // Match renderer.drawPath + pathSampling: EITHER handle counts;
+      // missing side falls back to the anchor position itself.
+      if (a.out || b.in) {
+        const c1x = a.out ? a.x + a.out.x : a.x;
+        const c1y = a.out ? a.y + a.out.y : a.y;
+        const c2x = b.in  ? b.x + b.in.x  : b.x;
+        const c2y = b.in  ? b.y + b.in.y  : b.y;
+        d += ` C ${c1x},${c1y} ${c2x},${c2y} ${b.x},${b.y}`;
       } else {
         d += ` L ${b.x},${b.y}`;
       }

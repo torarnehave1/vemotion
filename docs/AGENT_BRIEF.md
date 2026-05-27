@@ -1167,9 +1167,9 @@ type PathAnchor = {
 ```
 
 Per-segment behaviour:
-- If `anchors[i].out` AND `anchors[i+1].in` are both set → that segment renders as a **cubic Bezier** via `ctx.bezierCurveTo`, using the handles as control points.
-- Otherwise → straight line via `ctx.lineTo`.
-- You can mix corner anchors (no handles) and smooth anchors (handles) freely in the same path.
+- If EITHER `anchors[i].out` OR `anchors[i+1].in` is set → that segment renders as a **cubic Bezier** via `ctx.bezierCurveTo`. Missing-side falls back to the anchor position itself (degenerate control point), producing a one-sided curve. Practical consequence: right-click a single anchor to convert it to smooth → both adjacent segments immediately curve, even if their neighbours are still corners.
+- If BOTH endpoints are corners (no handles) → straight line via `ctx.lineTo`.
+- You can mix corner anchors and smooth anchors freely in the same path.
 
 ### 18.2 — Authoring (editor)
 

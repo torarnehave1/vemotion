@@ -529,12 +529,17 @@ export class CanvasRenderer {
     this.ctx.beginPath();
     this.ctx.moveTo(anchors[0].x, anchors[0].y);
     const drawSegment = (a: PathAnchor, b: PathAnchor) => {
-      if (a.out && b.in) {
-        this.ctx.bezierCurveTo(
-          a.x + a.out.x, a.y + a.out.y,
-          b.x + b.in.x,  b.y + b.in.y,
-          b.x, b.y,
-        );
+      // A segment is a cubic Bezier when EITHER endpoint contributes a
+      // handle. The missing-handle side falls back to the anchor position
+      // itself (degenerate control point), producing a one-sided curve.
+      // This means right-clicking a single anchor to smooth-it immediately
+      // bends both adjacent segments — the natural authoring expectation.
+      if (a.out || b.in) {
+        const c1x = a.out ? a.x + a.out.x : a.x;
+        const c1y = a.out ? a.y + a.out.y : a.y;
+        const c2x = b.in  ? b.x + b.in.x  : b.x;
+        const c2y = b.in  ? b.y + b.in.y  : b.y;
+        this.ctx.bezierCurveTo(c1x, c1y, c2x, c2y, b.x, b.y);
       } else {
         this.ctx.lineTo(b.x, b.y);
       }

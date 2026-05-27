@@ -34,17 +34,21 @@ export function samplePath(anchors: PathAnchor[], t: number, closed = false): { 
   const a = anchors[segIdx];
   const b = anchors[(segIdx + 1) % anchors.length];
 
-  if (a.out && b.in) {
+  // Cubic Bezier when EITHER endpoint contributes a handle. Missing-side
+  // falls back to the anchor itself (degenerate control point) producing
+  // a one-sided curve — same rule as drawPath uses. Single-anchor
+  // smoothing immediately bends both adjacent segments.
+  if (a.out || b.in) {
     return bezierAt(
       a.x, a.y,
-      a.x + a.out.x, a.y + a.out.y,
-      b.x + b.in.x, b.y + b.in.y,
+      a.out ? a.x + a.out.x : a.x, a.out ? a.y + a.out.y : a.y,
+      b.in  ? b.x + b.in.x  : b.x, b.in  ? b.y + b.in.y  : b.y,
       b.x, b.y,
       localT,
     );
   }
 
-  // Linear interpolation
+  // Linear interpolation when both endpoints are corners.
   return {
     x: a.x + localT * (b.x - a.x),
     y: a.y + localT * (b.y - a.y),

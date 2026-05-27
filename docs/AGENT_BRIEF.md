@@ -1173,12 +1173,27 @@ Per-segment behaviour:
 
 ### 18.2 — Authoring (editor)
 
-- Top-right of the preview, click the **Pen** button. Mutually exclusive with **Edit** (drag-to-move) — turning one on disables the other.
-- Click on the canvas to drop anchors. Each click extends the path with a new corner anchor.
-- **Enter** or click **Finish** to commit. **Esc** or **Cancel** to discard. **Backspace** to undo the last anchor.
-- On commit, two layers are added atomically: the path layer + a sky-blue follower dot whose `motionScene.pathLayerId` references the path. The dot starts driving along the path immediately on the next playback.
+The Pen tool button sits in the preview controls next to **Edit**. Mutually exclusive — turning one on disables the other. Pen Mode auto-pauses playback.
 
-V1 of the Pen tool emits polyline anchors only (no handles). Bezier-handle authoring (drag-while-clicking to set tangents, smooth/corner anchor types, post-hoc handle dragging) is a follow-up GUI slice — the schema and renderer already support Bezier paths, so anchors with `in` / `out` handles authored via JSON or by a future GUI render correctly today.
+Gestures:
+
+| Gesture | Effect |
+|---|---|
+| Click empty canvas | Drop a CORNER anchor (no handles → straight segment) |
+| Click + drag empty canvas | Drop a SMOOTH anchor; drag sets the outgoing handle; incoming handle mirrors it (smooth tangent — Illustrator default) |
+| Click + drag an existing anchor | Move the anchor. Its handles ride along; segment shapes preserved. |
+| Click + drag a handle endpoint | Reshape that side of the curve. By default the OPPOSITE handle mirrors (smooth tangent preserved). |
+| **Alt** + drag a handle endpoint | Break the mirror — independent in/out handles for sharp curvature changes |
+| Right-click an anchor | Toggle smooth ⇄ corner. Smooth → handles stripped (segments collapse to straight). Corner → symmetric handles tangent to the local segment added (segments smooth out). |
+| **Enter** or **Finish** | Commit the path layer + an auto-generated follower dot (sky-blue 14 px) whose `motionScene.pathLayerId` references the path. |
+| **Esc** or **Cancel** | Discard the in-progress path. |
+| **Backspace** | Undo the last anchor. |
+
+Visual feedback while authoring:
+- First anchor is green; subsequent anchors are amber.
+- Smooth anchors are filled discs; corner anchors are hollow (slate-fill, amber outline) — quick read of which segments will be curves.
+- Handle endpoints render as small amber squares connected by thin slate lines to their anchors.
+- Live cursor preview shows where the next segment would land before you commit it.
 
 ### 18.3 — Motion: `motionScene.pathLayerId`
 

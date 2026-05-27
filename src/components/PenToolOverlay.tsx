@@ -13,21 +13,42 @@ interface PenToolOverlayProps {
 
 const generateId = () => `path-${Date.now().toString(36)}`;
 
+/** Screen-pixel hit radius for grabbing anchors / handles (converted to SVG units at the call site). */
+const HIT_RADIUS_SCREEN_PX = 10;
+/** Minimum drag delta (SVG units) to flip "new anchor" from corner → smooth (avoids accidental tiny drags). */
+const SMOOTH_DRAG_THRESHOLD = 4;
+
+type Gesture =
+  | { kind: 'idle' }
+  | { kind: 'placing-new'; anchorIdx: number; anchorX: number; anchorY: number }
+  | { kind: 'dragging-anchor'; anchorIdx: number; dx: number; dy: number }
+  | { kind: 'dragging-handle'; anchorIdx: number; which: 'in' | 'out'; mirror: boolean };
+
 /**
- * Pen-tool authoring overlay. Sits as an SVG on top of the preview canvas
- * when Pen Mode is active. Click empty canvas to drop an anchor; Enter
- * (or click Finish) commits the path as a new `type: 'path'` layer;
- * Escape (or click Cancel) discards.
+ * Pen-tool authoring overlay — Phase 2b (full Bezier handle authoring).
  *
- * V1 emits polyline anchors only (no `in`/`out` handles). The renderer +
- * sampler already support Bezier-handle anchors, so the GUI for handle
- * authoring is a follow-up slice; today's authored polylines round-trip
- * through the schema with no rework needed when curves arrive.
+ * Gestures:
+ *   - Click on empty canvas → place a corner anchor.
+ *   - Click + drag on empty canvas → place a smooth anchor; drag sets the
+ *     outgoing handle. The incoming handle is set as the mirror of the
+ *     outgoing one (smooth tangent — Illustrator default).
+ *   - Click + drag an existing anchor → move it. Handles ride along.
+ *   - Click + drag a handle endpoint → reshape that side of the curve.
+ *     By default, dragging one handle mirrors the OTHER (smooth tangent
+ *     preserved). Hold Alt while dragging to break the mirror — independent
+ *     in / out handles for sharp curvature changes (Illustrator's "convert
+ *     anchor point" behaviour).
+ *   - Right-click an anchor → toggle smooth / corner. Smooth → strip
+ *     handles. Corner → add symmetric handles tangent to the local segment.
  *
- * The overlay uses an SVG with viewBox = composition dimensions and
- * preserveAspectRatio="none", so SVG userspace coords ≡ canvas pixel
- * coords. Click handlers convert clientX/clientY → SVG userspace using
- * the same getBoundingClientRect math Edit Mode uses for hit-tests.
+ * Keyboard:
+ *   - Enter or Finish button → commit the path layer (+ auto-follower dot).
+ *   - Escape or Cancel button → discard.
+ *   - Backspace → undo last anchor.
+ *
+ * SVG userspace coords ≡ canvas pixel coords via viewBox + preserveAspectRatio="none".
+ * Hit-test radius is screen-pixel-sized (converted on each gesture so it
+ * stays clickable regardless of the canvas's display size).
  */
 export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   compositionWidth,
@@ -37,8 +58,12 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
 }) => {
   const [anchors, setAnchors] = useState<PathAnchor[]>([]);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+  const [gesture, setGesture] = useState<Gesture>({ kind: 'idle' });
   const svgRef = useRef<SVGSVGElement>(null);
+  // Live "alt-held" so the dragging-handle gesture knows whether to mirror.
+  const altRef = useRef(false);
 
+  // ── client ↔ SVG userspace coords + screen-px → SVG-units factor ───────────
   const clientToUserspace = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     const svg = svgRef.current;
     if (!svg) return null;
@@ -50,19 +75,194 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     };
   }, [compositionWidth, compositionHeight]);
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
+  const hitRadiusSvg = useCallback((): number => {
+    const svg = svgRef.current;
+    if (!svg) return HIT_RADIUS_SCREEN_PX;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width <= 0) return HIT_RADIUS_SCREEN_PX;
+    return HIT_RADIUS_SCREEN_PX * (compositionWidth / rect.width);
+  }, [compositionWidth]);
+
+  // ── Hit-test under cursor ──────────────────────────────────────────────────
+  type Hit =
+    | { kind: 'anchor'; anchorIdx: number }
+    | { kind: 'handle'; anchorIdx: number; which: 'in' | 'out' }
+    | { kind: 'empty' };
+
+  const hitTest = useCallback((pt: { x: number; y: number }): Hit => {
+    const r = hitRadiusSvg();
+    const r2 = r * r;
+    // Handles take priority over anchors (handle endpoints sit further from
+    // the anchor centre and can otherwise be "behind" the anchor visually).
+    for (let i = 0; i < anchors.length; i++) {
+      const a = anchors[i];
+      if (a.out) {
+        const hx = a.x + a.out.x;
+        const hy = a.y + a.out.y;
+        const dx = pt.x - hx;
+        const dy = pt.y - hy;
+        if (dx * dx + dy * dy <= r2) return { kind: 'handle', anchorIdx: i, which: 'out' };
+      }
+      if (a.in) {
+        const hx = a.x + a.in.x;
+        const hy = a.y + a.in.y;
+        const dx = pt.x - hx;
+        const dy = pt.y - hy;
+        if (dx * dx + dy * dy <= r2) return { kind: 'handle', anchorIdx: i, which: 'in' };
+      }
+    }
+    for (let i = 0; i < anchors.length; i++) {
+      const a = anchors[i];
+      const dx = pt.x - a.x;
+      const dy = pt.y - a.y;
+      if (dx * dx + dy * dy <= r2) return { kind: 'anchor', anchorIdx: i };
+    }
+    return { kind: 'empty' };
+  }, [anchors, hitRadiusSvg]);
+
+  // ── Mouse handlers (window-level during drag so off-canvas mouseups still fire) ──
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return; // left button only; right-click handled separately
     e.preventDefault();
     e.stopPropagation();
     const pt = clientToUserspace(e.clientX, e.clientY);
     if (!pt) return;
-    setAnchors(prev => [...prev, { x: Math.round(pt.x), y: Math.round(pt.y) }]);
-  }, [clientToUserspace]);
+    const hit = hitTest(pt);
+    altRef.current = e.altKey;
+
+    if (hit.kind === 'anchor') {
+      setGesture({
+        kind: 'dragging-anchor',
+        anchorIdx: hit.anchorIdx,
+        dx: pt.x - anchors[hit.anchorIdx].x,
+        dy: pt.y - anchors[hit.anchorIdx].y,
+      });
+      return;
+    }
+    if (hit.kind === 'handle') {
+      setGesture({
+        kind: 'dragging-handle',
+        anchorIdx: hit.anchorIdx,
+        which: hit.which,
+        mirror: !e.altKey,
+      });
+      return;
+    }
+    // Empty → place a NEW anchor. Starts as a corner; if the user drags
+    // before mouseup, it upgrades to smooth (out + mirrored in).
+    setAnchors(prev => {
+      const next = [...prev, { x: Math.round(pt.x), y: Math.round(pt.y) }];
+      setGesture({
+        kind: 'placing-new',
+        anchorIdx: next.length - 1,
+        anchorX: pt.x,
+        anchorY: pt.y,
+      });
+      return next;
+    });
+  }, [anchors, clientToUserspace, hitTest]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const pt = clientToUserspace(e.clientX, e.clientY);
     if (pt) setHover(pt);
-  }, [clientToUserspace]);
+    if (gesture.kind === 'idle') return;
+    if (!pt) return;
 
+    if (gesture.kind === 'placing-new') {
+      const dx = pt.x - gesture.anchorX;
+      const dy = pt.y - gesture.anchorY;
+      const dist = Math.hypot(dx, dy);
+      setAnchors(prev => prev.map((a, i) => {
+        if (i !== gesture.anchorIdx) return a;
+        if (dist < SMOOTH_DRAG_THRESHOLD) {
+          // Below threshold — keep as corner. Strip any partial handles.
+          const { in: _in, out: _out, ...rest } = a;
+          void _in; void _out;
+          return { ...rest, x: gesture.anchorX, y: gesture.anchorY };
+        }
+        return {
+          x: gesture.anchorX,
+          y: gesture.anchorY,
+          out: { x: dx, y: dy },
+          in:  { x: -dx, y: -dy }, // smooth tangent — mirror
+        };
+      }));
+      return;
+    }
+
+    if (gesture.kind === 'dragging-anchor') {
+      const newX = pt.x - gesture.dx;
+      const newY = pt.y - gesture.dy;
+      setAnchors(prev => prev.map((a, i) => i === gesture.anchorIdx ? { ...a, x: newX, y: newY } : a));
+      return;
+    }
+
+    if (gesture.kind === 'dragging-handle') {
+      const offsetX = pt.x - anchors[gesture.anchorIdx].x;
+      const offsetY = pt.y - anchors[gesture.anchorIdx].y;
+      // Alt held? Pull free (break mirror) for this single drag.
+      const mirror = gesture.mirror && !e.altKey;
+      setAnchors(prev => prev.map((a, i) => {
+        if (i !== gesture.anchorIdx) return a;
+        const next = { ...a };
+        if (gesture.which === 'out') {
+          next.out = { x: offsetX, y: offsetY };
+          if (mirror) next.in = { x: -offsetX, y: -offsetY };
+        } else {
+          next.in = { x: offsetX, y: offsetY };
+          if (mirror) next.out = { x: -offsetX, y: -offsetY };
+        }
+        return next;
+      }));
+      return;
+    }
+  }, [anchors, clientToUserspace, gesture]);
+
+  const handleMouseUp = useCallback(() => {
+    setGesture({ kind: 'idle' });
+  }, []);
+
+  // Right-click toggles smooth / corner on an existing anchor.
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const pt = clientToUserspace(e.clientX, e.clientY);
+    if (!pt) return;
+    const hit = hitTest(pt);
+    if (hit.kind !== 'anchor') return;
+    setAnchors(prev => prev.map((a, i) => {
+      if (i !== hit.anchorIdx) return a;
+      if (a.in || a.out) {
+        // Smooth → corner (strip handles)
+        const { in: _in, out: _out, ...rest } = a;
+        void _in; void _out;
+        return rest;
+      }
+      // Corner → smooth (add symmetric handles tangent to local segment).
+      // Direction inferred from the surrounding anchors; falls back to
+      // horizontal if endpoints.
+      const prevA = prev[i - 1];
+      const nextA = prev[i + 1];
+      let tx = 1, ty = 0;
+      if (prevA && nextA) {
+        tx = nextA.x - prevA.x;
+        ty = nextA.y - prevA.y;
+      } else if (prevA) {
+        tx = a.x - prevA.x;
+        ty = a.y - prevA.y;
+      } else if (nextA) {
+        tx = nextA.x - a.x;
+        ty = nextA.y - a.y;
+      }
+      const len = Math.hypot(tx, ty) || 1;
+      // Handle reach = 25% of the local segment length (looks natural).
+      const reach = (len * 0.25) || 40;
+      const ux = (tx / len) * reach;
+      const uy = (ty / len) * reach;
+      return { ...a, in: { x: -ux, y: -uy }, out: { x: ux, y: uy } };
+    }));
+  }, [clientToUserspace, hitTest]);
+
+  // ── Finish + cancel + undo ─────────────────────────────────────────────────
   const finish = useCallback(() => {
     if (anchors.length < 2) {
       onCancel();
@@ -71,13 +271,17 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     const layer: Layer = {
       id: generateId(),
       type: 'path',
-      // path coords are absolute; position is informational / future "translate the whole path" handle.
       position: { x: 0, y: 0 },
       size: { width: compositionWidth, height: compositionHeight },
       properties: {
-        anchors: anchors.map(a => ({ x: a.x, y: a.y })),
+        anchors: anchors.map(a => ({
+          x: Math.round(a.x),
+          y: Math.round(a.y),
+          ...(a.in  ? { in:  { x: Math.round(a.in.x),  y: Math.round(a.in.y)  } } : {}),
+          ...(a.out ? { out: { x: Math.round(a.out.x), y: Math.round(a.out.y) } } : {}),
+        })),
         closed: false,
-        strokeColor: '#fbbf24',  // amber by default so it reads on most backgrounds
+        strokeColor: '#fbbf24',
         strokeWidth: 2,
         showInPreview: true,
       },
@@ -86,7 +290,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     setAnchors([]);
   }, [anchors, compositionWidth, compositionHeight, onFinish]);
 
-  // Keyboard: Enter to finish, Escape to cancel, Backspace to undo last anchor.
+  // Keyboard: Enter / Esc / Backspace.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
@@ -105,13 +309,32 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [anchors.length, finish, onCancel]);
 
-  // Build the polyline points for the in-progress path. Includes the
-  // "preview" segment from the last anchor to the cursor so the user
-  // sees where the next segment WOULD land.
-  const polylinePoints = [
-    ...anchors.map(a => `${a.x},${a.y}`),
-    ...(hover && anchors.length > 0 ? [`${hover.x},${hover.y}`] : []),
-  ].join(' ');
+  // ── Render the in-progress path (with Bezier segments when handles exist) ─
+  const pathD = (() => {
+    if (anchors.length === 0) return '';
+    let d = `M ${anchors[0].x},${anchors[0].y}`;
+    for (let i = 1; i < anchors.length; i++) {
+      const a = anchors[i - 1];
+      const b = anchors[i];
+      if (a.out && b.in) {
+        d += ` C ${a.x + a.out.x},${a.y + a.out.y} ${b.x + b.in.x},${b.y + b.in.y} ${b.x},${b.y}`;
+      } else {
+        d += ` L ${b.x},${b.y}`;
+      }
+    }
+    return d;
+  })();
+
+  // Cursor-preview segment from last anchor to mouse position.
+  const lastA = anchors[anchors.length - 1];
+  const cursorPreview = (gesture.kind === 'idle' && lastA && hover)
+    ? `M ${lastA.x},${lastA.y} L ${hover.x},${hover.y}`
+    : '';
+
+  const cursor =
+    gesture.kind === 'dragging-anchor' || gesture.kind === 'dragging-handle' ? 'grabbing'
+    : gesture.kind === 'placing-new' ? 'grabbing'
+    : 'crosshair';
 
   return (
     <>
@@ -120,61 +343,120 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
         className="absolute inset-0 w-full h-full"
         viewBox={`0 0 ${compositionWidth} ${compositionHeight}`}
         preserveAspectRatio="none"
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHover(null)}
-        style={{ cursor: 'crosshair' }}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={() => { setHover(null); }}
+        onContextMenu={handleContextMenu}
+        style={{ cursor }}
       >
-        {/* In-progress path stroke */}
-        {anchors.length >= 1 && polylinePoints && (
-          <polyline
-            points={polylinePoints}
+        {/* Committed-so-far path */}
+        {pathD && (
+          <path
+            d={pathD}
             fill="none"
             stroke="#fbbf24"
             strokeWidth={2}
-            strokeDasharray={anchors.length > 1 ? '0' : '6 4'}
             vectorEffect="non-scaling-stroke"
           />
         )}
 
-        {/* Anchor dots */}
-        {anchors.map((a, i) => (
-          <circle
-            key={i}
-            cx={a.x}
-            cy={a.y}
-            r={6}
-            fill={i === 0 ? '#22c55e' : '#fbbf24'}
-            stroke="#0f172a"
+        {/* Cursor preview — dashed segment from last anchor to mouse pos */}
+        {cursorPreview && (
+          <path
+            d={cursorPreview}
+            fill="none"
+            stroke="#fbbf24"
             strokeWidth={2}
+            strokeDasharray="6 4"
             vectorEffect="non-scaling-stroke"
+            opacity={0.6}
           />
+        )}
+
+        {/* Handle lines (anchor centre → handle endpoint) */}
+        {anchors.map((a, i) => (
+          <React.Fragment key={`h-${i}`}>
+            {a.in && (
+              <line
+                x1={a.x} y1={a.y}
+                x2={a.x + a.in.x} y2={a.y + a.in.y}
+                stroke="#94a3b8"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+            {a.out && (
+              <line
+                x1={a.x} y1={a.y}
+                x2={a.x + a.out.x} y2={a.y + a.out.y}
+                stroke="#94a3b8"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+          </React.Fragment>
         ))}
 
-        {/* Live cursor indicator */}
-        {hover && (
-          <circle
-            cx={hover.x}
-            cy={hover.y}
-            r={4}
-            fill="none"
-            stroke="#fbbf24"
-            strokeWidth={2}
-            strokeDasharray="4 2"
-            vectorEffect="non-scaling-stroke"
-            pointerEvents="none"
-          />
-        )}
+        {/* Handle endpoint squares */}
+        {anchors.map((a, i) => (
+          <React.Fragment key={`h-end-${i}`}>
+            {a.in && (
+              <rect
+                x={a.x + a.in.x - 4} y={a.y + a.in.y - 4}
+                width={8} height={8}
+                fill="#fbbf24"
+                stroke="#0f172a"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+            {a.out && (
+              <rect
+                x={a.x + a.out.x - 4} y={a.y + a.out.y - 4}
+                width={8} height={8}
+                fill="#fbbf24"
+                stroke="#0f172a"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+          </React.Fragment>
+        ))}
+
+        {/* Anchor dots — first anchor is green (start), others are amber.
+            Smooth anchors are filled; corner anchors are outlined to make
+            the distinction visible. */}
+        {anchors.map((a, i) => {
+          const smooth = !!(a.in || a.out);
+          return (
+            <circle
+              key={`a-${i}`}
+              cx={a.x}
+              cy={a.y}
+              r={6}
+              fill={smooth ? (i === 0 ? '#22c55e' : '#fbbf24') : '#0f172a'}
+              stroke={i === 0 ? '#22c55e' : '#fbbf24'}
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          );
+        })}
       </svg>
 
-      {/* Floating instruction + action bar — positioned over the preview, doesn't intercept clicks except on its own buttons */}
+      {/* Floating instruction + action bar */}
       <div className="absolute left-3 top-3 z-10 flex items-center gap-2 pointer-events-none">
         <div className="pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 shadow-2xl flex items-center gap-3">
           <span className="font-medium">Pen tool</span>
           <span className="text-slate-400">
-            {anchors.length === 0 ? 'Click to start path'
-              : anchors.length === 1 ? 'Click to add segments'
+            {anchors.length === 0 ? 'Click to start path (drag to set curve)'
               : `${anchors.length} anchor${anchors.length === 1 ? '' : 's'}`}
+            {' · drag handles to reshape · right-click anchor to toggle smooth/corner'}
             {' · Enter to finish · Esc to cancel · Backspace to undo'}
           </span>
         </div>

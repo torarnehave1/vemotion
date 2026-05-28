@@ -157,3 +157,37 @@ export const saveCompositionToCloud = async ({
 
   return data;
 };
+
+export type AssistMessage = { role: 'user' | 'assistant'; content: string };
+
+export type AssistResponse = {
+  ok: true;
+  message: { role: 'assistant'; content: string };
+  model: string;
+  usage?: unknown;
+};
+
+export const assistComposition = async ({
+  messages,
+  composition,
+}: {
+  messages: AssistMessage[];
+  composition?: CompositionData;
+}): Promise<AssistResponse> => {
+  const token = getToken();
+  if (!token) {
+    throw new Error('Sign in to use the AI assistant.');
+  }
+
+  const res = await fetch(`${VEMOTION_API}/assist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+    body: JSON.stringify({ messages, composition }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Assistant request failed.');
+  }
+  return data as AssistResponse;
+};

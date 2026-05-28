@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AudioLayerForm } from './AudioLayerForm';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, Loader2, Upload } from 'lucide-react';
+import { X, Sparkles, Loader2, Upload, ChevronDown } from 'lucide-react';
 import type { Layer, MotionScene } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
@@ -9,6 +9,7 @@ const KG_SHAPES_GRAPH = 'vemotion-shapes';
 const KG_CARDS_GRAPH  = 'vemotion-cards';
 const KG_BASE = 'https://knowledge.vegvisr.org';
 const PHOTOS_API = 'https://photos-api.vegvisr.org';
+const ALBUMS_API = 'https://albums.vegvisr.org';
 const DEFAULT_ALBUM = 'VEmotion';
 
 const FONT_OPTIONS = [
@@ -547,9 +548,42 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Available albums (fetched from vegvisr-albums-worker). Lazily populated
+  // the first time the Images tab is opened. The current `albumName` is
+  // always rendered as an option even if it is not in the returned list,
+  // so the select never silently defaults to a different album.
+  const [availableAlbums, setAvailableAlbums] = useState<string[]>([]);
+  const [albumsLoading, setAlbumsLoading] = useState(false);
+  const [albumsLoaded, setAlbumsLoaded] = useState(false);
+
+  const fetchAlbumList = () => {
+    const token = readStoredUser()?.emailVerificationToken;
+    if (!token) return;
+    setAlbumsLoading(true);
+    fetch(`${ALBUMS_API}/photo-albums`, {
+      headers: { 'X-API-Token': token },
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data?.albums)) {
+          // Schema says items can be `string` or `AlbumSummary`; we only need names.
+          const names = data.albums
+            .map((a: unknown) => (typeof a === 'string' ? a : (a as { name?: string })?.name))
+            .filter((n: unknown): n is string => typeof n === 'string' && n.length > 0);
+          setAvailableAlbums(names);
+        }
+      })
+      .catch(() => { /* leave list empty; the current album stays selectable */ })
+      .finally(() => {
+        setAlbumsLoading(false);
+        setAlbumsLoaded(true);
+      });
+  };
+
   useEffect(() => {
     if (tab !== 'images') return;
     fetchAlbum(albumName);
+    if (!albumsLoaded) fetchAlbumList();
   }, [tab]);
 
   const fetchAlbum = (name: string) => {
@@ -626,6 +660,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       });
       if (!res.ok) throw new Error('Upload failed');
       await fetchAlbum(albumName);
+      // Refresh the album list — an upload to a previously-unknown album
+      // (created from another surface) should show up here too.
+      fetchAlbumList();
     } catch {
       setImagesError('Upload failed.');
     } finally {
@@ -1195,18 +1232,35 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             <>
               {/* Album picker + upload */}
               <div className="flex gap-2">
-                <input
-                  value={albumName}
-                  onChange={e => setAlbumName(e.target.value)}
-                  onBlur={() => fetchAlbum(albumName)}
-                  onKeyDown={e => e.key === 'Enter' && fetchAlbum(albumName)}
-                  placeholder="Album name"
-                  className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
+                <div className="relative flex-1">
+                  <select
+                    value={albumName}
+                    onChange={e => {
+                      const next = e.target.value;
+                      setAlbumName(next);
+                      fetchAlbum(next);
+                    }}
+                    disabled={albumsLoading}
+                    className="w-full appearance-none bg-slate-800 border border-slate-700 text-white rounded-lg pl-3 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
+                  >
+                    {/* Always keep the current album selectable, even if the
+                        list fetch failed or it has not loaded yet. */}
+                    {!availableAlbums.includes(albumName) && (
+                      <option value={albumName}>{albumName}</option>
+                    )}
+                    {availableAlbums.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
+                    {albumsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+                </div>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
                   className="flex items-center gap-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-sm transition"
+                  title={`Upload an image to album "${albumName}"`}
                 >
                   {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                   Upload

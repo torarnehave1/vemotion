@@ -26,7 +26,27 @@ export async function analyseAudioFromUrl(
   url: string,
   sampleRate = 30,
 ): Promise<AudioTrack> {
-  const res = await fetch(url);
+  let res = await fetch(url);
+  // Defensive retry for the audio-portfolio-worker upload bug: some R2
+  // keys were stored with the literal percent-escape characters baked in
+  // (e.g. "SeljeFl%C3%B8yte.wav" — six literal ASCII chars where the
+  // upload pipeline double-encoded the original `ø`). The recording's
+  // r2Url single-encodes those, so a normal fetch decodes them back to
+  // `ø` before R2 lookup and misses. Re-encoding each `%XX` as `%25XX`
+  // restores the literal-percent form the R2 key actually carries.
+  // Verified 2026-05-29 against rec_1780038560915_c11sbpqoe.
+  if (!res.ok && res.status === 404 && /%[0-9A-Fa-f]{2}/.test(url)) {
+    const recovered = url.replace(/%([0-9A-Fa-f]{2})/g, '%25$1');
+    if (recovered !== url) {
+      console.warn(
+        'analyseAudioFromUrl: 404 on original URL, retrying with percent-re-encoded path (audio-portfolio-worker upload bug workaround)',
+      );
+      const retry = await fetch(recovered);
+      if (retry.ok) {
+        res = retry;
+      }
+    }
+  }
   if (!res.ok) {
     throw new Error(`Audio fetch failed: HTTP ${res.status}`);
   }

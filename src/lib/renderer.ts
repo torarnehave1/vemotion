@@ -1,5 +1,6 @@
 import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnchor } from './api';
 import { samplePath } from './pathSampling';
+import { sampleAudioTrack } from './audioAnalysis';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -78,6 +79,17 @@ function resolveLayerValues(layer: Layer, time: number, composition?: Compositio
     values[anim.property] = interpolate(anim.keyframes, time, anim.easing);
   }
 
+  // Audio amp lookup — sampled at ABSOLUTE composition time (layer-local
+  // time + layer.startTime), so amp is consistent across every layer at
+  // the same moment. Stashed on values with namespaced keys so drawMathShape
+  // (which doesn't see composition directly) can read them back.
+  const layerStartTime = layer.startTime ?? 0;
+  const absoluteTime = time + layerStartTime;
+  const ampSample = sampleAudioTrack(composition?.meta?.audioTrack, absoluteTime);
+  values.__amp = ampSample.amp;
+  values.__ampL = ampSample.ampL;
+  values.__ampR = ampSample.ampR;
+
   const motionScenes = Array.isArray(values.motionScenes) ? values.motionScenes as MotionScene[] : [];
   if (motionScenes.length > 0) {
     const currentScene = motionScenes.find((scene) => time >= scene.start && time <= scene.end);
@@ -92,6 +104,9 @@ function resolveLayerValues(layer: Layer, time: number, composition?: Compositio
         y0: layer.position.y,
         w: layer.size.width,
         h: layer.size.height,
+        amp: ampSample.amp,
+        ampL: ampSample.ampL,
+        ampR: ampSample.ampR,
       };
       const sceneX = evaluateFormula(currentScene.xFormula, context);
       const sceneY = evaluateFormula(currentScene.yFormula, context);
@@ -129,7 +144,11 @@ function resolveLayerValues(layer: Layer, time: number, composition?: Compositio
 
 function evaluateFormula(
   formula: string | undefined,
-  context: { t: number; p: number; start: number; end: number; duration: number; x0: number; y0: number; w: number; h: number }
+  context: {
+    t: number; p: number; start: number; end: number; duration: number;
+    x0: number; y0: number; w: number; h: number;
+    amp: number; ampL: number; ampR: number;
+  },
 ): number | null {
   if (!formula || !formula.trim()) return null;
   const safe = formula.trim();
@@ -138,11 +157,13 @@ function evaluateFormula(
   try {
     const fn = new Function(
       't', 'p', 'start', 'end', 'duration', 'x0', 'y0', 'w', 'h',
+      'amp', 'ampL', 'ampR',
       'sin', 'cos', 'tan', 'abs', 'min', 'max', 'pow', 'sqrt', 'pi',
       `"use strict"; return (${safe});`
     ) as (...args: unknown[]) => number;
     const result = fn(
       context.t, context.p, context.start, context.end, context.duration, context.x0, context.y0, context.w, context.h,
+      context.amp, context.ampL, context.ampR,
       Math.sin, Math.cos, Math.tan, Math.abs, Math.min, Math.max, Math.pow, Math.sqrt, Math.PI
     );
     return Number.isFinite(result) ? result : null;
@@ -858,11 +879,22 @@ export class CanvasRenderer {
 
     if (kind !== 'parametric' || !xFormula || !yFormula) return;
 
+    // Read amp values from values (set once per layer per frame by
+    // resolveLayerValues from composition.meta.audioTrack at absolute
+    // composition time). Constant across the whole parametric sweep —
+    // every sample gets the same amp for this frame.
+    const ampVal = typeof values.__amp === 'number' ? values.__amp : 0;
+    const ampLVal = typeof values.__ampL === 'number' ? values.__ampL : 0;
+    const ampRVal = typeof values.__ampR === 'number' ? values.__ampR : 0;
+
     const points: Array<{ x: number; y: number }> = [];
     for (let i = 0; i <= samples; i += 1) {
       const p = i / samples;
       const t = tStart + (tEnd - tStart) * p;
-      const context = { t, p, start: tStart, end: tEnd, duration: tEnd - tStart, x0: x, y0: y, w, h };
+      const context = {
+        t, p, start: tStart, end: tEnd, duration: tEnd - tStart, x0: x, y0: y, w, h,
+        amp: ampVal, ampL: ampLVal, ampR: ampRVal,
+      };
       const px = evaluateFormula(xFormula, context);
       const py = evaluateFormula(yFormula, context);
       if (px === null || py === null) continue;

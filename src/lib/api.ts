@@ -43,6 +43,39 @@ export type CompositionMeta = {
    * category). Convention: human-friendly capitalised noun.
    */
   metaArea?: string;
+  /**
+   * Pre-baked amplitude track for audio-reactive layer formulas.
+   * Produced client-side from the composition's first audio layer when added
+   * via AudioLayerForm (or constructed manually for smoke testing). Three
+   * parallel channels — left, right, mono — sampled at the same fixed rate
+   * (typically 30 Hz to match the composition's default fps).
+   *
+   * Each value is normalized so that the peak across all three channels
+   * equals 1.0. Linear interpolation between adjacent samples is the
+   * renderer's lookup convention.
+   *
+   * Exposes three context variables in math-shape xFormula / yFormula and
+   * in motionScene formulas: `amp` (mono mix), `ampL`, `ampR`. Sampled at
+   * absolute composition time, not layer-local time — so amp is the same
+   * value across every layer at any given moment.
+   *
+   * v1 limitation: one audioTrack per composition. If multiple audio
+   * layers exist, only the first one drives the track.
+   */
+  audioTrack?: AudioTrack;
+};
+
+export type AudioTrack = {
+  /** Samples per second. Typically 30 to match the composition fps. */
+  sampleRate: number;
+  /** Length of the audio in seconds. Used for bounds checking. */
+  duration: number;
+  /** Left channel amplitudes, normalized 0..1, length = ceil(duration * sampleRate). */
+  left: number[];
+  /** Right channel amplitudes, normalized 0..1, same length as left. */
+  right: number[];
+  /** Mono (mix) amplitudes, normalized 0..1, same length as left. */
+  mono: number[];
 };
 
 export type LayerGroup = {

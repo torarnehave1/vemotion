@@ -46,7 +46,7 @@ export class AudioPlaybackController {
       const existing = this.audios.get(layer.id);
       const volRaw = (layer.properties as Record<string, unknown>).volume;
       const volume = typeof volRaw === 'number' ? Math.max(0, Math.min(1, volRaw)) : 1;
-      if (existing && existing.src === url) {
+      if (existing && existing.dataset.requestedUrl === url) {
         existing.volume = volume;
         continue;
       }
@@ -59,6 +59,26 @@ export class AudioPlaybackController {
       audio.preload = 'auto';
       audio.crossOrigin = 'anonymous';
       audio.volume = volume;
+      // Track the URL we were ASKED to load (not audio.src, which the browser
+      // normalises to absolute) so the next rebuild doesn't tear down and
+      // re-create an element that's already loading the right source.
+      audio.dataset.requestedUrl = url;
+      // Same audio-portfolio-worker double-encoding bug worked around in
+      // analyseAudioFromUrl (audioAnalysis.ts): some R2 keys carry literal
+      // percent-escape chars, so a single-encoded r2Url 404s and only the
+      // %25-re-encoded form resolves. The <audio> element can't read the
+      // status code, so retry on the first load error if the path has %XX
+      // escapes and we haven't already retried.
+      if (/%[0-9A-Fa-f]{2}/.test(url)) {
+        audio.addEventListener('error', () => {
+          if (audio.dataset.retried === '1') return;
+          const recovered = url.replace(/%([0-9A-Fa-f]{2})/g, '%25$1');
+          if (recovered === url) return;
+          audio.dataset.retried = '1';
+          audio.src = recovered;
+          audio.load();
+        });
+      }
       this.audios.set(layer.id, audio);
     }
     // Drop audios whose layers were removed

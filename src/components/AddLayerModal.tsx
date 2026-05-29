@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AudioLayerForm } from './AudioLayerForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown } from 'lucide-react';
-import type { Layer, MotionScene } from '../lib/api';
+import type { AudioTrack, Layer, MotionScene } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
@@ -99,6 +99,14 @@ interface AlbumImage {
 
 interface AddLayerModalProps {
   onAdd: (layer: Layer) => void;
+  /**
+   * Optional — forwarded to AudioLayerForm. When provided, adding an audio
+   * layer triggers Web-Audio amplitude analysis on the audio file; the
+   * resulting AudioTrack is delivered here so the parent can merge it into
+   * composition.meta.audioTrack (drives the renderer's amp / ampL / ampR
+   * context variables). Non-audio layers don't use this callback.
+   */
+  onUpdateMeta?: (patch: { audioTrack?: AudioTrack }) => void;
   onClose: () => void;
   compositionDuration: number;
   compositionWidth: number;
@@ -322,7 +330,7 @@ function parseMotionScenes(json: string): MotionScene[] | undefined {
 }
 
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
-  onAdd, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
+  onAdd, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
 }) => {
   const isEditing  = !!editingLayer;
   const isKgShape  = editingLayer?.type === 'kg-shape';
@@ -1527,6 +1535,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               compositionDuration={compositionDuration}
               editingLayer={editingLayer?.type === 'audio' ? editingLayer : undefined}
               onAdd={(layer) => { onAdd(layer); onClose(); }}
+              onUpdateMeta={onUpdateMeta}
             />
           ) : tab === 'animations' ? (
             <>

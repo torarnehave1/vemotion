@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, Loader2, Volume2, Library } from 'lucide-react';
-import type { Layer } from '../lib/api';
+import type { AudioTrack, Layer } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
+import { analyseAudioFromUrl } from '../lib/audioAnalysis';
 import {
   listVemotionRecordings,
   saveRecordingMetadata,
@@ -14,6 +15,18 @@ import {
 
 interface AudioLayerFormProps {
   onAdd: (layer: Layer) => void;
+  /**
+   * Optional — when provided, AudioLayerForm runs amplitude analysis on the
+   * selected audio (via Web Audio API) before the layer is added, and pipes
+   * the resulting AudioTrack up via this callback. The parent merges the
+   * track into composition.meta.audioTrack, which the renderer reads to
+   * drive the amp / ampL / ampR formula context variables.
+   *
+   * Failure mode: if analysis fails (CORS, decode error, missing
+   * AudioContext), the layer is still added — only the amp track is
+   * skipped. A warning is logged but the user is not blocked.
+   */
+  onUpdateMeta?: (patch: { audioTrack?: AudioTrack }) => void;
   compositionDuration: number;
   editingLayer?: Layer;
 }
@@ -35,7 +48,7 @@ const generateId = () => `layer-${Date.now().toString(36)}`;
  *
  * Common per-layer fields: volume (0–1), startTime (sec), layerDuration (sec).
  */
-export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, compositionDuration, editingLayer }) => {
+export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateMeta, compositionDuration, editingLayer }) => {
   const [mode, setMode] = useState<Mode>('record');
 
   // Editing pre-fills from existing layer.
@@ -55,6 +68,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, compositi
   // Recording state
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [analysing, setAnalysing] = useState(false);
   const [status, setStatus] = useState<string>('');
   const [error, setError] = useState<string>('');
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -157,7 +171,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, compositi
   }, []);
 
   // ── Build + commit layer ────────────────────────────────────────────────────
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!r2Url) { setError('Pick or record an audio source first.'); return; }
     const props: Record<string, unknown> = {
       r2Url,
@@ -177,6 +191,35 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, compositi
       layerDuration,
       properties: props,
     };
+
+    // Slice 2 of A3: pre-bake an amplitude track from the audio so the
+    // renderer's amp / ampL / ampR context variables resolve to real values.
+    // Only runs when the parent provides onUpdateMeta — the legacy add path
+    // (no audio-reactive features) stays untouched.
+    //
+    // Failure mode is intentionally soft: if analysis throws (CORS,
+    // unsupported codec, missing AudioContext), log + skip the meta update.
+    // The audio layer is still added — only amp-driven visuals will be
+    // unavailable for this composition.
+    if (onUpdateMeta) {
+      setAnalysing(true);
+      setError('');
+      setStatus('Analysing audio for amp track…');
+      try {
+        const track = await analyseAudioFromUrl(r2Url, 30);
+        onUpdateMeta({ audioTrack: track });
+      } catch (err) {
+        console.warn('Audio amp analysis failed (layer will be added without amp track):', err);
+        setStatus('');
+        setError(err instanceof Error
+          ? `Amp analysis failed: ${err.message}. Layer added without amp track.`
+          : 'Amp analysis failed. Layer added without amp track.');
+      } finally {
+        setAnalysing(false);
+        setStatus('');
+      }
+    }
+
     onAdd(layer);
   };
 
@@ -340,11 +383,16 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, compositi
         )}
 
         <button
-          onClick={handleAdd}
-          disabled={!r2Url}
-          className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white font-semibold rounded-lg py-3 transition"
+          onClick={() => { void handleAdd(); }}
+          disabled={!r2Url || analysing}
+          className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2"
         >
-          {editingLayer ? 'Save Changes' : 'Add as Layer'}
+          {analysing && <Loader2 className="w-4 h-4 animate-spin" />}
+          {analysing
+            ? 'Analysing audio…'
+            : editingLayer
+              ? 'Save Changes'
+              : 'Add as Layer'}
         </button>
       </div>
     </div>

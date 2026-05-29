@@ -276,6 +276,15 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         {showModal && (
           <AddLayerModal
             onAdd={addLayer}
+            onUpdateMeta={(patch) => {
+              // Merge the audio amp track into composition.meta. Used by
+              // AudioLayerForm after Web-Audio analysis completes — drives
+              // the renderer's amp / ampL / ampR formula context variables.
+              onChange({
+                ...composition,
+                meta: { ...composition.meta, ...patch },
+              });
+            }}
             onClose={() => setShowModal(false)}
             compositionDuration={composition.duration}
             compositionWidth={composition.width}

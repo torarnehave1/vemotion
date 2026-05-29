@@ -22,10 +22,7 @@ import type { AudioTrack } from './api';
  * Throws on network error or on AudioContext.decodeAudioData rejection.
  * Caller should surface the error to the user.
  */
-export async function analyseAudioFromUrl(
-  url: string,
-  sampleRate = 30,
-): Promise<AudioTrack> {
+export async function fetchAudioArrayBuffer(url: string): Promise<ArrayBuffer> {
   let res = await fetch(url);
   // Defensive retry for the audio-portfolio-worker upload bug: some R2
   // keys were stored with the literal percent-escape characters baked in
@@ -39,7 +36,7 @@ export async function analyseAudioFromUrl(
     const recovered = url.replace(/%([0-9A-Fa-f]{2})/g, '%25$1');
     if (recovered !== url) {
       console.warn(
-        'analyseAudioFromUrl: 404 on original URL, retrying with percent-re-encoded path (audio-portfolio-worker upload bug workaround)',
+        'fetchAudioArrayBuffer: 404 on original URL, retrying with percent-re-encoded path (audio-portfolio-worker upload bug workaround)',
       );
       const retry = await fetch(recovered);
       if (retry.ok) {
@@ -50,7 +47,14 @@ export async function analyseAudioFromUrl(
   if (!res.ok) {
     throw new Error(`Audio fetch failed: HTTP ${res.status}`);
   }
-  const arrayBuffer = await res.arrayBuffer();
+  return res.arrayBuffer();
+}
+
+export async function analyseAudioFromUrl(
+  url: string,
+  sampleRate = 30,
+): Promise<AudioTrack> {
+  const arrayBuffer = await fetchAudioArrayBuffer(url);
   // Webkit prefix kept for older Safari versions; harmless on modern browsers.
   const Ctx =
     typeof window !== 'undefined'

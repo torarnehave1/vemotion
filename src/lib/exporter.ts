@@ -2,6 +2,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL, fetchFile } from '@ffmpeg/util';
 import type { CompositionData } from './api';
 import { CanvasRenderer } from './renderer';
+import { fetchAudioArrayBuffer } from './audioAnalysis';
 
 export type ExportProgress = {
   stage: 'loading' | 'rendering' | 'encoding' | 'done';
@@ -59,11 +60,17 @@ export async function exportToMp4(
       const url = typeof props.r2Url === 'string' ? props.r2Url : '';
       if (!url) continue;
       try {
-        const fetched = await fetchFile(url);
+        // Use fetchAudioArrayBuffer, NOT @ffmpeg/util's fetchFile: fetchFile
+        // does not check res.ok, so a 404 (audio-portfolio-worker double-encode
+        // bug) silently writes the HTML error page into the vFS, ffmpeg can't
+        // demux it, exec fails, and readFile('output.mp4') throws ErrnoError.
+        // fetchAudioArrayBuffer applies the %25 re-encode retry and throws on a
+        // real failure so this layer falls through to the fail-soft catch.
+        const buf = await fetchAudioArrayBuffer(url);
         // .webm is the recording format Contacts uses; the extension hint
         // helps ffmpeg pick a demuxer though it'll usually probe correctly.
         const inputName = `audio_${i}.webm`;
-        await ffmpeg.writeFile(inputName, fetched);
+        await ffmpeg.writeFile(inputName, new Uint8Array(buf));
         const volRaw = props.volume;
         audioInputs.push({
           inputName,

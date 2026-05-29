@@ -63,6 +63,26 @@ export type CompositionMeta = {
    * layers exist, only the first one drives the track.
    */
   audioTrack?: AudioTrack;
+  /**
+   * Illustrator-style ruler guides. Editor-only: the renderer draws them
+   * (cyan lines) only when `showGuides` is set, which VideoPreview enables
+   * and the exporter never does — so MP4 output stays guide-free. Layers
+   * snap their centre to these positions while dragging in edit mode.
+   * Positions are in composition-pixel space (same coordinate space as
+   * layer.position), NOT screen space.
+   */
+  guides?: Guide[];
+};
+
+export type Guide = {
+  id: string;
+  /**
+   * 'x' = a vertical line at x=position (dragged from the left ruler).
+   * 'y' = a horizontal line at y=position (dragged from the top ruler).
+   */
+  axis: 'x' | 'y';
+  /** Composition-pixel coordinate of the line on its axis. */
+  position: number;
 };
 
 export type AudioTrack = {

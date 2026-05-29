@@ -318,6 +318,20 @@ export class CanvasRenderer {
    */
   snapGuides: { vertical: boolean; horizontal: boolean } | null = null;
 
+  /**
+   * Editor-only toggle for persisted ruler guides (composition.meta.guides).
+   * VideoPreview sets this true; the exporter never does, so guides stay out
+   * of MP4 output. When true, renderFrame draws each guide as a cyan line.
+   */
+  showGuides = false;
+
+  /**
+   * A guide being dragged out of a ruler but not yet committed. Drawn dashed
+   * so it reads as a preview distinct from committed guides. Set by
+   * VideoPreview during a ruler drag; cleared on drop.
+   */
+  draftGuide: { axis: 'x' | 'y'; position: number } | null = null;
+
   onImageLoad?: () => void;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -382,11 +396,56 @@ export class CanvasRenderer {
       this.drawSelectionOverlay(composition, time);
     }
 
+    // Editor-only persisted ruler guides (composition.meta.guides) + any
+    // in-progress draft guide. Drawn under the magenta smart guides so the
+    // active snap indicator stays most prominent.
+    if (this.showGuides) {
+      this.drawGuides(composition);
+    }
+
     // Editor-only smart guides (centre snap indicators). Drawn after the
     // selection overlay so they sit on top — easier to spot at a glance.
     if (this.snapGuides) {
       this.drawSnapGuides(composition);
     }
+  }
+
+  /**
+   * Draw persisted ruler guides (cyan, solid) and the in-progress draft
+   * guide (cyan, dashed). Composition-pixel coordinates map 1:1 to canvas
+   * pixels here because the canvas is sized to the composition resolution.
+   */
+  private drawGuides(composition: CompositionData): void {
+    const guides = composition.meta?.guides ?? [];
+    if (guides.length === 0 && !this.draftGuide) return;
+    this.ctx.save();
+    this.ctx.strokeStyle = '#22d3ee'; // cyan-400 — Illustrator guide convention
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([]);
+    for (const g of guides) {
+      this.ctx.beginPath();
+      if (g.axis === 'x') {
+        this.ctx.moveTo(g.position, 0);
+        this.ctx.lineTo(g.position, composition.height);
+      } else {
+        this.ctx.moveTo(0, g.position);
+        this.ctx.lineTo(composition.width, g.position);
+      }
+      this.ctx.stroke();
+    }
+    if (this.draftGuide) {
+      this.ctx.setLineDash([8, 6]);
+      this.ctx.beginPath();
+      if (this.draftGuide.axis === 'x') {
+        this.ctx.moveTo(this.draftGuide.position, 0);
+        this.ctx.lineTo(this.draftGuide.position, composition.height);
+      } else {
+        this.ctx.moveTo(0, this.draftGuide.position);
+        this.ctx.lineTo(composition.width, this.draftGuide.position);
+      }
+      this.ctx.stroke();
+    }
+    this.ctx.restore();
   }
 
   /**

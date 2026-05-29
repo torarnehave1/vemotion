@@ -447,6 +447,14 @@ export const Dashboard: React.FC = () => {
                     : l),
                 }));
               }}
+              onUpdateGuides={(guides) => {
+                // Persist ruler guides into composition.meta.guides. Editor-only
+                // (excluded from MP4 export); rides the existing autosave.
+                setComposition(prev => ({
+                  ...prev,
+                  meta: { ...prev.meta, guides },
+                }));
+              }}
             />
           </div>
           <TimelineEditor

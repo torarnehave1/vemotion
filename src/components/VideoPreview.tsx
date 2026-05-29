@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Square, Download, MousePointer2, PenTool } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
-import type { CompositionData, Layer, PathAnchor } from '../lib/api';
+import type { CompositionData, Layer, PathAnchor, Guide } from '../lib/api';
 import { PenToolOverlay } from './PenToolOverlay';
 import { PathEditOverlay } from './PathEditOverlay';
 
@@ -37,9 +37,15 @@ interface VideoPreviewProps {
    * server write.
    */
   onUpdatePathAnchors?: (layerId: string, anchors: PathAnchor[]) => void;
+  /**
+   * Replace the composition's ruler guides (composition.meta.guides). Called
+   * when a guide is created (dragged from a ruler), moved, or deleted (dragged
+   * off-canvas). When omitted, the rulers + guide interactions are disabled.
+   */
+  onUpdateGuides?: (guides: Guide[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -92,6 +98,9 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     if (!canvas) return;
 
     const renderer = new CanvasRenderer(canvas);
+    // Editor-only: draw persisted ruler guides. Embed/iframe player and the
+    // exporter never enable this, so guides stay out of the final video.
+    renderer.showGuides = !embed;
     const controller = new PlaybackController(renderer, composition);
     const audioCtrl = new AudioPlaybackController(composition);
 
@@ -308,9 +317,93 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     };
   }, []);
 
-  // Combined mousedown — edit-mode hit test gets priority; otherwise fall
-  // through to the existing pan handler.
+  // Ruler drag → create a guide. axis 'y' = top ruler (drag down → horizontal
+  // guide); axis 'x' = left ruler (drag right → vertical guide). The guide
+  // position is read from the cursor's CANVAS coordinate at drop time (via
+  // toCanvasCoords, which already accounts for zoom/pan), so the unscaled
+  // ruler strip only needs to start the drag, not measure it.
+  const handleRulerMouseDown = useCallback((axis: 'x' | 'y') => (e: React.MouseEvent) => {
+    const renderer = rendererRef.current;
+    if (!renderer || !onUpdateGuides) return;
+    e.preventDefault();
+    let lastPos = 0;
+    let inside = false;
+
+    const onMove = (ev: MouseEvent) => {
+      const c = toCanvasCoords(ev.clientX, ev.clientY);
+      if (!c) return;
+      inside = c.x >= 0 && c.x <= composition.width && c.y >= 0 && c.y <= composition.height;
+      const raw = axis === 'x' ? c.x : c.y;
+      const max = axis === 'x' ? composition.width : composition.height;
+      lastPos = Math.max(0, Math.min(max, raw));
+      renderer.draftGuide = inside ? { axis, position: lastPos } : null;
+      void renderer.renderFrame(composition, currentFrame);
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      renderer.draftGuide = null;
+      if (inside) {
+        const guide: Guide = { id: `guide-${Date.now().toString(36)}`, axis, position: Math.round(lastPos) };
+        onUpdateGuides([...(composition.meta?.guides ?? []), guide]);
+        // composition prop updates → [composition] effect re-renders with the
+        // new guide committed; no manual renderFrame needed here.
+      } else {
+        void renderer.renderFrame(composition, currentFrame);
+      }
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [composition, currentFrame, onUpdateGuides, toCanvasCoords]);
+
+  // Combined mousedown — guide grab has top priority (any mode), then
+  // edit-mode hit test; otherwise fall through to the existing pan handler.
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Guide grab: drag an existing guide to reposition, or off-canvas to delete.
+    const guides = composition.meta?.guides ?? [];
+    if (guides.length > 0 && onUpdateGuides && rendererRef.current) {
+      const gc = toCanvasCoords(e.clientX, e.clientY);
+      if (gc) {
+        const GUIDE_HIT = 8;
+        const hit = guides.find(g => g.axis === 'x'
+          ? Math.abs(gc.x - g.position) <= GUIDE_HIT
+          : Math.abs(gc.y - g.position) <= GUIDE_HIT);
+        if (hit) {
+          e.preventDefault();
+          const renderer = rendererRef.current;
+          const others = guides.filter(g => g.id !== hit.id);
+          let lastPos = hit.position;
+          let offCanvas = false;
+          const onMove = (ev: MouseEvent) => {
+            const c = toCanvasCoords(ev.clientX, ev.clientY);
+            if (!c) return;
+            offCanvas = c.x < 0 || c.x > composition.width || c.y < 0 || c.y > composition.height;
+            const raw = hit.axis === 'x' ? c.x : c.y;
+            const max = hit.axis === 'x' ? composition.width : composition.height;
+            lastPos = Math.max(0, Math.min(max, raw));
+            const tempComp: CompositionData = { ...composition, meta: { ...composition.meta, guides: others } };
+            renderer.draftGuide = offCanvas ? null : { axis: hit.axis, position: lastPos };
+            void renderer.renderFrame(tempComp, currentFrame);
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            renderer.draftGuide = null;
+            if (offCanvas) {
+              onUpdateGuides(others);
+            } else {
+              onUpdateGuides([...others, { ...hit, position: Math.round(lastPos) }]);
+            }
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+          return;
+        }
+      }
+    }
+
     if (!editMode || !rendererRef.current) {
       handlePanStart(e);
       return;
@@ -385,6 +478,13 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       if (showVerticalGuide) newX = canvasCx - layerW / 2;
       if (showHorizontalGuide) newY = canvasCy - layerH / 2;
 
+      // Also snap the layer centre to any ruler guide within threshold. A
+      // guide hit overrides the canvas-centre snap when both are in range.
+      for (const g of composition.meta?.guides ?? []) {
+        if (g.axis === 'x' && Math.abs(centreX - g.position) < SNAP_THRESHOLD) newX = g.position - layerW / 2;
+        if (g.axis === 'y' && Math.abs(centreY - g.position) < SNAP_THRESHOLD) newY = g.position - layerH / 2;
+      }
+
       drag.finalX = newX;
       drag.finalY = newY;
 
@@ -430,7 +530,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
 
     document.addEventListener('mousemove', onDragMove);
     document.addEventListener('mouseup', onDragUp);
-  }, [editMode, composition, currentFrame, handlePanStart, onLayerMove, toCanvasCoords]);
+  }, [editMode, composition, currentFrame, handlePanStart, onLayerMove, toCanvasCoords, onUpdateGuides]);
 
   // Cursor feedback: in edit mode, show grab when hovering a layer.
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -470,6 +570,30 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           </div>
         )}
 
+        {!embed && onUpdateGuides && (
+          <p className="text-[11px] text-slate-500">
+            Drag from the rulers to add snap guides. Drag a guide off the canvas to remove it.
+          </p>
+        )}
+        <div
+          className={!embed && onUpdateGuides ? 'grid' : undefined}
+          style={!embed && onUpdateGuides ? { gridTemplateColumns: '16px minmax(0,1fr)', gridTemplateRows: '16px auto' } : undefined}
+        >
+          {!embed && onUpdateGuides && (
+            <>
+              <div className="bg-slate-800/70 border-b border-r border-slate-700 rounded-tl" />
+              <div
+                onMouseDown={handleRulerMouseDown('y')}
+                title="Drag down to add a horizontal guide"
+                className="bg-slate-800/70 border-b border-slate-700 cursor-row-resize hover:bg-slate-700/70 transition-colors"
+              />
+              <div
+                onMouseDown={handleRulerMouseDown('x')}
+                title="Drag right to add a vertical guide"
+                className="bg-slate-800/70 border-r border-slate-700 cursor-col-resize hover:bg-slate-700/70 transition-colors"
+              />
+            </>
+          )}
         <div
           ref={viewportRef}
           className="flex justify-center overflow-hidden rounded-lg"
@@ -508,6 +632,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               />
             )}
           </div>
+        </div>
         </div>
       </div>
 

@@ -95,8 +95,14 @@ export async function saveRecordingMetadata(payload: AudioRecording & { userEmai
  * the user's pick-from-portfolio = "Only Vemotion" choice).
  */
 export async function listVemotionRecordings(userEmail: string): Promise<AudioRecording[]> {
+  // Explicit limit — the worker's default behaviour without `limit` was
+  // observed (2026-05-29) to return only 4 recordings for a user with
+  // 8 in /list-recordings-public. The OpenAPI documents `limit: default 50`
+  // but the actual response disagreed. Hard-coding 200 keeps the picker
+  // from silently hiding tagged recordings beyond the first short page
+  // until the underlying worker default is investigated.
   const res = await fetch(
-    `${PORTFOLIO_WORKER}/list-recordings?userEmail=${encodeURIComponent(userEmail)}`,
+    `${PORTFOLIO_WORKER}/list-recordings?userEmail=${encodeURIComponent(userEmail)}&limit=200`,
   );
   if (!res.ok) {
     throw new Error(`Audio list failed: HTTP ${res.status}`);

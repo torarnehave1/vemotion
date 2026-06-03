@@ -1,5 +1,3 @@
-import { readStoredUser } from './auth';
-
 /**
  * Vemotion "projects" — book/course/project outlines stored as Knowledge Graphs.
  *
@@ -39,8 +37,6 @@ const COMPOSITION_VIEWER = 'https://vemotion.vegvisr.org/?compositionId=';
 const COLOR_PROJECT = '#1e293b';
 const COLOR_CHAPTER = '#6366f1';
 const COLOR_COMPREF = '#0ea5e9';
-
-const getToken = () => readStoredUser()?.emailVerificationToken ?? null;
 
 // ── Raw KG shapes (only the fields we touch) ────────────────────────────────
 type KgNode = {
@@ -100,11 +96,13 @@ const fetchGraph = async (graphId: string): Promise<KgGraph> => {
 };
 
 const saveGraph = async (graphId: string, graph: KgGraph): Promise<void> => {
-  const token = getToken();
-  if (!token) throw new Error('Sign in to edit projects.');
+  // No X-API-Token: the KG worker accepts anonymous writes (this is how the
+  // production GraphAdmin tool saves). Sending the Vemotion login token here
+  // is REJECTED — it's valid for api.vegvisr.org/vemotion, not for
+  // knowledge.vegvisr.org. See lessons_learned Lesson 36.
   const res = await fetch(`${KG_BASE}/saveGraphWithHistory`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       id: graphId,
       graphData: { metadata: graph.metadata, nodes: graph.nodes, edges: graph.edges },
@@ -175,8 +173,6 @@ export const getProject = async (graphId: string): Promise<ProjectDetail> => {
 
 /** Create a new project graph (UUID id, marked as a Vemotion project). */
 export const createProject = async ({ metaArea, title }: { metaArea: string; title?: string }): Promise<ProjectSummary> => {
-  const token = getToken();
-  if (!token) throw new Error('Sign in to create projects.');
   const area = metaArea.trim();
   if (!area) throw new Error('A project needs a meta area name.');
   const projectTitle = title?.trim() || area;

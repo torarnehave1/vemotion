@@ -15,6 +15,35 @@ is visible in the transcript; that's the proof it happened.
 
 ---
 
+## STANDARD CHANGE WORKFLOW — follow every step, in order, for every change
+
+This is the fixed sequence for any code change. No step is skippable. No step is offered as
+optional (see lessons_learned Lesson 33).
+
+1. **Read** `_project/lessons_learned.md` — the full file, with the Read tool.
+2. **Find what is wrong** — investigate the actual cause with tool calls, not speculation.
+3. **Fix** — make the change.
+4. **State what changed** — name the file(s) and the change.
+5. **Run build** — `npm run build` from `/Volumes/T7/video-generator`. Fix all errors. Never proceed on a broken build.
+6. **Deploy with wrangler IF it is a worker** — `npx wrangler deploy` from the worker dir. (Worker repo is NOT git-committed by Claude; see Worker deploy policy.)
+7. **Commit + push to git IF it is source code in this repo** — `git add` → `git commit` → `git push origin main`.
+8. **Read `_project/lessons_learned.md` again and update it if this change surfaced a new lesson** — plus STATUS.md / TODO.md / TEST_PLAN.md per P1.
+
+### Delivery report format (end of every change message)
+
+End the message with the report. The push line MUST be the last line, on its own, so it is never
+mistaken for prose:
+
+```
+Delivered: <what>. Tested: <build/other>. Caveats: <z>.
+Pushed: <commit-hash> — github.com/torarnehave1/vemotion → main
+```
+
+If nothing was pushed (e.g. worker-only deploy, or _project-only/gitignored edits), the last line
+states that explicitly: `Pushed: nothing — <reason>`.
+
+---
+
 ## Before creating any new UI component
 - Always search the existing codebase for similar components first.
 - If a modal, form, panel, or UI pattern already exists, reuse or extend it — do not build a new one from scratch.

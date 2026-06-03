@@ -9,7 +9,6 @@ import {
   listProjects,
   getProject,
   createProject,
-  registerExistingProject,
   addChapter,
   addCompositionToChapter,
   type ProjectSummary,
@@ -228,13 +227,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
     if (!trimmed) return;
     setProjectBusy(true);
     try {
-      // Pasting a graph UUID imports an existing project graph; otherwise the
-      // text is a new project name. Import recovers projects created before the
-      // local registry existed (or made on another device).
-      const isGraphId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmed);
-      const created = isGraphId
-        ? await registerExistingProject(trimmed)
-        : await createProject({ metaArea: trimmed });
+      const created = await createProject({ metaArea: trimmed });
       setNewProjectName(null);
       await loadProjects();
       selectProject(created);
@@ -641,7 +634,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                       value={newProjectName}
                       onChange={(e) => setNewProjectName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Escape') setNewProjectName(null); }}
-                      placeholder="New project name — or paste a graph id to import"
+                      placeholder="Project meta area"
                       className="flex-1 min-w-0 bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                     <button

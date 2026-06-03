@@ -40,42 +40,12 @@ const COLOR_PROJECT = '#1e293b';
 const COLOR_CHAPTER = '#6366f1';
 const COLOR_COMPREF = '#0ea5e9';
 
-// Local registry of known project graph ids. The KG list endpoints
-// (getknowgraphs / getknowgraphsummaries / searchGraphs) are a cached/curated
-// index that does NOT include freshly-created graphs, so a marker scan alone
-// can't find a project right after you make it. This localStorage registry is
-// the reliable source of truth; listProjects merges it with the index scan.
-// Limitation: device-local — projects created elsewhere appear only if/when the
-// KG index picks them up (or via registerExistingProject by id).
-const LS_PROJECTS_KEY = 'vemotion:projects';
-type RegistryEntry = { graphId: string; metaArea: string; title: string };
-
-const readRegistry = (): RegistryEntry[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(LS_PROJECTS_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr.filter((e) => e && typeof e.graphId === 'string') : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeRegistry = (entries: RegistryEntry[]): void => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(LS_PROJECTS_KEY, JSON.stringify(entries));
-  } catch {
-    /* ignore quota / serialization errors */
-  }
-};
-
-const addToRegistry = (entry: RegistryEntry): void => {
-  const cur = readRegistry();
-  writeRegistry(cur.some((e) => e.graphId === entry.graphId)
-    ? cur.map((e) => (e.graphId === entry.graphId ? entry : e))
-    : [...cur, entry]);
-};
+// KG list/read endpoints are ROLE-gated: an anonymous caller gets only public
+// graphs (~62), while a Superadmin/Admin role header returns the full set
+// (935+, including freshly-created graphs). Mirror the canonical
+// GraphPortfolio.vue, which sends the user's role on every KG read. Default to
+// Superadmin to match its fallback.
+const userRole = (): string => readStoredUser()?.role || 'Superadmin';
 
 // ── Raw KG shapes (only the fields we touch) ────────────────────────────────
 type KgNode = {
@@ -124,7 +94,9 @@ const newUuid = (): string => {
 };
 
 const fetchGraph = async (graphId: string): Promise<KgGraph> => {
-  const res = await fetch(`${KG_BASE}/getknowgraph?id=${encodeURIComponent(graphId)}`);
+  const res = await fetch(`${KG_BASE}/getknowgraph?id=${encodeURIComponent(graphId)}`, {
+    headers: { 'x-user-role': userRole() },
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to load project graph.');
   return {
@@ -144,7 +116,7 @@ const saveGraph = async (graphId: string, graph: KgGraph): Promise<void> => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-role': readStoredUser()?.role || 'Superadmin',
+      'x-user-role': userRole(),
     },
     body: JSON.stringify({
       id: graphId,
@@ -161,41 +133,43 @@ const saveGraph = async (graphId: string, graph: KgGraph): Promise<void> => {
  * Reads /getknowgraphsummaries (which includes metadata) and filters client-side.
  */
 export const listProjects = async (): Promise<ProjectSummary[]> => {
-  // Primary source: local registry (immediate, survives the KG list-index delay).
-  const byId = new Map<string, ProjectSummary>(readRegistry().map((e) => [e.graphId, e]));
-  // Merge in any marker-tagged graphs the KG portfolio index knows about
-  // (cross-device / future-proof if/when the index includes them).
-  try {
-    const res = await fetch(`${KG_BASE}/getknowgraphsummaries?limit=1000`);
-    if (res.ok) {
-      const data = await res.json();
-      const results: Array<{ id?: string; metadata?: KgMetadata }> = Array.isArray(data.results) ? data.results : [];
-      for (const g of results) {
-        if (g?.metadata?.createdBy === PROJECT_MARKER && typeof g.id === 'string' && !byId.has(g.id)) {
-          byId.set(g.id, {
-            graphId: g.id,
-            metaArea: g.metadata?.metaArea ?? g.metadata?.title ?? '',
-            title: g.metadata?.title ?? g.metadata?.metaArea ?? '(untitled project)',
-          });
-        }
+  // Role-authed, paginated scan of all graphs — the canonical GraphPortfolio.vue
+  // listing. With the role header this returns the full set (incl. graphs just
+  // created); filter to those marked as Vemotion projects. Follow hasMore/offset
+  // (the server caps each page at 250).
+  const headers = { 'x-user-role': userRole() };
+  const out: ProjectSummary[] = [];
+  const seen = new Set<string>();
+  const LIMIT = 250;
+  let offset = 0;
+  for (let page = 0; page < 40; page += 1) {
+    const res = await fetch(`${KG_BASE}/getknowgraphsummaries?limit=${LIMIT}&offset=${offset}`, { headers });
+    if (!res.ok) break;
+    // Some graphs' summary content contains raw control characters that make
+    // JSON.parse throw for the WHOLE page. Don't let one bad page abort the
+    // scan — skip it and continue (we lose only the projects on that page).
+    let data: { results?: Array<{ id?: string; metadata?: KgMetadata }>; hasMore?: boolean };
+    try {
+      data = await res.json();
+    } catch {
+      offset += LIMIT;
+      continue;
+    }
+    const results = Array.isArray(data.results) ? data.results : [];
+    for (const g of results) {
+      if (g?.metadata?.createdBy === PROJECT_MARKER && typeof g.id === 'string' && !seen.has(g.id)) {
+        seen.add(g.id);
+        out.push({
+          graphId: g.id,
+          metaArea: g.metadata?.metaArea ?? g.metadata?.title ?? '',
+          title: g.metadata?.title ?? g.metadata?.metaArea ?? '(untitled project)',
+        });
       }
     }
-  } catch {
-    /* index unreachable — registry still works */
+    if (!data.hasMore) break;
+    offset += LIMIT;
   }
-  return [...byId.values()];
-};
-
-/**
- * Register an existing project graph (by id) into the local registry — for
- * recovering a project created before the registry existed, or one made on
- * another device. Reads the graph to capture its metaArea/title.
- */
-export const registerExistingProject = async (graphId: string): Promise<ProjectSummary> => {
-  const detail = await getProject(graphId);
-  const summary = { graphId, metaArea: detail.metaArea, title: detail.title };
-  addToRegistry(summary);
-  return summary;
+  return out;
 };
 
 /** Load one project graph and parse it into chapters → composition refs. */
@@ -264,9 +238,7 @@ export const createProject = async ({ metaArea, title }: { metaArea: string; tit
     edges: [],
   };
   await saveGraph(graphId, graph);
-  const summary = { graphId, metaArea: area, title: projectTitle };
-  addToRegistry(summary);
-  return summary;
+  return { graphId, metaArea: area, title: projectTitle };
 };
 
 /** Append a chapter node (+ project-root → chapter edge) to a project graph. */

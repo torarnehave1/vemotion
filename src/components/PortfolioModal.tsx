@@ -1,10 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save, Image as ImageIcon } from 'lucide-react';
+import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save, Image as ImageIcon, FolderPlus, Plus, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
 import type { CompositionData, CompositionMeta } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { getCompositionFromCloud, saveCompositionToCloud } from '../lib/cloud-compositions';
 import { renderThumbnail } from '../lib/thumbnail';
+import {
+  listProjects,
+  getProject,
+  createProject,
+  addChapter,
+  addCompositionToChapter,
+  type ProjectSummary,
+  type ProjectDetail,
+} from '../lib/project-graphs';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -72,6 +81,19 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
 
   const [openingId, setOpeningId] = useState<string | null>(null);
 
+  // ── Projects (book/chapter outline, backed by KG) ───────────────────────────
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projectsError, setProjectsError] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null); // graphId
+  const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
+  const [projectBusy, setProjectBusy] = useState(false);
+  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
+  // Inline "new project" / "new chapter" forms.
+  const [newProjectName, setNewProjectName] = useState<string | null>(null); // null = form closed
+  const [newChapterName, setNewChapterName] = useState<string | null>(null);
+  // Per-card "add to chapter" in flight (composition id).
+  const [addingToChapterId, setAddingToChapterId] = useState<string | null>(null);
+
   // Thumbnail cache. Keyed by composition id. Sentinel strings indicate
   // not-ready / loading / failed; otherwise the value is a PNG data URL.
   // Persists for the lifetime of the modal — closing + reopening rerenders.
@@ -117,6 +139,111 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // ── Projects: load list, then detail on selection ───────────────────────────
+  const loadProjects = useCallback(async () => {
+    try {
+      setProjectsError('');
+      setProjects(await listProjects());
+    } catch (e) {
+      setProjectsError(e instanceof Error ? e.message : 'Failed to load projects');
+    }
+  }, []);
+
+  useEffect(() => { void loadProjects(); }, [loadProjects]);
+
+  const refreshProjectDetail = useCallback(async (graphId: string) => {
+    setProjectBusy(true);
+    try {
+      setProjectDetail(await getProject(graphId));
+    } catch (e) {
+      setProjectsError(e instanceof Error ? e.message : 'Failed to load project');
+    } finally {
+      setProjectBusy(false);
+    }
+  }, []);
+
+  // Selecting a project loads its outline and pins the metaArea filter to it
+  // (membership = composition.meta.metaArea === project.metaArea).
+  const selectProject = useCallback((p: ProjectSummary | null) => {
+    setSelectedChapterId(null);
+    if (!p) {
+      setSelectedProjectId(null);
+      setProjectDetail(null);
+      setFilterMetaArea(SENTINEL_ALL);
+      return;
+    }
+    setSelectedProjectId(p.graphId);
+    setFilterMetaArea(p.metaArea || SENTINEL_ALL);
+    void refreshProjectDetail(p.graphId);
+  }, [refreshProjectDetail]);
+
+  // Composition ids placed in the currently-selected chapter (for grid narrowing).
+  const selectedChapterCompIds = useMemo(() => {
+    if (!selectedChapterId || !projectDetail) return null;
+    const ch = projectDetail.chapters.find(c => c.id === selectedChapterId);
+    if (!ch) return null;
+    return new Set(ch.compositions.map(c => c.compositionId));
+  }, [selectedChapterId, projectDetail]);
+
+  const handleCreateProject = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setProjectBusy(true);
+    try {
+      const created = await createProject({ metaArea: trimmed });
+      setNewProjectName(null);
+      await loadProjects();
+      selectProject(created);
+    } catch (e) {
+      setProjectsError(e instanceof Error ? e.message : 'Failed to create project');
+    } finally {
+      setProjectBusy(false);
+    }
+  }, [loadProjects, selectProject]);
+
+  const handleAddChapter = useCallback(async (name: string) => {
+    if (!selectedProjectId) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setProjectBusy(true);
+    try {
+      await addChapter(selectedProjectId, trimmed);
+      setNewChapterName(null);
+      await refreshProjectDetail(selectedProjectId);
+    } catch (e) {
+      setProjectsError(e instanceof Error ? e.message : 'Failed to add chapter');
+    } finally {
+      setProjectBusy(false);
+    }
+  }, [selectedProjectId, refreshProjectDetail]);
+
+  // Add a composition to a chapter: (1) set its meta.metaArea to the project's
+  // (reuse-metaArea membership — spread-and-override to preserve other meta),
+  // (2) append the compref node + edge to the project graph.
+  const handleAddToChapter = useCallback(async (item: CompositionSummary, chapterId: string) => {
+    if (!selectedProjectId || !projectDetail) return;
+    setAddingToChapterId(item.id);
+    try {
+      const projectMetaArea = projectDetail.metaArea;
+      const full = await getCompositionFromCloud(item.id);
+      const nextMeta: CompositionMeta = { ...(full.composition.meta ?? {}), metaArea: projectMetaArea };
+      await saveCompositionToCloud({
+        id: item.id,
+        name: full.name,
+        composition: { ...full.composition, meta: nextMeta },
+        saveType: 'manual',
+      });
+      await addCompositionToChapter(selectedProjectId, chapterId, { compositionId: item.id, name: full.name || item.name });
+      // Reflect new membership locally + refresh the outline.
+      setItems(prev => prev.map(it => it.id === item.id ? { ...it, meta: nextMeta } : it));
+      await refreshProjectDetail(selectedProjectId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to add to chapter');
+    } finally {
+      setAddingToChapterId(null);
+    }
+  }, [selectedProjectId, projectDetail, refreshProjectDetail]);
+
   // ── Facets (derive from currently-fetched items) ────────────────────────────
   const allCategories = useMemo(() => {
     const set = new Set<string>();
@@ -140,6 +267,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     let out = items.filter(it => {
+      if (selectedChapterCompIds && !selectedChapterCompIds.has(it.id)) return false;
       if (filterCategory !== SENTINEL_ALL && (it.meta?.category ?? '') !== filterCategory) return false;
       if (filterMetaArea !== SENTINEL_ALL && (it.meta?.metaArea ?? '') !== filterMetaArea) return false;
       if (activeTags.size > 0) {
@@ -167,7 +295,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
       return bT - aT;
     });
     return out;
-  }, [items, search, sortBy, filterCategory, filterMetaArea, activeTags]);
+  }, [items, search, sortBy, filterCategory, filterMetaArea, activeTags, selectedChapterCompIds]);
 
   const toggleTag = (tag: string) => {
     setActiveTags(prev => {
@@ -338,6 +466,130 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
               >
                 {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
+            </Section>
+
+            <Section title="Project">
+              {projectsError && <p className="text-[11px] text-red-400 mb-1">{projectsError}</p>}
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => selectProject(null)}
+                  className={[
+                    'w-full text-left px-2 py-1 text-xs rounded transition border-l-2',
+                    selectedProjectId === null
+                      ? 'bg-sky-600/20 text-sky-300 border-sky-500'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                  ].join(' ')}
+                >
+                  All compositions
+                </button>
+
+                {projects.map(p => {
+                  const active = selectedProjectId === p.graphId;
+                  return (
+                    <div key={p.graphId}>
+                      <button
+                        onClick={() => (active ? selectProject(null) : selectProject(p))}
+                        className={[
+                          'w-full flex items-center gap-1 px-2 py-1 text-xs rounded transition border-l-2',
+                          active
+                            ? 'bg-sky-600/20 text-sky-300 border-sky-500'
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                        ].join(' ')}
+                        title={p.title}
+                      >
+                        {active ? <ChevronDown className="w-3 h-3 flex-shrink-0" /> : <ChevronRight className="w-3 h-3 flex-shrink-0" />}
+                        <BookOpen className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{p.title}</span>
+                      </button>
+
+                      {active && (
+                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-slate-700 pl-2">
+                          {projectBusy && !projectDetail && (
+                            <p className="text-[11px] text-slate-500 px-1">Loading…</p>
+                          )}
+                          {(projectDetail?.chapters ?? []).map(ch => (
+                            <button
+                              key={ch.id}
+                              onClick={() => setSelectedChapterId(selectedChapterId === ch.id ? null : ch.id)}
+                              className={[
+                                'w-full text-left px-2 py-0.5 text-xs rounded transition border-l-2',
+                                selectedChapterId === ch.id
+                                  ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500'
+                                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                              ].join(' ')}
+                            >
+                              <span className="truncate">{ch.title}</span>
+                              <span className="text-slate-600"> ({ch.compositions.length})</span>
+                            </button>
+                          ))}
+                          {projectDetail && projectDetail.chapters.length === 0 && newChapterName === null && (
+                            <p className="text-[11px] text-slate-500 px-1">No chapters yet.</p>
+                          )}
+                          {newChapterName === null ? (
+                            <button
+                              onClick={() => setNewChapterName('')}
+                              className="w-full flex items-center gap-1 px-2 py-0.5 text-[11px] text-slate-500 hover:text-sky-300 transition"
+                            >
+                              <Plus className="w-3 h-3" /> Chapter
+                            </button>
+                          ) : (
+                            <form
+                              onSubmit={(e) => { e.preventDefault(); void handleAddChapter(newChapterName); }}
+                              className="flex gap-1 pt-0.5"
+                            >
+                              <input
+                                autoFocus
+                                value={newChapterName}
+                                onChange={(e) => setNewChapterName(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Escape') setNewChapterName(null); }}
+                                placeholder="Chapter title"
+                                className="flex-1 min-w-0 bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              />
+                              <button
+                                type="submit"
+                                disabled={projectBusy}
+                                className="px-1.5 py-1 text-[11px] bg-sky-600 hover:bg-sky-500 text-white rounded disabled:bg-slate-700"
+                              >
+                                {projectBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {newProjectName === null ? (
+                  <button
+                    onClick={() => setNewProjectName('')}
+                    className="w-full flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-sky-300 transition"
+                  >
+                    <FolderPlus className="w-3 h-3" /> New project
+                  </button>
+                ) : (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); void handleCreateProject(newProjectName); }}
+                    className="flex gap-1 pt-1"
+                  >
+                    <input
+                      autoFocus
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setNewProjectName(null); }}
+                      placeholder="Project meta area"
+                      className="flex-1 min-w-0 bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={projectBusy}
+                      className="px-1.5 py-1 text-[11px] bg-sky-600 hover:bg-sky-500 text-white rounded disabled:bg-slate-700"
+                    >
+                      {projectBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Create'}
+                    </button>
+                  </form>
+                )}
+              </div>
             </Section>
 
             <Section title="Meta area">
@@ -528,6 +780,24 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                             Open
                           </button>
                           <div className="flex items-center gap-1">
+                            {selectedProjectId && projectDetail && projectDetail.chapters.length > 0 && (
+                              <select
+                                value=""
+                                disabled={addingToChapterId === item.id}
+                                onChange={(e) => {
+                                  const ch = e.target.value;
+                                  e.target.value = '';
+                                  if (ch) void handleAddToChapter(item, ch);
+                                }}
+                                className="bg-slate-900 border border-slate-700 text-slate-300 text-[10px] rounded px-1 py-0.5 max-w-[7.5rem] focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
+                                title="Add this composition to a chapter of the selected project"
+                              >
+                                <option value="">{addingToChapterId === item.id ? 'Adding…' : '+ Chapter'}</option>
+                                {projectDetail.chapters.map(ch => (
+                                  <option key={ch.id} value={ch.id}>{ch.title}</option>
+                                ))}
+                              </select>
+                            )}
                             <button
                               onClick={() => beginEdit(item)}
                               className="p-1 text-slate-500 hover:text-emerald-400 transition"

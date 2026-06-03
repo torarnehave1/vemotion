@@ -84,6 +84,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const [selectedLayerIds, setSelectedLayerIds] = useState<Set<string>>(new Set());
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [guideTime, setGuideTime] = useState<number | null>(null);
+  const [scrubbing, setScrubbing] = useState(false);
 
   const groups = composition.groups ?? [];
   const groupMap = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
@@ -141,12 +142,19 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const totalHeight = RULER_HEIGHT + rows.length * (LAYER_HEIGHT + LAYER_GAP) + 8;
   const editingLayer = composition.layers.find((l) => l.id === editingLayerId) ?? null;
 
-  const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  const seekToClientX = useCallback((clientX: number) => {
     if (!trackRef.current) return;
     const rect = trackRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const x = clientX - rect.left;
     const frame = Math.round(timeFromX(x) * composition.fps);
     onSeek(Math.max(0, Math.min(frame, Math.floor(composition.duration * composition.fps) - 1)));
+  }, [timeFromX, composition.fps, composition.duration, onSeek]);
+
+  const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    seekToClientX(e.clientX);
+    setScrubbing(true);
   };
 
   const collectSnapTimes = useCallback((excludeLayerIds: string[]): number[] => {
@@ -284,6 +292,23 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       document.removeEventListener('mouseup', onUp);
     };
   }, [collectSnapTimes, composition, onChange, pxPerSecond, snapRange, snapSingleTime, drag]);
+
+  useEffect(() => {
+    if (!scrubbing) return;
+
+    const onMove = (e: MouseEvent) => {
+      e.preventDefault();
+      seekToClientX(e.clientX);
+    };
+    const onUp = () => setScrubbing(false);
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [scrubbing, seekToClientX]);
 
   useEffect(() => {
     if (!boxSelect) return;
@@ -715,7 +740,14 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
 
             {trackWidth > 0 && (
               <div className="absolute top-0 bottom-0 w-px bg-sky-400 pointer-events-none z-20" style={{ left: currentTime * pxPerSecond }}>
-                <div className="w-3 h-3 bg-sky-400 rotate-45 absolute -top-1" style={{ left: -5 }} />
+                <div
+                  data-no-marquee="true"
+                  className="absolute -top-1 w-4 h-4 cursor-ew-resize pointer-events-auto"
+                  style={{ left: -8 }}
+                  onMouseDown={handleRulerMouseDown}
+                >
+                  <div className="w-3 h-3 bg-sky-400 rotate-45 absolute top-0" style={{ left: 2 }} />
+                </div>
               </div>
             )}
           </div>

@@ -233,11 +233,96 @@ function applyMaskWipeClip(ctx: CanvasRenderingContext2D, layer: Layer, time: nu
 }
 
 /**
+ * Sample a path's anchors into a flat polyline of canvas points. Bezier
+ * segments (where either endpoint contributes a handle) are subdivided into
+ * STEPS line segments so distance tests / bounds stay close to the curve.
+ * Mirrors the segment logic in drawPath — keep the two in sync.
+ */
+function samplePathPoints(anchors: PathAnchor[], closed: boolean): Array<{ x: number; y: number }> {
+  const STEPS = 16;
+  const pts: Array<{ x: number; y: number }> = [{ x: anchors[0].x, y: anchors[0].y }];
+  const seg = (a: PathAnchor, b: PathAnchor) => {
+    if (a.out || b.in) {
+      const c1x = a.out ? a.x + a.out.x : a.x;
+      const c1y = a.out ? a.y + a.out.y : a.y;
+      const c2x = b.in ? b.x + b.in.x : b.x;
+      const c2y = b.in ? b.y + b.in.y : b.y;
+      for (let s = 1; s <= STEPS; s += 1) {
+        const t = s / STEPS;
+        const mt = 1 - t;
+        const x = mt * mt * mt * a.x + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * b.x;
+        const y = mt * mt * mt * a.y + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * b.y;
+        pts.push({ x, y });
+      }
+    } else {
+      pts.push({ x: b.x, y: b.y });
+    }
+  };
+  for (let i = 1; i < anchors.length; i += 1) seg(anchors[i - 1], anchors[i]);
+  if (closed) seg(anchors[anchors.length - 1], anchors[0]);
+  return pts;
+}
+
+/** Shortest distance from point (px,py) to the segment a→b. */
+function distToSegment(px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq > 0 ? ((px - a.x) * dx + (py - a.y) * dy) / lenSq : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = a.x + t * dx;
+  const cy = a.y + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+/**
+ * Hit-test a path layer by proximity to its actual stroke geometry, not its
+ * declared (often full-canvas) bounding box. Returns true when the point is
+ * within the stroke half-width + a small grab tolerance of any segment.
+ */
+function hitTestPath(layer: Layer, localTime: number, px: number, py: number, composition?: CompositionData): boolean {
+  const values = resolveLayerValues(layer, localTime, composition);
+  if (values.showInPreview === false) return false;
+  const anchors = values.anchors as PathAnchor[] | undefined;
+  if (!Array.isArray(anchors) || anchors.length < 2) return false;
+  const strokeWidth = typeof values.strokeWidth === 'number' ? values.strokeWidth : 2;
+  const closed = (values.closed as boolean) ?? false;
+  const tol = Math.max(6, strokeWidth / 2 + 4);
+  const pts = samplePathPoints(anchors, closed);
+  for (let i = 1; i < pts.length; i += 1) {
+    if (distToSegment(px, py, pts[i - 1], pts[i]) <= tol) return true;
+  }
+  return false;
+}
+
+/**
  * Compute the visual bounding rect of a layer at a given local time, including
  * offsetX/Y and scale (around centre). Returns null if the layer has zero or
  * negative size. Used by both the selection overlay and the hit-test.
+ *
+ * Path layers are a special case: drawPath ignores position/size and draws
+ * from absolute anchor coordinates, so their declared size (usually the full
+ * canvas) is meaningless for bounds. Compute the tight anchor-extent box
+ * instead, padded by the stroke half-width.
  */
 function computeLayerBounds(layer: Layer, localTime: number, composition?: CompositionData): { x: number; y: number; w: number; h: number } | null {
+  if (layer.type === 'path') {
+    const values = resolveLayerValues(layer, localTime, composition);
+    const anchors = values.anchors as PathAnchor[] | undefined;
+    if (!Array.isArray(anchors) || anchors.length < 2) return null;
+    const closed = (values.closed as boolean) ?? false;
+    const strokeWidth = typeof values.strokeWidth === 'number' ? values.strokeWidth : 2;
+    const pts = samplePathPoints(anchors, closed);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const pad = strokeWidth / 2 + 2;
+    return { x: minX - pad, y: minY - pad, w: (maxX - minX) + pad * 2, h: (maxY - minY) + pad * 2 };
+  }
   const values = resolveLayerValues(layer, localTime, composition);
   const offsetX = typeof values.offsetX === 'number' ? values.offsetX : 0;
   const offsetY = typeof values.offsetY === 'number' ? values.offsetY : 0;
@@ -468,7 +553,14 @@ export class CanvasRenderer {
       const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
       if (time < startTime || time > startTime + layerDuration) continue;
       const localTime = time - startTime;
-      const bounds = computeLayerBounds(layer, localTime);
+      // Paths hit-test against their stroke geometry, not a bounding box —
+      // their declared size is usually the full canvas and would otherwise
+      // swallow every click, making layers beneath them unselectable.
+      if (layer.type === 'path') {
+        if (hitTestPath(layer, localTime, canvasX, canvasY, composition)) return layer.id;
+        continue;
+      }
+      const bounds = computeLayerBounds(layer, localTime, composition);
       if (bounds === null) continue;
       if (canvasX >= bounds.x && canvasX <= bounds.x + bounds.w
         && canvasY >= bounds.y && canvasY <= bounds.y + bounds.h) {

@@ -1,3 +1,5 @@
+import { readStoredUser } from './auth';
+
 /**
  * Vemotion "projects" — book/course/project outlines stored as Knowledge Graphs.
  *
@@ -96,13 +98,17 @@ const fetchGraph = async (graphId: string): Promise<KgGraph> => {
 };
 
 const saveGraph = async (graphId: string, graph: KgGraph): Promise<void> => {
-  // No X-API-Token: the KG worker accepts anonymous writes (this is how the
-  // production GraphAdmin tool saves). Sending the Vemotion login token here
-  // is REJECTED — it's valid for api.vegvisr.org/vemotion, not for
-  // knowledge.vegvisr.org. See lessons_learned Lesson 36.
+  // KG writes are authorized by ROLE, not a token — this mirrors the canonical
+  // production caller (vegvisr-frontend GNewViewer.vue), which sends
+  // `x-user-role: userStore.role || 'Superadmin'` and NO X-API-Token. Sending
+  // the Vemotion login token here is REJECTED (valid for api.vegvisr.org/
+  // vemotion, not knowledge.vegvisr.org). See lessons_learned Lesson 36.
   const res = await fetch(`${KG_BASE}/saveGraphWithHistory`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-role': readStoredUser()?.role || 'Superadmin',
+    },
     body: JSON.stringify({
       id: graphId,
       graphData: { metadata: graph.metadata, nodes: graph.nodes, edges: graph.edges },

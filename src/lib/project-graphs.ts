@@ -40,6 +40,43 @@ const COLOR_PROJECT = '#1e293b';
 const COLOR_CHAPTER = '#6366f1';
 const COLOR_COMPREF = '#0ea5e9';
 
+// Local registry of known project graph ids. The KG list endpoints
+// (getknowgraphs / getknowgraphsummaries / searchGraphs) are a cached/curated
+// index that does NOT include freshly-created graphs, so a marker scan alone
+// can't find a project right after you make it. This localStorage registry is
+// the reliable source of truth; listProjects merges it with the index scan.
+// Limitation: device-local — projects created elsewhere appear only if/when the
+// KG index picks them up (or via registerExistingProject by id).
+const LS_PROJECTS_KEY = 'vemotion:projects';
+type RegistryEntry = { graphId: string; metaArea: string; title: string };
+
+const readRegistry = (): RegistryEntry[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(LS_PROJECTS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((e) => e && typeof e.graphId === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeRegistry = (entries: RegistryEntry[]): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LS_PROJECTS_KEY, JSON.stringify(entries));
+  } catch {
+    /* ignore quota / serialization errors */
+  }
+};
+
+const addToRegistry = (entry: RegistryEntry): void => {
+  const cur = readRegistry();
+  writeRegistry(cur.some((e) => e.graphId === entry.graphId)
+    ? cur.map((e) => (e.graphId === entry.graphId ? entry : e))
+    : [...cur, entry]);
+};
+
 // ── Raw KG shapes (only the fields we touch) ────────────────────────────────
 type KgNode = {
   id: string;
@@ -124,17 +161,41 @@ const saveGraph = async (graphId: string, graph: KgGraph): Promise<void> => {
  * Reads /getknowgraphsummaries (which includes metadata) and filters client-side.
  */
 export const listProjects = async (): Promise<ProjectSummary[]> => {
-  const res = await fetch(`${KG_BASE}/getknowgraphsummaries?limit=1000`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to list projects.');
-  const results: Array<{ id?: string; metadata?: KgMetadata }> = Array.isArray(data.results) ? data.results : [];
-  return results
-    .filter((g) => g?.metadata?.createdBy === PROJECT_MARKER && typeof g.id === 'string')
-    .map((g) => ({
-      graphId: g.id as string,
-      metaArea: g.metadata?.metaArea ?? g.metadata?.title ?? '',
-      title: g.metadata?.title ?? g.metadata?.metaArea ?? '(untitled project)',
-    }));
+  // Primary source: local registry (immediate, survives the KG list-index delay).
+  const byId = new Map<string, ProjectSummary>(readRegistry().map((e) => [e.graphId, e]));
+  // Merge in any marker-tagged graphs the KG portfolio index knows about
+  // (cross-device / future-proof if/when the index includes them).
+  try {
+    const res = await fetch(`${KG_BASE}/getknowgraphsummaries?limit=1000`);
+    if (res.ok) {
+      const data = await res.json();
+      const results: Array<{ id?: string; metadata?: KgMetadata }> = Array.isArray(data.results) ? data.results : [];
+      for (const g of results) {
+        if (g?.metadata?.createdBy === PROJECT_MARKER && typeof g.id === 'string' && !byId.has(g.id)) {
+          byId.set(g.id, {
+            graphId: g.id,
+            metaArea: g.metadata?.metaArea ?? g.metadata?.title ?? '',
+            title: g.metadata?.title ?? g.metadata?.metaArea ?? '(untitled project)',
+          });
+        }
+      }
+    }
+  } catch {
+    /* index unreachable — registry still works */
+  }
+  return [...byId.values()];
+};
+
+/**
+ * Register an existing project graph (by id) into the local registry — for
+ * recovering a project created before the registry existed, or one made on
+ * another device. Reads the graph to capture its metaArea/title.
+ */
+export const registerExistingProject = async (graphId: string): Promise<ProjectSummary> => {
+  const detail = await getProject(graphId);
+  const summary = { graphId, metaArea: detail.metaArea, title: detail.title };
+  addToRegistry(summary);
+  return summary;
 };
 
 /** Load one project graph and parse it into chapters → composition refs. */
@@ -203,7 +264,9 @@ export const createProject = async ({ metaArea, title }: { metaArea: string; tit
     edges: [],
   };
   await saveGraph(graphId, graph);
-  return { graphId, metaArea: area, title: projectTitle };
+  const summary = { graphId, metaArea: area, title: projectTitle };
+  addToRegistry(summary);
+  return summary;
 };
 
 /** Append a chapter node (+ project-root → chapter edge) to a project graph. */

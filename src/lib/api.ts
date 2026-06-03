@@ -44,6 +44,16 @@ export type CompositionMeta = {
    */
   metaArea?: string;
   /**
+   * Stable pointer to the composition's project graph (a Knowledge Graph id,
+   * UUID v4). Set when the composition is filed into a project chapter. This
+   * is the authoritative project-membership link — independent of metaArea,
+   * so naming a project after an existing metaArea does NOT sweep in unrelated
+   * compositions, and renaming a project (its metaArea) does not detach
+   * members. Chapter placement itself lives in the project graph (a compref
+   * node under a chapter), not on the composition. See lib/project-graphs.ts.
+   */
+  projectGraphId?: string;
+  /**
    * Pre-baked amplitude track for audio-reactive layer formulas.
    * Produced client-side from the composition's first audio layer when added
    * via AudioLayerForm (or constructed manually for smoke testing). Three

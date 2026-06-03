@@ -162,18 +162,17 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
     }
   }, []);
 
-  // Selecting a project loads its outline and pins the metaArea filter to it
-  // (membership = composition.meta.metaArea === project.metaArea).
+  // Selecting a project loads its outline. Membership is by the stable
+  // meta.projectGraphId pointer (see the `visible` filter) — independent of
+  // metaArea, so the Meta area facet stays a separate axis.
   const selectProject = useCallback((p: ProjectSummary | null) => {
     setSelectedChapterId(null);
     if (!p) {
       setSelectedProjectId(null);
       setProjectDetail(null);
-      setFilterMetaArea(SENTINEL_ALL);
       return;
     }
     setSelectedProjectId(p.graphId);
-    setFilterMetaArea(p.metaArea || SENTINEL_ALL);
     void refreshProjectDetail(p.graphId);
   }, [refreshProjectDetail]);
 
@@ -217,16 +216,16 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
     }
   }, [selectedProjectId, refreshProjectDetail]);
 
-  // Add a composition to a chapter: (1) set its meta.metaArea to the project's
-  // (reuse-metaArea membership — spread-and-override to preserve other meta),
-  // (2) append the compref node + edge to the project graph.
+  // Add a composition to a chapter: (1) set its meta.projectGraphId to this
+  // project's graph id (spread-and-override to preserve other meta, including
+  // metaArea — membership no longer touches metaArea), (2) append the compref
+  // node + edge to the project graph.
   const handleAddToChapter = useCallback(async (item: CompositionSummary, chapterId: string) => {
     if (!selectedProjectId || !projectDetail) return;
     setAddingToChapterId(item.id);
     try {
-      const projectMetaArea = projectDetail.metaArea;
       const full = await getCompositionFromCloud(item.id);
-      const nextMeta: CompositionMeta = { ...(full.composition.meta ?? {}), metaArea: projectMetaArea };
+      const nextMeta: CompositionMeta = { ...(full.composition.meta ?? {}), projectGraphId: selectedProjectId };
       await saveCompositionToCloud({
         id: item.id,
         name: full.name,
@@ -267,6 +266,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     let out = items.filter(it => {
+      if (selectedProjectId && (it.meta?.projectGraphId ?? '') !== selectedProjectId) return false;
       if (selectedChapterCompIds && !selectedChapterCompIds.has(it.id)) return false;
       if (filterCategory !== SENTINEL_ALL && (it.meta?.category ?? '') !== filterCategory) return false;
       if (filterMetaArea !== SENTINEL_ALL && (it.meta?.metaArea ?? '') !== filterMetaArea) return false;
@@ -295,7 +295,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
       return bT - aT;
     });
     return out;
-  }, [items, search, sortBy, filterCategory, filterMetaArea, activeTags, selectedChapterCompIds]);
+  }, [items, search, sortBy, filterCategory, filterMetaArea, activeTags, selectedChapterCompIds, selectedProjectId]);
 
   const toggleTag = (tag: string) => {
     setActiveTags(prev => {

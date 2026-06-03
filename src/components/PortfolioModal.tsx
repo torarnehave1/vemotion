@@ -47,6 +47,9 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
 
 const SENTINEL_ALL = '__all__';
 
+/** A (project, chapter) pair the Unassigned bucket can file a composition into. */
+type ChapterTarget = { projectGraphId: string; projectTitle: string; chapterId: string; chapterTitle: string };
+
 /**
  * Searchable, sortable, filterable portfolio of cloud compositions.
  * Replaces the old "Open from cloud" dropdown panel inside FileMenu.
@@ -93,6 +96,11 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   const [newChapterName, setNewChapterName] = useState<string | null>(null);
   // Per-card "add to chapter" in flight (composition id).
   const [addingToChapterId, setAddingToChapterId] = useState<string | null>(null);
+  // Unassigned bucket: compositions with no projectGraphId, plus the flat list
+  // of (project, chapter) targets used to file them from that view.
+  const [unassignedMode, setUnassignedMode] = useState(false);
+  const [chapterTargets, setChapterTargets] = useState<ChapterTarget[]>([]);
+  const [targetsLoading, setTargetsLoading] = useState(false);
 
   // Thumbnail cache. Keyed by composition id. Sentinel strings indicate
   // not-ready / loading / failed; otherwise the value is a PNG data URL.
@@ -167,6 +175,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   // metaArea, so the Meta area facet stays a separate axis.
   const selectProject = useCallback((p: ProjectSummary | null) => {
     setSelectedChapterId(null);
+    setUnassignedMode(false);
     if (!p) {
       setSelectedProjectId(null);
       setProjectDetail(null);
@@ -175,6 +184,35 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
     setSelectedProjectId(p.graphId);
     void refreshProjectDetail(p.graphId);
   }, [refreshProjectDetail]);
+
+  // Load every project's chapters into one flat list (for the Unassigned
+  // bucket's "file into…" picker). One getProject per project; projects are
+  // few, so the cost is acceptable. A failed project load is skipped.
+  const loadChapterTargets = useCallback(async () => {
+    setTargetsLoading(true);
+    try {
+      const details = await Promise.all(projects.map(p => getProject(p.graphId).catch(() => null)));
+      const flat: ChapterTarget[] = [];
+      for (const d of details) {
+        if (!d) continue;
+        for (const ch of d.chapters) {
+          flat.push({ projectGraphId: d.graphId, projectTitle: d.title, chapterId: ch.id, chapterTitle: ch.title });
+        }
+      }
+      setChapterTargets(flat);
+    } finally {
+      setTargetsLoading(false);
+    }
+  }, [projects]);
+
+  // Show compositions that aren't in any project yet (no meta.projectGraphId).
+  const selectUnassigned = useCallback(() => {
+    setSelectedProjectId(null);
+    setProjectDetail(null);
+    setSelectedChapterId(null);
+    setUnassignedMode(true);
+    void loadChapterTargets();
+  }, [loadChapterTargets]);
 
   // Composition ids placed in the currently-selected chapter (for grid narrowing).
   const selectedChapterCompIds = useMemo(() => {
@@ -216,32 +254,38 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
     }
   }, [selectedProjectId, refreshProjectDetail]);
 
-  // Add a composition to a chapter: (1) set its meta.projectGraphId to this
-  // project's graph id (spread-and-override to preserve other meta, including
-  // metaArea — membership no longer touches metaArea), (2) append the compref
-  // node + edge to the project graph.
-  const handleAddToChapter = useCallback(async (item: CompositionSummary, chapterId: string) => {
-    if (!selectedProjectId || !projectDetail) return;
+  // File a composition into a chapter of a given project: (1) set its
+  // meta.projectGraphId (spread-and-override to preserve other meta, including
+  // metaArea — membership never touches metaArea), (2) append the compref node
+  // + edge to the project graph. Used by both the per-project card control and
+  // the Unassigned bucket's project›chapter picker.
+  const fileIntoChapter = useCallback(async (item: CompositionSummary, projectGraphId: string, chapterId: string) => {
     setAddingToChapterId(item.id);
     try {
       const full = await getCompositionFromCloud(item.id);
-      const nextMeta: CompositionMeta = { ...(full.composition.meta ?? {}), projectGraphId: selectedProjectId };
+      const nextMeta: CompositionMeta = { ...(full.composition.meta ?? {}), projectGraphId };
       await saveCompositionToCloud({
         id: item.id,
         name: full.name,
         composition: { ...full.composition, meta: nextMeta },
         saveType: 'manual',
       });
-      await addCompositionToChapter(selectedProjectId, chapterId, { compositionId: item.id, name: full.name || item.name });
-      // Reflect new membership locally + refresh the outline.
+      await addCompositionToChapter(projectGraphId, chapterId, { compositionId: item.id, name: full.name || item.name });
+      // Reflect new membership locally (drops it out of the Unassigned view).
       setItems(prev => prev.map(it => it.id === item.id ? { ...it, meta: nextMeta } : it));
-      await refreshProjectDetail(selectedProjectId);
+      // Refresh the outline only if we're currently viewing that project.
+      if (selectedProjectId === projectGraphId) await refreshProjectDetail(projectGraphId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to add to chapter');
     } finally {
       setAddingToChapterId(null);
     }
-  }, [selectedProjectId, projectDetail, refreshProjectDetail]);
+  }, [selectedProjectId, refreshProjectDetail]);
+
+  const handleAddToChapter = useCallback((item: CompositionSummary, chapterId: string) => {
+    if (!selectedProjectId) return;
+    void fileIntoChapter(item, selectedProjectId, chapterId);
+  }, [selectedProjectId, fileIntoChapter]);
 
   // ── Facets (derive from currently-fetched items) ────────────────────────────
   const allCategories = useMemo(() => {
@@ -266,6 +310,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     let out = items.filter(it => {
+      if (unassignedMode && it.meta?.projectGraphId) return false;
       if (selectedProjectId && (it.meta?.projectGraphId ?? '') !== selectedProjectId) return false;
       if (selectedChapterCompIds && !selectedChapterCompIds.has(it.id)) return false;
       if (filterCategory !== SENTINEL_ALL && (it.meta?.category ?? '') !== filterCategory) return false;
@@ -295,7 +340,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
       return bT - aT;
     });
     return out;
-  }, [items, search, sortBy, filterCategory, filterMetaArea, activeTags, selectedChapterCompIds, selectedProjectId]);
+  }, [items, search, sortBy, filterCategory, filterMetaArea, activeTags, selectedChapterCompIds, selectedProjectId, unassignedMode]);
 
   const toggleTag = (tag: string) => {
     setActiveTags(prev => {
@@ -475,12 +520,24 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                   onClick={() => selectProject(null)}
                   className={[
                     'w-full text-left px-2 py-1 text-xs rounded transition border-l-2',
-                    selectedProjectId === null
+                    selectedProjectId === null && !unassignedMode
                       ? 'bg-sky-600/20 text-sky-300 border-sky-500'
                       : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
                   ].join(' ')}
                 >
                   All compositions
+                </button>
+                <button
+                  onClick={selectUnassigned}
+                  className={[
+                    'w-full text-left px-2 py-1 text-xs rounded transition border-l-2',
+                    unassignedMode
+                      ? 'bg-amber-600/20 text-amber-300 border-amber-500'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                  ].join(' ')}
+                  title="Compositions not yet filed into any project"
+                >
+                  Unassigned{targetsLoading && unassignedMode ? '…' : ''}
                 </button>
 
                 {projects.map(p => {
@@ -796,6 +853,36 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                                 {projectDetail.chapters.map(ch => (
                                   <option key={ch.id} value={ch.id}>{ch.title}</option>
                                 ))}
+                              </select>
+                            )}
+                            {unassignedMode && chapterTargets.length > 0 && (
+                              <select
+                                value=""
+                                disabled={addingToChapterId === item.id}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.target.value = '';
+                                  if (!v) return;
+                                  const sep = v.indexOf('|');
+                                  const pg = v.slice(0, sep);
+                                  const ch = v.slice(sep + 1);
+                                  if (pg && ch) void fileIntoChapter(item, pg, ch);
+                                }}
+                                className="bg-slate-900 border border-slate-700 text-slate-300 text-[10px] rounded px-1 py-0.5 max-w-[9rem] focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
+                                title="File this composition into a project chapter"
+                              >
+                                <option value="">{addingToChapterId === item.id ? 'Filing…' : '+ Project'}</option>
+                                {projects.map(p => {
+                                  const chs = chapterTargets.filter(t => t.projectGraphId === p.graphId);
+                                  if (chs.length === 0) return null;
+                                  return (
+                                    <optgroup key={p.graphId} label={p.title}>
+                                      {chs.map(t => (
+                                        <option key={t.chapterId} value={`${t.projectGraphId}|${t.chapterId}`}>{t.chapterTitle}</option>
+                                      ))}
+                                    </optgroup>
+                                  );
+                                })}
                               </select>
                             )}
                             <button

@@ -1301,3 +1301,116 @@ To turn the same path into a smooth curve, give each anchor `in` + `out` handles
 A future Pen-tool GUI iteration will let you drag these handles directly; today they're JSON-authored only.
 
 Error codes: 400 (missing required field / invalid mode / both compositionId+composition / inline composition missing width/height/layers), 403 (compositionId belongs to another user), 404 (compositionId not found).
+
+## 19. AI editing assistant — `POST /vemotion/assist`
+
+An agent (or a UI like the `CompositionJsonModal`) can hand the current composition plus a chat history to a server-side wrapper around Anthropic. The server prepends its own system prompt (which is seeded with the VEmotion composition schema), forwards to `anthropic.vegvisr.org/chat` running `claude-sonnet-4-20250514`, and returns the assistant's reply.
+
+The reply is either prose (questions / clarifications) or a fenced ```` ```json ```` block containing the FULL updated composition. The frontend extracts that block and applies it to the JSON modal's textarea; the existing save path then validates + autosaves.
+
+### 19.1 — Contract
+
+- **URL:** `POST https://api.vegvisr.org/vemotion/assist`
+- **Auth:** `X-API-Token: <emailVerificationToken>` (same token as every other VEmotion endpoint)
+- **Request body:**
+
+  ```jsonc
+  {
+    "messages": [                              // required, non-empty
+      { "role": "user",      "content": "..." },
+      { "role": "assistant", "content": "..." }
+    ],
+    "composition": { /* CompositionData */ }   // optional, recommended
+  }
+  ```
+
+  - `messages`: visible chat history. Roles are `user` | `assistant` only. The `system` role is **forbidden** — the server supplies its own system prompt. 400 if you include it.
+  - `composition`: the current composition. The server treats it as source-of-truth so the assistant can copy unchanged fields verbatim. Strongly recommended for any change request; optional for general Q&A.
+
+- **Response body (200):**
+
+  ```jsonc
+  {
+    "ok": true,
+    "message": { "role": "assistant", "content": "..." },
+    "model": "claude-sonnet-4-20250514",
+    "usage": { /* token usage, optional */ }
+  }
+  ```
+
+- **Errors (non-200):** `{ "ok": false, "error": "...", "upstreamStatus"?: 4xx|5xx }`
+  - **400** — bad JSON body, missing `messages`, wrong role, wrong types
+  - **401** — missing or invalid `X-API-Token`
+  - **502** — upstream model service unreachable
+
+- **Model + limits:** `claude-sonnet-4-20250514`, `max_tokens: 8192`. The endpoint is stateless — pass the full message history every turn.
+
+### 19.2 — Reading the response
+
+The assistant's `content` is plain text. For change requests, look for a fenced ```` ```json ```` block at the end. The last block wins in the rare case the model emits multiple:
+
+```ts
+const re = /```json\s*\n([\s\S]*?)```/gi;
+let last: string | null = null;
+for (const m of content.matchAll(re)) last = m[1].trim();
+// `last` is the FULL updated composition as a JSON string (or null if prose-only)
+```
+
+Parse with `JSON.parse(last)`, then feed through the same structural validator the modal uses:
+
+- `typeof duration === 'number'`
+- `typeof fps === 'number'`
+- `typeof width === 'number'`
+- `typeof height === 'number'`
+- `Array.isArray(layers)`
+
+If those pass, the JSON is safe to apply. Layer-level correctness is the renderer's job — feed the result to `setComposition` (or the equivalent) and let the renderer surface deeper issues on the next frame.
+
+### 19.3 — Worked example
+
+```bash
+TOKEN="your-emailVerificationToken"
+
+curl -X POST https://api.vegvisr.org/vemotion/assist \
+  -H "X-API-Token: $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      { "role": "user", "content": "Shorten refrain-1 fade-out from 1.0s to 0.6s." }
+    ],
+    "composition": { "duration": 44, "fps": 30, "width": 1280, "height": 720, "layers": [ /* ... */ ] }
+  }'
+```
+
+Response shape:
+
+```jsonc
+{
+  "ok": true,
+  "message": {
+    "role": "assistant",
+    "content": "I've shortened the fade-out on `refrain-1` from 1.0s to 0.6s. Here is the updated composition:\n\n```json\n{ \"duration\": 44, \"fps\": 30, \"width\": 1280, \"height\": 720, \"layers\": [ ... ] }\n```"
+  },
+  "model": "claude-sonnet-4-20250514",
+  "usage": { "input_tokens": 1234, "output_tokens": 567 }
+}
+```
+
+### 19.4 — Rules for agents
+
+- The server supplies the system prompt — do NOT include a `system` role in `messages`. The endpoint will 400.
+- ALWAYS pass `composition` for change requests. Without it the assistant has to guess the current state and will often invent unchanged fields incorrectly — which the structural validator may pass but which silently strips data. (See lesson family in `_project/lessons_learned.md` on rebuild-from-scratch stripping.)
+- The fenced block contains the FULL composition, not a patch. The frontend / agent applies it whole; D1's row history takes care of diffing.
+- Treat the assistant's prose as suggestive, not authoritative. Verify by rendering before committing visible changes.
+- For multi-turn conversations, pass the full message history each turn — the server is stateless.
+
+### 19.5 — Frontend reference implementation
+
+A reference implementation of the chat panel lives in `src/components/CompositionJsonModal.tsx` (this repo). It uses:
+
+- `assistComposition({ messages, composition })` from `src/lib/cloud-compositions.ts` — wraps the fetch + error handling
+- `AssistMessage` type — `{ role: 'user' | 'assistant'; content: string }`
+- An `extractJsonBlock` helper that runs the last-block-wins regex above
+- An "Apply" button on every assistant message that contains a ```` ```json ```` block, which drops the block into the modal's editable textarea (where the user can review + click Save through the existing structural validator)
+
+External agents building their own UI follow the same pattern.

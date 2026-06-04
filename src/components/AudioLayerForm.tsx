@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Mic, Square, Loader2, Volume2, Library } from 'lucide-react';
+import { Mic, Square, Loader2, Volume2, Library, Upload } from 'lucide-react';
 import type { AudioTrack, Layer } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { analyseAudioFromUrl } from '../lib/audioAnalysis';
@@ -31,20 +31,26 @@ interface AudioLayerFormProps {
   editingLayer?: Layer;
 }
 
-type Mode = 'record' | 'pick';
+type Mode = 'record' | 'upload' | 'pick';
 
 const generateId = () => `layer-${Date.now().toString(36)}`;
 
 /**
  * Audio-tab content for AddLayerModal.
  *
- * Two modes:
+ * Three modes:
  *   - 'record' (default): captures mic via MediaRecorder → uploads to the
  *     transcription-worker /upload → registers metadata in audio-portfolio
  *     /save-recording → builds the layer with the returned r2Url. Same
  *     pattern Contacts uses (verified path).
+ *   - 'upload': pick an audio file from disk and push it through the exact
+ *     same upload → save-recording → layer path as 'record'.
  *   - 'pick': lists the user's already-saved Vemotion-tagged recordings
  *     from /list-recordings and lets them attach one without re-recording.
+ *
+ * Both 'record' and 'upload' save metadata tagged 'vemotion' with
+ * publicationState 'published' — the two conditions /list-recordings needs to
+ * surface the recording back in the 'pick' picker for any role.
  *
  * Common per-layer fields: volume (0–1), startTime (sec), layerDuration (sec).
  */
@@ -74,6 +80,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Pick-mode state
   const [recordings, setRecordings] = useState<AudioRecording[]>([]);
@@ -93,6 +100,59 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
       .finally(() => setPickLoading(false));
   }, [mode, userEmail]);
 
+  // ── Shared upload path (record + upload modes) ───────────────────────────────
+  // Pushes a blob through transcription-worker /upload → audio-portfolio
+  // /save-recording, probes the source duration, and primes the per-layer
+  // fields. Metadata is tagged 'vemotion' + published so it lists in Pick mode.
+  const ingestBlob = useCallback(async (blob: Blob, fileName: string, audioFormat: string, defaultName?: string) => {
+    setUploading(true);
+    setError('');
+    setStatus(`Uploading ${(blob.size / 1024).toFixed(0)} KB…`);
+    try {
+      const { audioUrl, r2Key: returnedKey } = await uploadAudioBlob(blob, fileName);
+      setR2Url(audioUrl);
+      setR2Key(returnedKey);
+
+      // Probe duration via a temporary Audio element.
+      const probe = new Audio(audioUrl);
+      await new Promise<void>(resolve => {
+        probe.addEventListener('loadedmetadata', () => resolve(), { once: true });
+        probe.addEventListener('error', () => resolve(), { once: true });
+      });
+      const probedDuration = Number.isFinite(probe.duration) ? probe.duration : 0;
+      setSourceDuration(probedDuration);
+      if (probedDuration > 0 && layerDuration === compositionDuration) {
+        // First-time autofill: shrink layerDuration to fit the source
+        setLayerDuration(probedDuration);
+      }
+
+      // Best-effort metadata save (Contacts pattern: ignore failures)
+      if (userEmail) {
+        const niceName = displayName.trim() || defaultName || `Vemotion audio — ${new Date().toLocaleString()}`;
+        await saveRecordingMetadata({
+          userEmail,
+          fileName,
+          displayName: niceName,
+          r2Key: returnedKey,
+          r2Url: audioUrl,
+          fileSize: blob.size,
+          duration: probedDuration,
+          tags: [VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG],
+          category: VEMOTION_AUDIO_CATEGORY,
+          audioFormat,
+          publicationState: 'published',
+        });
+        if (!displayName.trim()) setDisplayName(niceName);
+      }
+      setStatus('Audio saved ✓ — review and Add as Layer');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
+      setStatus('');
+    } finally {
+      setUploading(false);
+    }
+  }, [compositionDuration, displayName, layerDuration, userEmail]);
+
   // ── Recording control ────────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
     setError('');
@@ -107,51 +167,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
         stream.getTracks().forEach(t => t.stop());
         streamRef.current = null;
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setUploading(true);
-        setStatus(`Uploading ${(blob.size / 1024).toFixed(0)} KB…`);
-        try {
-          const fileName = `vemotion-vo-${Date.now()}.webm`;
-          const { audioUrl, r2Key: returnedKey } = await uploadAudioBlob(blob, fileName);
-          setR2Url(audioUrl);
-          setR2Key(returnedKey);
-
-          // Probe duration via a temporary Audio element.
-          const probe = new Audio(audioUrl);
-          await new Promise<void>(resolve => {
-            probe.addEventListener('loadedmetadata', () => resolve(), { once: true });
-            probe.addEventListener('error', () => resolve(), { once: true });
-          });
-          const probedDuration = Number.isFinite(probe.duration) ? probe.duration : 0;
-          setSourceDuration(probedDuration);
-          if (probedDuration > 0 && layerDuration === compositionDuration) {
-            // First-time autofill: shrink layerDuration to fit the recording
-            setLayerDuration(probedDuration);
-          }
-
-          // Best-effort metadata save (Contacts pattern: ignore failures)
-          if (userEmail) {
-            const niceName = displayName.trim() || `Vemotion VO — ${new Date().toLocaleString()}`;
-            await saveRecordingMetadata({
-              userEmail,
-              fileName,
-              displayName: niceName,
-              r2Key: returnedKey,
-              r2Url: audioUrl,
-              fileSize: blob.size,
-              duration: probedDuration,
-              tags: [VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG],
-              category: VEMOTION_AUDIO_CATEGORY,
-              audioFormat: 'webm',
-            });
-            if (!displayName.trim()) setDisplayName(niceName);
-          }
-          setStatus('Recording saved ✓ — review and Add as Layer');
-        } catch (e) {
-          setError(e instanceof Error ? e.message : 'Upload failed');
-          setStatus('');
-        } finally {
-          setUploading(false);
-        }
+        await ingestBlob(blob, `vemotion-vo-${Date.now()}.webm`, 'webm');
       };
       recorder.start();
       recorderRef.current = recorder;
@@ -161,7 +177,17 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
       setError('Microphone access denied: ' + (e instanceof Error ? e.message : String(e)));
       setStatus('');
     }
-  }, [compositionDuration, displayName, layerDuration, userEmail]);
+  }, [ingestBlob]);
+
+  // ── File upload control ──────────────────────────────────────────────────────
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // reset so the same file can be re-picked
+    if (!file) return;
+    const ext = (file.name.split('.').pop() || 'mp3').toLowerCase();
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    await ingestBlob(file, `vemotion-upload-${Date.now()}.${ext}`, ext, baseName);
+  }, [ingestBlob]);
 
   const stopRecording = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
@@ -238,6 +264,16 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
           Record new
         </button>
         <button
+          onClick={() => setMode('upload')}
+          className={[
+            'flex-1 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2',
+            mode === 'upload' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
+          ].join(' ')}
+        >
+          <Upload className="w-4 h-4" />
+          Upload file
+        </button>
+        <button
           onClick={() => setMode('pick')}
           className={[
             'flex-1 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2',
@@ -272,6 +308,38 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
             {(uploading || recording) && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
             {!userEmail && <span className="text-xs text-amber-400">Sign in to save recordings</span>}
           </div>
+          {status && <p className="text-xs text-slate-400">{status}</p>}
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          {r2Url && (
+            <audio src={r2Url} controls className="w-full h-10" />
+          )}
+        </div>
+      )}
+
+      {/* UPLOAD MODE */}
+      {mode === 'upload' && (
+        <div className="space-y-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*"
+            onChange={(e) => void handleFileSelect(e)}
+            className="hidden"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || !userEmail}
+              className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition"
+            >
+              <Upload className="w-4 h-4" /> Choose audio file
+            </button>
+            {uploading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            {!userEmail && <span className="text-xs text-amber-400">Sign in to upload audio</span>}
+          </div>
+          <p className="text-xs text-slate-500">
+            MP3, WAV, M4A, OGG, WebM. Uploaded files are tagged <em>vemotion</em> and published, so they appear under <em>Pick from portfolio</em> next time.
+          </p>
           {status && <p className="text-xs text-slate-400">{status}</p>}
           {error && <p className="text-xs text-red-400">{error}</p>}
           {r2Url && (

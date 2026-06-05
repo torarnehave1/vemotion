@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AudioLayerForm } from './AudioLayerForm';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, Loader2, Upload, ChevronDown } from 'lucide-react';
+import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon } from 'lucide-react';
 import type { AudioTrack, Layer, MotionScene } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
@@ -426,6 +426,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [imgWidth,  setImgWidth]  = useState(editingLayer?.size.width ?? 400);
   const [imgHeight, setImgHeight] = useState(editingLayer?.size.height ?? 400);
   const [imgFit,    setImgFit]    = useState((editingLayer?.properties.fit as string) ?? 'cover');
+  // The image source the edit form will save. Starts as the layer's current
+  // src; "Replace image" swaps it via the album/upload picker without touching
+  // position, size, fit, opacity, or animation.
+  const [imgSrc,    setImgSrc]    = useState((editingLayer?.properties.src as string) ?? '');
+  const [imgName,   setImgName]   = useState((editingLayer?.properties.name as string) ?? '');
+  const [replacingImage, setReplacingImage] = useState(false);
 
   // Animation — canvas coordinate based
   const _ea = isImgLayer ? editingLayer?.animation : undefined;
@@ -506,6 +512,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       animations: extraAnimations,
       properties: {
         ...editingLayer.properties,
+        src: imgSrc,
+        name: imgName,
         fit: imgFit,
         opacity: opacityValue,
         ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
@@ -609,6 +617,14 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   };
 
   const handleImagePick = (img: AlbumImage) => {
+    // Replace mode: swap the source on the layer being edited and return to
+    // the edit form. Position, size, fit, opacity and animation are untouched.
+    if (isImgLayer && replacingImage) {
+      setImgSrc(img.url);
+      setImgName(img.displayName ?? img.name ?? img.key);
+      setReplacingImage(false);
+      return;
+    }
     const el = new Image();
     el.crossOrigin = 'anonymous';
     el.onload = () => {
@@ -878,6 +894,82 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     </div>
   );
 
+  // Album picker + upload + image grid. Shared by the Add-layer Images tab and
+  // the edit-mode "Replace image" flow. `handleImagePick` branches on
+  // `replacingImage` to decide whether to add a new layer or swap the source.
+  const imagePicker = (
+    <>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <select
+            value={albumName}
+            onChange={e => {
+              const next = e.target.value;
+              setAlbumName(next);
+              fetchAlbum(next);
+            }}
+            disabled={albumsLoading}
+            className="w-full appearance-none bg-slate-800 border border-slate-700 text-white rounded-lg pl-3 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
+          >
+            {/* Always keep the current album selectable, even if the
+                list fetch failed or it has not loaded yet. */}
+            {!availableAlbums.includes(albumName) && (
+              <option value={albumName}>{albumName}</option>
+            )}
+            {availableAlbums.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
+            {albumsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </div>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-sm transition"
+          title={`Upload an image to album "${albumName}"`}
+        >
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          Upload
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+      </div>
+
+      {imagesLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+      {imagesError && <p className="text-red-400 text-sm">{imagesError}</p>}
+
+      <div className="grid grid-cols-3 gap-3 max-h-80 overflow-y-auto">
+        {albumImages.map(img => (
+          <button
+            key={img.key}
+            onClick={() => handleImagePick(img)}
+            className="flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-sky-500 rounded-xl transition group"
+          >
+            <div className="w-full aspect-square bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
+              <img
+                src={img.url}
+                alt={img.displayName ?? img.key}
+                className="w-full h-full object-contain"
+                loading="lazy"
+              />
+            </div>
+            <span className="text-xs text-slate-400 group-hover:text-white truncate w-full text-center">
+              {img.displayName ?? img.name ?? img.key}
+            </span>
+            {img.tags && img.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 justify-center">
+                {img.tags.slice(0, 3).map(tag => (
+                  <span key={tag} className="text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full">{tag}</span>
+                ))}
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl">
@@ -940,18 +1032,45 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
         <div className="p-6 space-y-4">
           {isImgLayer ? (
+            replacingImage ? (
+            <>
+              {/* Replace-image picker — same album/upload UI as the Images tab */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-white">Choose a replacement image</h3>
+                <button
+                  onClick={() => setReplacingImage(false)}
+                  className="text-xs text-slate-400 hover:text-white transition px-2 py-1"
+                >
+                  Cancel
+                </button>
+              </div>
+              {imagePicker}
+            </>
+            ) : (
             <>
               {/* Image preview */}
               <div className="flex justify-center py-2">
                 <div className="w-40 h-28 bg-slate-800 rounded-lg overflow-hidden flex items-center justify-center border border-slate-700">
                   <img
-                    src={editingLayer.properties.src as string}
+                    src={imgSrc}
                     alt=""
                     className="w-full h-full object-contain"
                   />
                 </div>
               </div>
-              <p className="text-xs text-slate-500 text-center truncate">{editingLayer.properties.src as string}</p>
+              <p className="text-xs text-slate-500 text-center truncate">{imgSrc}</p>
+
+              {/* Replace image */}
+              <button
+                onClick={() => {
+                  setReplacingImage(true);
+                  fetchAlbum(albumName);
+                  if (!albumsLoaded) fetchAlbumList();
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+              >
+                <ImageIcon className="w-4 h-4" /> Replace image
+              </button>
 
               {/* Fit mode */}
               <div>
@@ -1045,6 +1164,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 Save Changes
               </button>
             </>
+            )
           ) : isKgCard ? (
             <>
               <div className="flex justify-center py-2">
@@ -1237,77 +1357,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               </div>
             </>
           ) : tab === 'images' ? (
-            <>
-              {/* Album picker + upload */}
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <select
-                    value={albumName}
-                    onChange={e => {
-                      const next = e.target.value;
-                      setAlbumName(next);
-                      fetchAlbum(next);
-                    }}
-                    disabled={albumsLoading}
-                    className="w-full appearance-none bg-slate-800 border border-slate-700 text-white rounded-lg pl-3 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
-                  >
-                    {/* Always keep the current album selectable, even if the
-                        list fetch failed or it has not loaded yet. */}
-                    {!availableAlbums.includes(albumName) && (
-                      <option value={albumName}>{albumName}</option>
-                    )}
-                    {availableAlbums.map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
-                    {albumsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
-                  </div>
-                </div>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="flex items-center gap-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-sm transition"
-                  title={`Upload an image to album "${albumName}"`}
-                >
-                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Upload
-                </button>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-              </div>
-
-              {imagesLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
-              {imagesError && <p className="text-red-400 text-sm">{imagesError}</p>}
-
-              <div className="grid grid-cols-3 gap-3 max-h-80 overflow-y-auto">
-                {albumImages.map(img => (
-                  <button
-                    key={img.key}
-                    onClick={() => handleImagePick(img)}
-                    className="flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-sky-500 rounded-xl transition group"
-                  >
-                    <div className="w-full aspect-square bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
-                      <img
-                        src={img.url}
-                        alt={img.displayName ?? img.key}
-                        className="w-full h-full object-contain"
-                        loading="lazy"
-                      />
-                    </div>
-                    <span className="text-xs text-slate-400 group-hover:text-white truncate w-full text-center">
-                      {img.displayName ?? img.name ?? img.key}
-                    </span>
-                    {img.tags && img.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 justify-center">
-                        {img.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full">{tag}</span>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </>
+            imagePicker
           ) : tab === 'manual' ? (
             <>
               {/* Layer type */}

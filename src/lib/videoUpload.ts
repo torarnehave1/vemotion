@@ -1,37 +1,40 @@
 /**
  * Video file upload.
  *
- * Reuses the same binary → R2 path the audio layer uses
- * (norwegian-transcription-worker POST /upload). R2 stores the bytes
- * regardless of content type, so the audio path doubles as a generic file
- * uploader — see _project/lessons_learned.md Lesson 22 (reuse ecosystem
- * infra). The returned URL is a public R2 URL usable directly as a <video>
- * src and drawable to canvas (the element is created with
- * crossOrigin='anonymous'; the R2 host serves the same CORS the image layers
- * already rely on).
+ * Uploads to the dedicated `vemotion-video` R2 bucket via the vemotion-worker
+ * (`POST /vemotion/video/upload`, authed with the user's X-API-Token). The
+ * returned URL points back at the worker's public, Range-capable serving
+ * endpoint (`GET /vemotion/video?key=…`), so a <video> element can stream and
+ * seek it. This is video-specific storage — NOT the audio/transcription R2.
  */
 
-const TRANSCRIPTION_WORKER = 'https://norwegian-transcription-worker.torarnehave.workers.dev';
+import { readStoredUser } from './auth';
+
+const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
 export interface VideoUploadResult {
-  /** Public R2 URL — assign straight to a video layer's properties.src. */
+  /** Public, Range-capable URL — assign straight to a video layer's properties.src. */
   url: string;
-  r2Key: string;
+  key: string;
 }
 
 export async function uploadVideoFile(file: File): Promise<VideoUploadResult> {
-  const res = await fetch(`${TRANSCRIPTION_WORKER}/upload`, {
+  const token = readStoredUser()?.emailVerificationToken;
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch(`${VEMOTION_API}/video/upload`, {
     method: 'POST',
-    headers: { 'X-File-Name': encodeURIComponent(file.name) },
+    headers: {
+      'X-API-Token': token,
+      'X-File-Name': encodeURIComponent(file.name),
+      'Content-Type': file.type || 'video/mp4',
+    },
     body: file,
   });
   if (!res.ok) {
     throw new Error(`Video upload failed: HTTP ${res.status}`);
   }
-  const data = await res.json() as { audioUrl?: string; url?: string; r2Key?: string };
-  // The worker labels its response field `audioUrl` regardless of payload
-  // type; accept `url` too in case the contract is generalised later.
-  const url = data.audioUrl ?? data.url;
-  if (!url) throw new Error('Video upload returned no URL');
-  return { url, r2Key: data.r2Key ?? '' };
+  const data = await res.json() as { url?: string; key?: string };
+  if (!data.url) throw new Error('Video upload returned no URL');
+  return { url: data.url, key: data.key ?? '' };
 }

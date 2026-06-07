@@ -267,7 +267,8 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
             {layer.animation && (
               <p className="text-xs text-slate-500">
-                Animates: <span className="text-sky-400">{layer.animation.property}</span> — {layer.animation.keyframes.length} keyframes
+                Animates: <span className="text-sky-400">{layer.animation.property}</span>
+                {Array.isArray(layer.animation.keyframes) && ` — ${layer.animation.keyframes.length} keyframes`}
               </p>
             )}
           </div>

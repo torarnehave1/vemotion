@@ -20,7 +20,7 @@ export function interpolate(
   time: number,
   easing: EasingMode = 'easeInOut',
 ): number {
-  if (keyframes.length === 0) return 0;
+  if (!Array.isArray(keyframes) || keyframes.length === 0) return 0;
   if (keyframes.length === 1) return keyframes[0].value as number;
 
   const sorted = [...keyframes].sort((a, b) => a.time - b.time);

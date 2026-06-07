@@ -224,9 +224,24 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
               layer.visible === false && 'opacity-60',
             ].join(' ')}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-white">{layer.id}</span>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <input
+                type="text"
+                value={layer.name ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const layers = composition.layers.map(l =>
+                    l.id === layer.id
+                      ? { ...l, name: value.trim() ? value : undefined }
+                      : l
+                  );
+                  onChange({ ...composition, layers });
+                }}
+                placeholder={layer.id}
+                title="Rename this layer"
+                className="flex-1 min-w-0 bg-transparent hover:bg-slate-700/50 focus:bg-slate-700 text-sm font-medium text-white rounded px-1.5 py-0.5 border border-transparent focus:border-sky-500 focus:outline-none placeholder:text-slate-400 placeholder:font-normal transition"
+              />
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">{layer.type}</span>
                 <button
                   onClick={() => toggleLayerVisibility(layer.id)}

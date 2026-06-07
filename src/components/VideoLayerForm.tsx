@@ -115,6 +115,8 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
     const layer: Layer = {
       id: editingLayer?.id ?? generateId(),
       type: 'video',
+      // Preserve a user-set display name across modal edits (Lesson 21).
+      ...(editingLayer?.name ? { name: editingLayer.name } : {}),
       position: editingLayer?.position ?? { x, y },
       size: editingLayer?.size ?? { width: w, height: h },
       startTime,

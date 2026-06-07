@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import type { CompositionData, Layer, LayerGroup } from '../lib/api';
+import { layerLabel } from '../lib/api';
 import { ChevronDown, ChevronRight, Eye, EyeOff, FolderPlus, Pencil, Rows3, TimerReset, Ungroup } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 
@@ -81,6 +82,15 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [boxSelect, setBoxSelect] = useState<BoxSelectState | null>(null);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
+  // Inline rename in the timeline row: id of the layer whose name is being typed.
+  const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
+
+  const renameLayer = (layerId: string, value: string) => {
+    const layers = composition.layers.map((l) =>
+      l.id === layerId ? { ...l, name: value.trim() ? value : undefined } : l
+    );
+    onChange({ ...composition, layers });
+  };
   const [selectedLayerIds, setSelectedLayerIds] = useState<Set<string>>(new Set());
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [guideTime, setGuideTime] = useState<number | null>(null);
@@ -564,7 +574,29 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
         onClick={(e) => selectLayer(layer.id, e.metaKey || e.ctrlKey)}
       >
         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getLayerColor(layer) }} />
-        <span className="truncate flex-1">{layer.id}</span>
+        {renamingLayerId === layer.id ? (
+          <input
+            data-no-marquee="true"
+            autoFocus
+            defaultValue={layer.name ?? ''}
+            placeholder={layer.id}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={(e) => { renameLayer(layer.id, e.target.value); setRenamingLayerId(null); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { renameLayer(layer.id, (e.target as HTMLInputElement).value); setRenamingLayerId(null); }
+              else if (e.key === 'Escape') { setRenamingLayerId(null); }
+            }}
+            className="flex-1 min-w-0 bg-slate-700 border border-sky-500 text-white text-xs rounded px-1 py-0.5 focus:outline-none"
+          />
+        ) : (
+          <span
+            className="truncate flex-1 cursor-text"
+            title={`${layerLabel(layer)} — double-click to rename`}
+            onDoubleClick={(e) => { e.stopPropagation(); setRenamingLayerId(layer.id); }}
+          >
+            {layerLabel(layer)}
+          </span>
+        )}
         <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} title={layer.visible === false ? 'Show layer' : 'Hide layer'}>
           {layer.visible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
@@ -639,7 +671,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
         >
           <div data-no-marquee="true" className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l" style={{ backgroundColor: color + '66' }} onMouseDown={(e) => startDragResizeLeft(e, layer)} />
           <span className="text-[10px] px-3 truncate flex-1" style={{ color }}>
-            {(layer.properties.text as string) ?? layer.type}
+            {(layer.name && layer.name.trim()) || (layer.properties.text as string) || layer.type}
           </span>
           <div data-no-marquee="true" className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r" style={{ backgroundColor: color + '66' }} onMouseDown={(e) => startDragResizeRight(e, layer)} />
         </div>

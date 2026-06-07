@@ -3,6 +3,7 @@ import { Play, Pause, Square, Download, MousePointer2, PenTool } from 'lucide-re
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
 import type { CompositionData, Layer, PathAnchor, Guide } from '../lib/api';
+import { layerLabel } from '../lib/api';
 import { PenToolOverlay } from './PenToolOverlay';
 import { PathEditOverlay } from './PathEditOverlay';
 
@@ -720,11 +721,14 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               <PenTool className="w-4 h-4" />
               {penMode ? 'Drawing' : 'Pen'}
             </button>
-            {editMode && selectedLayerId && (
-              <span className="text-xs font-mono text-slate-400 truncate max-w-[10rem]" title={selectedLayerId}>
-                Selected: {selectedLayerId}
-              </span>
-            )}
+            {editMode && selectedLayerId && (() => {
+              const sel = composition.layers.find((l) => l.id === selectedLayerId);
+              return (
+                <span className="text-xs font-mono text-slate-400 truncate max-w-[12rem]" title={selectedLayerId}>
+                  Selected: {sel ? layerLabel(sel) : selectedLayerId}
+                </span>
+              );
+            })()}
             <div className="ml-auto">
               <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition">
                 <Download className="w-4 h-4" /> Export MP4

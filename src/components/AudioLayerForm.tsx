@@ -209,6 +209,8 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
     const layer: Layer = {
       id: editingLayer?.id ?? generateId(),
       type: 'audio',
+      // Preserve a user-set display name across modal edits (Lesson 21).
+      ...(editingLayer?.name ? { name: editingLayer.name } : {}),
       // position/size are unused by the renderer for audio but the schema
       // requires them. Use stable defaults.
       position: editingLayer?.position ?? { x: 0, y: 0 },

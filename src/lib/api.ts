@@ -118,6 +118,12 @@ export type LayerGroup = {
 export type Layer = {
   id: string;
   type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio' | 'path' | 'knitting-chart';
+  /**
+   * Optional human-readable label shown in the timeline + layer list instead of
+   * the generated `id`. Display-only; the renderer never reads it. Resolve a
+   * layer's label via `layerLabel()` (fallback chain: name → text/filename → id).
+   */
+  name?: string;
   groupId?: string;
   /**
    * Required for visual layer types. For 'audio' layers position/size are
@@ -133,6 +139,27 @@ export type Layer = {
   animations?: Animation[];
   properties: Record<string, unknown>;
 };
+
+/**
+ * Resolve the display label for a layer. Priority:
+ *   1. explicit `layer.name` (user-set rename)
+ *   2. a sensible per-type fallback so layers are recognizable without a custom
+ *      name — text layers show their text; media (image/video/audio) show the
+ *      source filename from `properties.name`.
+ *   3. the generated `layer.id` as a last resort.
+ */
+export function layerLabel(layer: Layer): string {
+  const explicit = typeof layer.name === 'string' ? layer.name.trim() : '';
+  if (explicit) return explicit;
+  const props = layer.properties || {};
+  if (layer.type === 'text' && typeof props.text === 'string' && props.text.trim()) {
+    return (props.text as string).trim();
+  }
+  if (typeof props.name === 'string' && props.name.trim()) {
+    return (props.name as string).trim();
+  }
+  return layer.id;
+}
 
 export type Animation = {
   /**

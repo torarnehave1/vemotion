@@ -524,6 +524,52 @@ export class CanvasRenderer {
     await Promise.all(waits);
   }
 
+  /**
+   * Drive video layers for live PREVIEW (not export). Two regimes:
+   *  - Playing: let the <video> element PLAY in real time (it advances at the
+   *    same wall-clock rate as the composition clock). Only re-seek to correct
+   *    drift > 0.3s. Per-frame seeking would thrash and the element would never
+   *    settle on a paintable frame.
+   *  - Paused / scrubbing: PAUSE the element and seek ONCE to the target time.
+   *    Seeking is async, so request a repaint (onImageLoad) when 'seeked'
+   *    fires — otherwise a paused scrub shows a stale frame.
+   * Inactive layers (outside their time window or hidden) are paused.
+   * Best-effort and synchronous; the actual pixels are blitted by drawVideo.
+   */
+  syncVideos(composition: CompositionData, time: number, isPlaying: boolean): void {
+    for (const l of composition.layers) {
+      if (l.type !== 'video') continue;
+      const src = l.properties.src;
+      if (typeof src !== 'string') continue;
+      const v = this.videoCache.get(src);
+      if (!v) continue;
+      const startTime = l.startTime ?? 0;
+      const dur = l.layerDuration ?? (composition.duration - startTime);
+      const active = l.visible !== false && time >= startTime && time <= startTime + dur;
+      if (!active) {
+        if (!v.paused) v.pause();
+        continue;
+      }
+      let sourceTime = time - startTime;
+      if (Number.isFinite(v.duration) && v.duration > 0 && sourceTime > v.duration) {
+        sourceTime = v.duration;
+      }
+      if (isPlaying) {
+        if (Math.abs(v.currentTime - sourceTime) > 0.3) {
+          try { v.currentTime = sourceTime; } catch { /* not seekable yet */ }
+        }
+        if (v.paused) { void v.play().catch(() => { /* autoplay blocked — muted should allow it */ }); }
+      } else {
+        if (!v.paused) v.pause();
+        if (v.readyState >= 1 && Math.abs(v.currentTime - sourceTime) > 0.04) {
+          const onSeeked = () => { v.removeEventListener('seeked', onSeeked); this.onImageLoad?.(); };
+          v.addEventListener('seeked', onSeeked);
+          try { v.currentTime = sourceTime; } catch { /* not seekable yet */ }
+        }
+      }
+    }
+  }
+
   renderFrame(composition: CompositionData, frameNumber: number): void {
     const time = frameNumber / composition.fps;
 
@@ -1388,10 +1434,9 @@ export class PlaybackController {
 
   seekToFrame(frame: number): void {
     this.frameNumber = Math.max(0, Math.min(frame, this.totalFrames - 1));
-    // Fire-and-forget: nudge any video layers toward the playhead. The frame
-    // below draws the currently-decoded frame; the seeked frame lands on a
-    // subsequent render (onImageLoad/next tick), which is fine for preview.
-    void this.renderer.seekVideos(this.composition, this.frameNumber / this.composition.fps);
+    // Sync video layers to the playhead. When playing, they play in real time;
+    // when paused/scrubbing, a single seek + repaint-on-seeked shows the frame.
+    this.renderer.syncVideos(this.composition, this.frameNumber / this.composition.fps, this.rafId !== null);
     void this.renderer.renderFrame(this.composition, this.frameNumber);
     this.onFrameChange?.(this.frameNumber);
   }
@@ -1409,6 +1454,9 @@ export class PlaybackController {
       this.rafId = null;
     }
     this.lastTimestamp = null;
+    // Pause any playing video layers so they don't keep advancing past the
+    // (now stationary) playhead.
+    this.renderer.syncVideos(this.composition, this.frameNumber / this.composition.fps, false);
   }
 
   stop(): void {
@@ -1438,7 +1486,7 @@ export class PlaybackController {
     }
 
     this.lastTimestamp = timestamp;
-    void this.renderer.seekVideos(this.composition, this.frameNumber / this.composition.fps);
+    this.renderer.syncVideos(this.composition, this.frameNumber / this.composition.fps, true);
     void this.renderer.renderFrame(this.composition, this.frameNumber);
     this.onFrameChange?.(this.frameNumber);
 

@@ -104,6 +104,15 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     const controller = new PlaybackController(renderer, composition);
     const audioCtrl = new AudioPlaybackController(composition);
 
+    // Repaint the current frame when an async asset becomes paintable — a
+    // lazily-loaded image, or a video frame that just finished seeking while
+    // paused. Without this, a paused scrub shows a stale/blank frame until the
+    // next playback tick (which never comes while paused).
+    renderer.onImageLoad = () => {
+      const c = controllerRef.current;
+      if (c) void renderer.renderFrame(c.composition, c.currentFrame);
+    };
+
     controller.onFrameChange = (frame) => {
       setCurrentFrame(frame);
       onFrameChange?.(frame);

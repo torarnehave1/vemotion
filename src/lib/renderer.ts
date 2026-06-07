@@ -516,7 +516,20 @@ export class CanvasRenderer {
       }
       if (Math.abs(v.currentTime - sourceTime) < 1e-3) continue;
       waits.push(new Promise<void>((resolve) => {
-        const onSeeked = () => { v.removeEventListener('seeked', onSeeked); resolve(); };
+        // Timeout guard: some WebMs (MediaRecorder output, no seek cues) can
+        // fail to emit 'seeked' for a given target. Without this, the export
+        // loop's `await` would hang forever. Resolve after 2s either way and
+        // draw whatever frame is decoded — slow beats frozen.
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          v.removeEventListener('seeked', onSeeked);
+          clearTimeout(timer);
+          resolve();
+        };
+        const onSeeked = () => finish();
+        const timer = setTimeout(finish, 2000);
         v.addEventListener('seeked', onSeeked);
         v.currentTime = sourceTime;
       }));

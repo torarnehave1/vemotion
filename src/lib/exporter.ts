@@ -13,6 +13,15 @@ export type ExportProgress = {
 const ffmpeg = new FFmpeg();
 let loaded = false;
 
+// ffmpeg.exec() is one long blocking call with no built-in progress. The
+// FFmpeg instance emits a 'progress' event (ratio 0..1) parsed from ffmpeg's
+// own output during exec. Route it through a module-level sink set just before
+// exec, so the encode stage shows real movement instead of a silent 70% wall.
+let onEncodeProgress: ((ratio: number) => void) | null = null;
+ffmpeg.on('progress', ({ progress }) => {
+  if (onEncodeProgress) onEncodeProgress(progress);
+});
+
 async function loadFFmpeg(onProgress?: (p: ExportProgress) => void) {
   if (loaded) return;
 
@@ -115,8 +124,22 @@ export async function exportToMp4(
 
   onProgress?.({ stage: 'encoding', percent: 70, message: 'Encoding MP4...' });
 
+  // Map ffmpeg's 0..1 encode progress onto the 70→95% band so the bar moves.
+  onEncodeProgress = (ratio) => {
+    const clamped = Math.max(0, Math.min(1, ratio));
+    onProgress?.({
+      stage: 'encoding',
+      percent: 70 + Math.round(clamped * 25),
+      message: `Encoding MP4... ${Math.round(clamped * 100)}%`,
+    });
+  };
+
   const ffmpegCmd = buildFfmpegCommand(composition.fps, composition.duration, audioInputs);
-  await ffmpeg.exec(ffmpegCmd);
+  try {
+    await ffmpeg.exec(ffmpegCmd);
+  } finally {
+    onEncodeProgress = null;
+  }
 
   onProgress?.({ stage: 'encoding', percent: 95, message: 'Finalising...' });
 
@@ -174,6 +197,10 @@ function buildFfmpegCommand(fps: number, durationSec: number, audioInputs: Audio
   if (audioInputs.length === 0) {
     args.push(
       '-c:v', 'libx264',
+      // ffmpeg.wasm is single-threaded; the default 'medium' preset makes long
+      // exports look frozen. 'ultrafast' cuts encode time dramatically at the
+      // cost of a larger file (acceptable for browser-side export).
+      '-preset', 'ultrafast',
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
       '-t', String(durationSec),
@@ -221,6 +248,7 @@ function buildFfmpegCommand(fps: number, durationSec: number, audioInputs: Audio
     '-map', '0:v',
     '-map', finalAudioLabel,
     '-c:v', 'libx264',
+    '-preset', 'ultrafast',
     '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart',
     '-c:a', 'aac',

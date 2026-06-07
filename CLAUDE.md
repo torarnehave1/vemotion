@@ -136,7 +136,7 @@ Can we build a composable, AI-assisted video generation system that is lightweig
 - `GET  /vemotion/renders` — list all render jobs for the authed user
 
 **Remaining gaps:**
-- Image, video, audio layers
+- Video layer: visual playback + MP4 export shipped (canvas-drawn, z-order respected). NOT yet: muxing the video's own audio into the export (use a separate audio layer), trimming a sub-range of the source clip, looping.
 - Spring animations
 - Multiple animations per layer
 - Agent-Builder video subagent wiring

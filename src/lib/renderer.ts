@@ -352,27 +352,31 @@ function computeLayerBounds(layer: Layer, localTime: number, composition?: Compo
  */
 function drawImageFitted(
   ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
+  img: HTMLImageElement | HTMLVideoElement,
   x: number,
   y: number,
   w: number,
   h: number,
   fit: string,
 ): void {
+  // Intrinsic source dimensions differ by element: images expose
+  // naturalWidth/Height, videos expose videoWidth/Height.
+  const iw = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
+  const ih = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
   if (fit === 'fill') {
     ctx.drawImage(img, x, y, w, h);
   } else if (fit === 'contain') {
-    const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
-    const dw = img.naturalWidth * scale;
-    const dh = img.naturalHeight * scale;
+    const scale = Math.min(w / iw, h / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
     ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
   } else {
     // cover (default) — crop to fill
-    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const scale = Math.max(w / iw, h / ih);
     const sw = w / scale;
     const sh = h / scale;
-    const sx = (img.naturalWidth - sw) / 2;
-    const sy = (img.naturalHeight - sh) / 2;
+    const sx = (iw - sw) / 2;
+    const sy = (ih - sh) / 2;
     ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   }
 }
@@ -384,6 +388,10 @@ export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private compositionFont = 'Inter, system-ui, sans-serif';
   private imageCache = new Map<string, HTMLImageElement>();
+  // Video layers: one off-DOM <video> element per source URL. The element's
+  // currentTime is seeked to the matching source time before each frame is
+  // drawn (frame-accurate in export via seekVideos; best-effort in preview).
+  private videoCache = new Map<string, HTMLVideoElement>();
 
   /**
    * Id of the layer currently selected in the editor. When non-null,
@@ -450,6 +458,69 @@ export class CanvasRenderer {
       img.onerror = () => resolve();
       img.src = src;
     });
+  }
+
+  /**
+   * Load every video layer's source into an off-DOM <video> element so frames
+   * draw without a blank placeholder. Resolves once each video has data for
+   * its first frame (readyState >= HAVE_CURRENT_DATA). Errors resolve silently
+   * — a missing video just renders nothing, like a missing image.
+   */
+  async preloadVideos(composition: CompositionData): Promise<void> {
+    const srcs = composition.layers
+      .filter(l => l.type === 'video' && typeof l.properties.src === 'string')
+      .map(l => l.properties.src as string);
+    await Promise.all([...new Set(srcs)].filter(Boolean).map(src => this.loadVideoAsync(src)));
+  }
+
+  private loadVideoAsync(src: string): Promise<void> {
+    if (this.videoCache.has(src)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const v = document.createElement('video');
+      v.crossOrigin = 'anonymous';
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      const done = () => { this.videoCache.set(src, v); resolve(); };
+      v.onloadeddata = done;
+      v.onerror = () => resolve();
+      v.src = src;
+    });
+  }
+
+  /**
+   * Seek every active video layer to the source time matching the given
+   * composition time, and resolve once each pending seek has completed. The
+   * exporter awaits this before rendering each frame so the canvas draws the
+   * correct video frame (HTMLVideoElement seeking is async). Preview calls it
+   * fire-and-forget — the frame catches up on the next tick.
+   *
+   * Source time = composition time − layer.startTime, clamped to the clip's
+   * duration. Videos shorter than their layer window hold their last frame.
+   */
+  async seekVideos(composition: CompositionData, time: number): Promise<void> {
+    const waits: Promise<void>[] = [];
+    for (const l of composition.layers) {
+      if (l.type !== 'video' || l.visible === false) continue;
+      const src = l.properties.src;
+      if (typeof src !== 'string') continue;
+      const v = this.videoCache.get(src);
+      if (!v || v.readyState < 1) continue;
+      const startTime = l.startTime ?? 0;
+      const dur = l.layerDuration ?? (composition.duration - startTime);
+      if (time < startTime || time > startTime + dur) continue;
+      let sourceTime = time - startTime;
+      if (Number.isFinite(v.duration) && v.duration > 0 && sourceTime > v.duration) {
+        sourceTime = v.duration;
+      }
+      if (Math.abs(v.currentTime - sourceTime) < 1e-3) continue;
+      waits.push(new Promise<void>((resolve) => {
+        const onSeeked = () => { v.removeEventListener('seeked', onSeeked); resolve(); };
+        v.addEventListener('seeked', onSeeked);
+        v.currentTime = sourceTime;
+      }));
+    }
+    await Promise.all(waits);
   }
 
   renderFrame(composition: CompositionData, frameNumber: number): void {
@@ -661,6 +732,9 @@ export class CanvasRenderer {
         break;
       case 'image':
         this.drawImage(layer, values);
+        break;
+      case 'video':
+        this.drawVideo(layer, values);
         break;
       case 'kg-shape':
         this.drawKgShape(layer, values);
@@ -1196,6 +1270,45 @@ export class CanvasRenderer {
     drawImageFitted(this.ctx, img, x, y, w, h, fit);
   }
 
+  /**
+   * Draw a video layer's current frame. Mirrors drawImage but pulls pixels
+   * from an HTMLVideoElement. The element's currentTime is driven by
+   * seekVideos (export) / the playback controller (preview); here we just
+   * blit whatever frame is currently decoded. Lazily creates + caches the
+   * element on first sight (matching drawImage's lazy-load behaviour) so a
+   * video added after preloadVideos still appears once it buffers.
+   */
+  private drawVideo(layer: Layer, values: Record<string, unknown>): void {
+    const src = (values.src as string) ?? '';
+    if (!src) return;
+
+    const x = layer.position.x + ((values.offsetX as number) ?? 0);
+    const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const w = layer.size.width;
+    const h = layer.size.height;
+    const fit = (values.fit as string) ?? 'cover';
+
+    let v = this.videoCache.get(src);
+
+    if (!v) {
+      v = document.createElement('video');
+      v.crossOrigin = 'anonymous';
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.onloadeddata = () => { this.onImageLoad?.(); };
+      v.onerror = () => { /* keep placeholder */ };
+      v.src = src;
+      this.videoCache.set(src, v);
+      return;
+    }
+
+    // readyState < 2 (HAVE_CURRENT_DATA) → no frame to paint yet.
+    if (v.readyState < 2 || v.videoWidth === 0) return;
+
+    drawImageFitted(this.ctx, v, x, y, w, h, fit);
+  }
+
   // Word-wrap helper — returns array of lines that fit within maxWidth
   private wrapWords(text: string, maxWidth: number): string[] {
     const words = text.split(' ');
@@ -1246,6 +1359,10 @@ export class PlaybackController {
 
   seekToFrame(frame: number): void {
     this.frameNumber = Math.max(0, Math.min(frame, this.totalFrames - 1));
+    // Fire-and-forget: nudge any video layers toward the playhead. The frame
+    // below draws the currently-decoded frame; the seeked frame lands on a
+    // subsequent render (onImageLoad/next tick), which is fine for preview.
+    void this.renderer.seekVideos(this.composition, this.frameNumber / this.composition.fps);
     void this.renderer.renderFrame(this.composition, this.frameNumber);
     this.onFrameChange?.(this.frameNumber);
   }
@@ -1292,6 +1409,7 @@ export class PlaybackController {
     }
 
     this.lastTimestamp = timestamp;
+    void this.renderer.seekVideos(this.composition, this.frameNumber / this.composition.fps);
     void this.renderer.renderFrame(this.composition, this.frameNumber);
     this.onFrameChange?.(this.frameNumber);
 

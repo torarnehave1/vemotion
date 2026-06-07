@@ -44,6 +44,12 @@ export async function exportToMp4(
   onProgress?.({ stage: 'loading', percent: 10, message: 'Preloading images...' });
   await renderer.preloadImages(composition);
 
+  // Preload video layers into off-DOM <video> elements. Frames are drawn onto
+  // the canvas (see the per-frame seekVideos below), so each video bakes into
+  // the PNG sequence and respects layer z-order. The video's own audio is NOT
+  // muxed here — audio comes from dedicated audio layers, matching the model.
+  await renderer.preloadVideos(composition);
+
   // ── Audio layers: fetch each one into the ffmpeg vFS up front so the
   //     final mux command can reference them by name. Each layer becomes
   //     a separate -i input in the ffmpeg command and a filter-complex
@@ -86,6 +92,10 @@ export async function exportToMp4(
 
   // Render each frame and write to ffmpeg virtual filesystem
   for (let frame = 0; frame < totalFrames; frame++) {
+    // Seek every video layer to this frame's source time and await the seeks
+    // so renderFrame draws the correct (not stale) video frame. No-op when the
+    // composition has no video layers.
+    await renderer.seekVideos(composition, frame / composition.fps);
     renderer.renderFrame(composition, frame);
 
     const blob = await new Promise<Blob>((resolve) =>

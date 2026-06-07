@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AudioLayerForm } from './AudioLayerForm';
+import { VideoLayerForm } from './VideoLayerForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon } from 'lucide-react';
 import type { AudioTrack, Layer, MotionScene } from '../lib/api';
@@ -336,7 +337,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const isKgShape  = editingLayer?.type === 'kg-shape';
   const isKgCard   = editingLayer?.type === 'card';
   const isImgLayer = editingLayer?.type === 'image';
-  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images' | 'animations' | 'audio'>('manual');
+  const isVideoLayer = editingLayer?.type === 'video';
+  const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images' | 'animations' | 'audio' | 'video'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
   const [kgAnims,  setKgAnims]  = useState<KgAnimNode[]>([]);
@@ -1022,6 +1024,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               Audio
             </button>
             <button
+              onClick={() => setTab('video')}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'video' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Video
+            </button>
+            <button
               onClick={() => setTab('ai')}
               className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${tab === 'ai' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
             >
@@ -1031,7 +1039,15 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         )}
 
         <div className="p-6 space-y-4">
-          {isImgLayer ? (
+          {isVideoLayer ? (
+            <VideoLayerForm
+              compositionWidth={compositionWidth}
+              compositionHeight={compositionHeight}
+              compositionDuration={compositionDuration}
+              editingLayer={editingLayer}
+              onAdd={(layer) => { onAdd(layer); onClose(); }}
+            />
+          ) : isImgLayer ? (
             replacingImage ? (
             <>
               {/* Replace-image picker — same album/upload UI as the Images tab */}
@@ -1586,6 +1602,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               editingLayer={editingLayer?.type === 'audio' ? editingLayer : undefined}
               onAdd={(layer) => { onAdd(layer); onClose(); }}
               onUpdateMeta={onUpdateMeta}
+            />
+          ) : tab === 'video' ? (
+            <VideoLayerForm
+              compositionWidth={compositionWidth}
+              compositionHeight={compositionHeight}
+              compositionDuration={compositionDuration}
+              onAdd={(layer) => { onAdd(layer); onClose(); }}
             />
           ) : tab === 'animations' ? (
             <>

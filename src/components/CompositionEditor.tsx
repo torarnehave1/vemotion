@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
@@ -111,6 +111,19 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
     });
   };
 
+  // Reorder = z-order. Layers draw in array order: LATER in the array (lower in
+  // this list) draws ON TOP. 'up' moves a layer one slot earlier (further back);
+  // 'down' moves it one slot later (more on top). No-op at the ends.
+  const moveLayer = (id: string, dir: 'up' | 'down') => {
+    const idx = composition.layers.findIndex((l) => l.id === id);
+    if (idx < 0) return;
+    const target = dir === 'up' ? idx - 1 : idx + 1;
+    if (target < 0 || target >= composition.layers.length) return;
+    const layers = [...composition.layers];
+    [layers[idx], layers[target]] = [layers[target], layers[idx]];
+    onChange({ ...composition, layers });
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
       <h2 className="text-lg font-semibold text-white">Composition Editor</h2>
@@ -216,7 +229,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       <div className="pt-4 border-t border-slate-800 space-y-3">
         <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Layers</h3>
 
-        {composition.layers.map((layer) => (
+        {composition.layers.map((layer, idx) => (
           <div
             key={layer.id}
             className={[
@@ -243,6 +256,22 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
               />
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">{layer.type}</span>
+                <button
+                  onClick={() => moveLayer(layer.id, 'up')}
+                  disabled={idx === 0}
+                  className="text-slate-500 hover:text-sky-400 disabled:opacity-30 disabled:hover:text-slate-500 transition"
+                  title="Move back (render behind the layer above)"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => moveLayer(layer.id, 'down')}
+                  disabled={idx === composition.layers.length - 1}
+                  className="text-slate-500 hover:text-sky-400 disabled:opacity-30 disabled:hover:text-slate-500 transition"
+                  title="Move forward (render on top of the layer below)"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={() => toggleLayerVisibility(layer.id)}
                   className="text-slate-500 hover:text-sky-400 transition"

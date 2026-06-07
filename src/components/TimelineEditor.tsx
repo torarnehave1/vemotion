@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import type { CompositionData, Layer, LayerGroup } from '../lib/api';
 import { layerLabel } from '../lib/api';
-import { ChevronDown, ChevronRight, Eye, EyeOff, FolderPlus, Pencil, Rows3, TimerReset, Ungroup } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Eye, EyeOff, FolderPlus, Pencil, Rows3, TimerReset, Ungroup } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 
 interface TimelineEditorProps {
@@ -89,6 +89,19 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     const layers = composition.layers.map((l) =>
       l.id === layerId ? { ...l, name: value.trim() ? value : undefined } : l
     );
+    onChange({ ...composition, layers });
+  };
+
+  // Reorder = z-order. Layers draw in array order; LATER in the array (lower in
+  // this rail) draws ON TOP. 'up' moves a layer one slot earlier (further back),
+  // 'down' one slot later (more on top). No-op at the ends.
+  const moveLayer = (layerId: string, dir: 'up' | 'down') => {
+    const idx = composition.layers.findIndex((l) => l.id === layerId);
+    if (idx < 0) return;
+    const target = dir === 'up' ? idx - 1 : idx + 1;
+    if (target < 0 || target >= composition.layers.length) return;
+    const layers = [...composition.layers];
+    [layers[idx], layers[target]] = [layers[target], layers[idx]];
     onChange({ ...composition, layers });
   };
   const [selectedLayerIds, setSelectedLayerIds] = useState<Set<string>>(new Set());
@@ -597,6 +610,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
             {layerLabel(layer)}
           </span>
         )}
+        <button data-no-marquee="true" disabled={composition.layers[0]?.id === layer.id} className="text-slate-400 hover:text-sky-400 disabled:opacity-25 disabled:hover:text-slate-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'up'); }} title="Move back (render behind the layer above)">
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+        <button data-no-marquee="true" disabled={composition.layers[composition.layers.length - 1]?.id === layer.id} className="text-slate-400 hover:text-sky-400 disabled:opacity-25 disabled:hover:text-slate-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'down'); }} title="Move forward (render on top of the layer below)">
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
         <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} title={layer.visible === false ? 'Show layer' : 'Hide layer'}>
           {layer.visible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>

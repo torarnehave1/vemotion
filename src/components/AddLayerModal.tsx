@@ -1058,7 +1058,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               onClick={() => setTab('knitting')}
               className={`flex-1 py-3 text-sm font-medium transition ${tab === 'knitting' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
             >
-              Knitting
+              Pixel Grid
             </button>
             <button
               onClick={() => setTab('ai')}

@@ -116,7 +116,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         showLegend,
         background: BACKGROUND,
         gridColor: GRID_COLOR,
-        name: name || 'knitting chart',
+        name: name || 'pixel grid',
       },
     };
     onAdd(layer);
@@ -216,7 +216,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         disabled={!chart}
         className="w-full px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-medium transition"
       >
-        Add knitting chart
+        Add pixel grid
       </button>
     </div>
   );

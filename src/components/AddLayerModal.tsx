@@ -415,6 +415,30 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   });
   const [preset, setPreset] = useState<AnimationPreset>(() => detectPresetFromAnimation(editingLayer?.animation) || 'fade-in');
   const [shapePreset, setShapePreset] = useState<AnimationPreset>('fade-in');
+
+  // Generic-edit timing state (for layer types without a dedicated edit form).
+  const [genStart, setGenStart] = useState(editingLayer?.startTime ?? 0);
+  const [genDuration, setGenDuration] = useState(editingLayer?.layerDuration ?? compositionDuration);
+  // True when editing a layer whose type has NO dedicated edit form and is NOT
+  // one the manual (text/shape/math-shape) form legitimately handles. Without
+  // this guard the dispatch falls through to the manual TEXT form, and saving
+  // rebuilds the layer as a 'Hello World' text layer — silently destroying the
+  // original (e.g. knitting-chart, path). See handleSaveGeneric.
+  const isGenericEdit = isEditing && !isImgLayer && !isVideoLayer && !isKgShape && !isKgCard
+    && !(editingLayer && ['text', 'shape', 'math-shape'].includes(editingLayer.type));
+
+  const handleSaveGeneric = () => {
+    if (!editingLayer) return;
+    onAdd({
+      ...editingLayer, // preserve type + every type-specific property (Lesson 21)
+      position: { x: posX, y: posY },
+      size: { width, height },
+      startTime: genStart,
+      layerDuration: genDuration,
+      properties: { ...editingLayer.properties, opacity: opacityValue },
+    });
+    onClose();
+  };
   const [align, setAlign] = useState<'left' | 'center' | 'right'>((editingLayer?.properties.align as 'left' | 'center' | 'right') ?? 'center');
   const [kgColor, setKgColor] = useState((editingLayer?.properties.color as string) ?? '#ffffff');
   const [kgPosX, setKgPosX] = useState(editingLayer?.position.x ?? 0);
@@ -1278,6 +1302,54 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {opacityField}
               {motionScenesField}
               <button onClick={handleSaveKgShape}
+                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                Save Changes
+              </button>
+            </>
+          ) : isGenericEdit ? (
+            <>
+              <p className="text-xs text-slate-400">
+                Editing a <span className="text-sky-400">{editingLayer?.type}</span> layer. Common settings below;
+                edit type-specific properties via the JSON editor.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">X</label>
+                  <input type="number" value={posX} onChange={e => setPosX(Number(e.target.value) || 0)}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Y</label>
+                  <input type="number" value={posY} onChange={e => setPosY(Number(e.target.value) || 0)}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Width</label>
+                  <input type="number" value={width} onChange={e => setWidth(Number(e.target.value) || 0)}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Height</label>
+                  <input type="number" value={height} onChange={e => setHeight(Number(e.target.value) || 0)}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Start (s)</label>
+                  <input type="number" min={0} step={0.1} value={genStart} onChange={e => setGenStart(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Duration (s)</label>
+                  <input type="number" min={0.1} step={0.1} value={genDuration} onChange={e => setGenDuration(Math.max(0.1, Number(e.target.value) || 0.1))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Opacity ({opacityValue.toFixed(2)})</label>
+                <input type="range" min={0} max={1} step={0.01} value={opacityValue}
+                  onChange={e => setOpacityValue(Number(e.target.value))} className="w-full" />
+              </div>
+              <button onClick={handleSaveGeneric}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
               </button>

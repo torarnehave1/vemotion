@@ -1,6 +1,7 @@
 import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnchor } from './api';
 import { samplePath } from './pathSampling';
 import { sampleAudioTrack } from './audioAnalysis';
+import { renderKnittingChart, type KnittingChart } from './knitting';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -745,9 +746,37 @@ export class CanvasRenderer {
       case 'path':
         this.drawPath(layer, values);
         break;
+      case 'knitting-chart':
+        this.drawKnittingChart(layer, values);
+        break;
     }
 
     this.ctx.restore();
+  }
+
+  /**
+   * Draw a `type: 'knitting-chart'` layer — a pixelated stitch grid baked at
+   * creation time. The palette + cell grid live in the layer properties, so no
+   * source image is touched here (renders offline in the ffmpeg export). The
+   * actual drawing is shared with the form's live preview via renderKnittingChart.
+   */
+  private drawKnittingChart(layer: Layer, values: Record<string, unknown>): void {
+    const palette = values.palette as string[] | undefined;
+    const cells = values.cells as string[] | undefined;
+    const cols = values.cols as number | undefined;
+    const rows = values.rows as number | undefined;
+    if (!palette || !cells || !cols || !rows) return;
+
+    const x = layer.position.x + ((values.offsetX as number) ?? 0);
+    const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const chart: KnittingChart = { cols, rows, palette, cells };
+    renderKnittingChart(this.ctx, x, y, layer.size.width, layer.size.height, chart, {
+      showGrid: values.showGrid !== false,
+      showNumbers: values.showNumbers !== false,
+      showLegend: values.showLegend !== false,
+      background: (values.background as string) ?? '#ffffff',
+      gridColor: (values.gridColor as string) ?? '#999999',
+    });
   }
 
   /**

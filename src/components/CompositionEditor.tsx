@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
+import { exportFramePng } from '../lib/screenshot';
 
 const FONT_PRESETS = [
   { label: 'Inter — neutral default',        value: 'Inter' },
@@ -48,6 +49,19 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       setExportProgress({ stage: 'done', percent: 0, message: 'Export failed. See console for details.' });
     } finally {
       setExporting(false);
+    }
+  };
+
+  const [exportingPng, setExportingPng] = useState(false);
+  const handleExportPng = async () => {
+    if (exportingPng) return;
+    setExportingPng(true);
+    try {
+      await exportFramePng(composition);
+    } catch (err) {
+      console.error('PNG export failed:', err);
+    } finally {
+      setExportingPng(false);
     }
   };
 
@@ -330,6 +344,17 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         {exporting
           ? <><Loader2 className="w-4 h-4 animate-spin" /> {exportProgress?.message ?? 'Preparing...'}</>
           : <><Download className="w-4 h-4" /> Export MP4</>
+        }
+      </button>
+
+      <button
+        onClick={handleExportPng}
+        disabled={exportingPng}
+        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+      >
+        {exportingPng
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting…</>
+          : <><ImageIcon className="w-4 h-4" /> Export PNG (screenshot)</>
         }
       </button>
     </div>

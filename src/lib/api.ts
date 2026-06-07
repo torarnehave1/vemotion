@@ -117,7 +117,7 @@ export type LayerGroup = {
 
 export type Layer = {
   id: string;
-  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio' | 'path';
+  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio' | 'path' | 'knitting-chart';
   groupId?: string;
   /**
    * Required for visual layer types. For 'audio' layers position/size are

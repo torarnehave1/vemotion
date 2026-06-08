@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FilePlus, FileJson, Save, Upload, FolderOpen, Loader2 } from 'lucide-react';
+import { ChevronDown, FilePlus, FileJson, Save, Upload, FolderOpen, Loader2, PlayCircle } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
 import { movementOverTimeExample, neyLessonExample } from '../lib/examples';
 import { CompositionJsonModal } from './CompositionJsonModal';
 import { PortfolioModal } from './PortfolioModal';
+import { StagedRevealPlayer } from './StagedRevealPlayer';
 
 interface FileMenuProps {
   composition: CompositionData;
@@ -16,6 +17,8 @@ interface FileMenuProps {
   onNew: () => void;
   onCloudMetaChange?: (payload: { id: string | null; name: string }) => void;
   onCloudSaved?: (payload: { id: string; name: string; version?: number }) => void;
+  /** Editor playhead frame — the build-up replay freezes here by default. */
+  currentFrame?: number;
 }
 
 
@@ -28,6 +31,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   onNew,
   onCloudMetaChange,
   onCloudSaved,
+  currentFrame = 0,
 }) => {
   const [open, setOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -36,6 +40,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
+  const [showReveal, setShowReveal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -167,6 +172,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
             <MenuItem icon={<Upload className="w-4 h-4" />} label="Load from computer" onClick={loadFromComputer} />
             <div className="h-px bg-slate-800 mx-3" />
             <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Open Portfolio…" onClick={() => { setShowPortfolio(true); close(); }} />
+            <MenuItem icon={<PlayCircle className="w-4 h-4" />} label="Build-up replay…" onClick={() => { setShowReveal(true); close(); }} />
             <div className="p-3 border-t border-slate-800 space-y-2">
               <input
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500"
@@ -201,6 +207,14 @@ export const FileMenu: React.FC<FileMenuProps> = ({
             // Dashboard) carries it to the cloud automatically.
             onLoad(c);
           }}
+        />
+      )}
+
+      {showReveal && (
+        <StagedRevealPlayer
+          composition={composition}
+          initialFrame={currentFrame}
+          onClose={() => setShowReveal(false)}
         />
       )}
 

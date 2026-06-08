@@ -318,6 +318,7 @@ export const Dashboard: React.FC = () => {
         <FileMenu
           composition={composition}
           userEmail={auth?.email}
+          currentFrame={currentFrame}
           currentCloudId={cloudCompositionId}
           currentCloudName={cloudCompositionName}
           onCloudMetaChange={({ id, name }) => {

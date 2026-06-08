@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import type { CompositionData, Layer, LayerGroup } from '../lib/api';
 import { layerLabel } from '../lib/api';
-import { ChevronDown, ChevronRight, ChevronUp, Eye, EyeOff, FolderPlus, GripVertical, Pencil, Rows3, TimerReset, Ungroup } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Eye, EyeOff, Flag, FolderPlus, GripVertical, Pencil, Rows3, TimerReset, Trash2, Ungroup } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 
 interface TimelineEditorProps {
@@ -179,6 +179,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [guideTime, setGuideTime] = useState<number | null>(null);
   const [scrubbing, setScrubbing] = useState(false);
+  const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
 
   const groups = composition.groups ?? [];
   const groupMap = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
@@ -571,6 +572,34 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     });
   };
 
+  // ── Timeline markers (meta.markers) ───────────────────────────────────────
+  // Named time tags stored in composition.meta — editor/agent only, ignored by
+  // the renderer and exporter. Let the user pin a labelled marker at the
+  // playhead so an agent reading the JSON knows exactly where a change is wanted.
+  const markers = composition.meta?.markers ?? [];
+
+  const setMarkers = (next: typeof markers) => {
+    onChange({ ...composition, meta: { ...composition.meta, markers: next } });
+  };
+
+  const addMarkerAtPlayhead = () => {
+    const id = `mk-${Date.now().toString(36)}`;
+    const time = Math.round(currentTime * 100) / 100;
+    setMarkers([...markers, { id, time, label: '' }].sort((a, b) => a.time - b.time));
+    setEditingMarkerId(id);
+  };
+
+  const updateMarker = (id: string, patch: Partial<{ time: number; label: string }>) => {
+    setMarkers(markers.map((m) => (m.id === id ? { ...m, ...patch } : m)).sort((a, b) => a.time - b.time));
+  };
+
+  const removeMarker = (id: string) => {
+    setMarkers(markers.filter((m) => m.id !== id));
+    if (editingMarkerId === id) setEditingMarkerId(null);
+  };
+
+  const editingMarker = markers.find((m) => m.id === editingMarkerId) ?? null;
+
   const insertTimeAtPlayhead = () => {
     const insertAt = currentTime;
     const amount = 1;
@@ -864,11 +893,49 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
               <TimerReset className="w-3.5 h-3.5" />
               Add 1s
             </button>
+            <button
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-violet-500/15 text-violet-300 hover:bg-violet-500/25"
+              onClick={addMarkerAtPlayhead}
+              title="Add a labelled marker at the playhead (stored in meta — for sharing with an agent)"
+            >
+              <Flag className="w-3.5 h-3.5" />
+              Marker
+            </button>
           </div>
           <span className="text-xs text-slate-500">
             {composition.duration}s · {composition.fps}fps · {composition.layers.length} layers
+            {markers.length > 0 && ` · ${markers.length} marker${markers.length === 1 ? '' : 's'}`}
           </span>
         </div>
+
+        {/* Marker editor — appears when a marker flag is added/clicked. */}
+        {editingMarker && (
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-violet-500/5">
+            <Flag className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+            <input
+              autoFocus
+              value={editingMarker.label}
+              placeholder="What happens here? (note for you / an agent)"
+              onChange={(e) => updateMarker(editingMarker.id, { label: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingMarkerId(null); }}
+              className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+            <label className="flex items-center gap-1 text-xs text-slate-400 flex-shrink-0">
+              <span>at</span>
+              <input
+                type="number" min={0} max={composition.duration} step={0.1}
+                value={editingMarker.time}
+                onChange={(e) => updateMarker(editingMarker.id, { time: Math.max(0, Math.min(composition.duration, parseFloat(e.target.value) || 0)) })}
+                className="w-16 bg-slate-800 border border-slate-700 text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+              <span>s</span>
+            </label>
+            <button onClick={() => removeMarker(editingMarker.id)} title="Delete marker" className="text-slate-400 hover:text-red-400 transition flex-shrink-0 p-1">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => setEditingMarkerId(null)} className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-200 hover:bg-slate-600 flex-shrink-0">Done</button>
+          </div>
+        )}
 
         <div
           ref={bodyRef}
@@ -898,6 +965,27 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
                 style={{ left: guideTime * pxPerSecond }}
               />
             )}
+
+            {/* Timeline markers — full-height violet line + a clickable flag on the ruler. */}
+            {trackWidth > 0 && markers.map((m) => (
+              <div key={m.id} className="absolute top-0 bottom-0 z-20" style={{ left: m.time * pxPerSecond }}>
+                <div className="absolute top-0 bottom-0 w-px bg-violet-400/70 pointer-events-none" />
+                <button
+                  data-no-marquee="true"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); setEditingMarkerId(m.id); }}
+                  title={m.label || 'Marker (click to edit)'}
+                  className={[
+                    'absolute top-0 flex items-center gap-1 h-[18px] pl-0.5 pr-1.5 rounded-r rounded-bl text-[10px] whitespace-nowrap max-w-[160px] pointer-events-auto transition',
+                    editingMarkerId === m.id ? 'bg-violet-500 text-white' : 'bg-violet-500/80 text-white hover:bg-violet-500',
+                  ].join(' ')}
+                  style={{ left: 0 }}
+                >
+                  <Flag className="w-2.5 h-2.5 flex-shrink-0" />
+                  <span className="truncate">{m.label || `${m.time}s`}</span>
+                </button>
+              </div>
+            ))}
 
             {trackWidth > 0 && (
               <div className="absolute top-0 bottom-0 w-px bg-sky-400 pointer-events-none z-20" style={{ left: currentTime * pxPerSecond }}>

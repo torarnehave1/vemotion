@@ -82,6 +82,24 @@ export type CompositionMeta = {
    * layer.position), NOT screen space.
    */
   guides?: Guide[];
+  /**
+   * Named time markers on the timeline. Editor-only: the renderer and the MP4
+   * exporter ignore them entirely — they never affect output. Their purpose is
+   * communication: annotate exact timeline positions so a human or an AI agent
+   * reading this JSON knows precisely where a change is wanted (e.g.
+   * { time: 39, label: "swap the headline copy here" }). Shown as flags on the
+   * timeline ruler. `time` is in SECONDS, absolute composition time — the same
+   * units and origin as `layer.startTime`.
+   */
+  markers?: TimelineMarker[];
+};
+
+export type TimelineMarker = {
+  id: string;
+  /** Absolute composition time in seconds (same units as layer.startTime). */
+  time: number;
+  /** Human/agent-facing note describing what should happen at this time. */
+  label: string;
 };
 
 export type Guide = {

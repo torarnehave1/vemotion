@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import type { CompositionData, Layer, LayerGroup } from '../lib/api';
 import { layerLabel } from '../lib/api';
-import { ChevronDown, ChevronRight, ChevronUp, Eye, EyeOff, FolderPlus, Pencil, Rows3, TimerReset, Ungroup } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Eye, EyeOff, FolderPlus, GripVertical, Pencil, Rows3, TimerReset, Ungroup } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 
 interface TimelineEditorProps {
@@ -103,6 +103,32 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     const layers = [...composition.layers];
     [layers[idx], layers[target]] = [layers[target], layers[idx]];
     onChange({ ...composition, layers });
+  };
+
+  // Drag-to-reorder in the label rail: drop a layer above/below another to set
+  // its z-order in one gesture instead of clicking the arrows repeatedly. The
+  // moved layer adopts the target row's group membership so it lands exactly
+  // where it is dropped (keeping group members contiguous).
+  const [draggingLayerId, setDraggingLayerId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ layerId: string; pos: 'above' | 'below' } | null>(null);
+
+  const reorderLayer = (draggedId: string, targetId: string, pos: 'above' | 'below') => {
+    if (draggedId === targetId) return;
+    const layers = [...composition.layers];
+    const from = layers.findIndex((l) => l.id === draggedId);
+    const target = layers.find((l) => l.id === targetId);
+    if (from < 0 || !target) return;
+    const [moved] = layers.splice(from, 1);
+    let to = layers.findIndex((l) => l.id === targetId);
+    if (to < 0) return;
+    if (pos === 'below') to += 1;
+    layers.splice(to, 0, { ...moved, groupId: target.groupId });
+    onChange({ ...composition, layers });
+  };
+
+  const dropPosFromEvent = (e: React.DragEvent<HTMLElement>): 'above' | 'below' => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return e.clientY < rect.top + rect.height / 2 ? 'above' : 'below';
   };
   const [selectedLayerIds, setSelectedLayerIds] = useState<Set<string>>(new Set());
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -577,15 +603,39 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       <div
         key={layer.id}
         data-no-marquee="true"
+        draggable={renamingLayerId !== layer.id}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', layer.id);
+          setDraggingLayerId(layer.id);
+        }}
+        onDragEnd={() => { setDraggingLayerId(null); setDropTarget(null); }}
+        onDragOver={(e) => {
+          if (!draggingLayerId || draggingLayerId === layer.id) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          const pos = dropPosFromEvent(e);
+          setDropTarget((prev) => (prev?.layerId === layer.id && prev.pos === pos ? prev : { layerId: layer.id, pos }));
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (draggingLayerId) reorderLayer(draggingLayerId, layer.id, dropPosFromEvent(e));
+          setDraggingLayerId(null);
+          setDropTarget(null);
+        }}
         className={[
-          'flex items-center px-3 text-xs text-slate-400 truncate gap-1 transition',
+          'flex items-center px-3 text-xs text-slate-400 truncate gap-1 transition cursor-grab active:cursor-grabbing',
           layer.visible === false && 'opacity-50',
+          draggingLayerId === layer.id && 'opacity-40',
           selectedLayerIds.has(layer.id) && 'ring-1 ring-sky-500/60 bg-slate-800/40',
+          dropTarget?.layerId === layer.id && dropTarget.pos === 'above' && 'shadow-[inset_0_2px_0_0_#38bdf8]',
+          dropTarget?.layerId === layer.id && dropTarget.pos === 'below' && 'shadow-[inset_0_-2px_0_0_#38bdf8]',
           layer.groupId && 'pl-8',
         ].join(' ')}
         style={{ height: LAYER_HEIGHT, marginBottom: LAYER_GAP }}
         onClick={(e) => selectLayer(layer.id, e.metaKey || e.ctrlKey)}
       >
+        <GripVertical className="w-3 h-3 flex-shrink-0 text-slate-600" />
         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getLayerColor(layer) }} />
         {renamingLayerId === layer.id ? (
           <input

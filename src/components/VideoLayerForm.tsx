@@ -41,6 +41,18 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
   const [startTime, setStartTime] = useState<number>(editingLayer?.startTime ?? 0);
   const [layerDuration, setLayerDuration] = useState<number>(editingLayer?.layerDuration ?? compositionDuration);
 
+  // Layer box position + size. NEW videos default to FILLING the canvas (the
+  // common case); combined with fit:'cover' the clip crops to fill. Editing
+  // keeps the existing box. The "Fill canvas" button resets to full canvas.
+  // The fit dropdown only scales WITHIN this box — the box size is what
+  // determines how much of the canvas the video occupies.
+  const [posX, setPosX] = useState<number>(editingLayer?.position.x ?? 0);
+  const [posY, setPosY] = useState<number>(editingLayer?.position.y ?? 0);
+  const [boxW, setBoxW] = useState<number>(editingLayer?.size.width ?? compositionWidth);
+  const [boxH, setBoxH] = useState<number>(editingLayer?.size.height ?? compositionHeight);
+
+  const fillCanvas = () => { setPosX(0); setPosY(0); setBoxW(compositionWidth); setBoxH(compositionHeight); };
+
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,22 +100,7 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
 
   const handleAdd = async () => {
     if (!src) return;
-    const { w: nw, h: nh, duration } = await probe(src);
-
-    // Size: preserve aspect ratio, clamp to canvas. Fallback to half-canvas.
-    let w: number;
-    let h: number;
-    if (nw > 0 && nh > 0) {
-      const scale = Math.min(nw > compositionWidth ? compositionWidth / nw : 1,
-                             nh > compositionHeight ? compositionHeight / nh : 1);
-      w = Math.round(nw * scale);
-      h = Math.round(nh * scale);
-    } else {
-      w = Math.round(compositionWidth / 2);
-      h = Math.round(compositionHeight / 2);
-    }
-    const x = Math.round((compositionWidth - w) / 2);
-    const y = Math.round((compositionHeight - h) / 2);
+    const { duration } = await probe(src);
 
     // Autofill the layer window to the clip length the first time (only when
     // it still equals the composition default), clamped to the composition.
@@ -117,8 +114,8 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
       type: 'video',
       // Preserve a user-set display name across modal edits (Lesson 21).
       ...(editingLayer?.name ? { name: editingLayer.name } : {}),
-      position: editingLayer?.position ?? { x, y },
-      size: editingLayer?.size ?? { width: w, height: h },
+      position: { x: posX, y: posY },
+      size: { width: Math.max(1, boxW), height: Math.max(1, boxH) },
       startTime,
       layerDuration: dur,
       ...(editingLayer?.animation ? { animation: editingLayer.animation } : {}),
@@ -214,10 +211,45 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
               onChange={(e) => setFit(e.target.value as Fit)}
               className="flex-1 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500"
             >
-              <option value="cover">Cover</option>
-              <option value="contain">Contain</option>
-              <option value="fill">Fill</option>
+              <option value="cover">Cover (crop to fill the box)</option>
+              <option value="contain">Contain (fit inside, letterbox)</option>
+              <option value="fill">Fill (stretch to the box)</option>
             </select>
+          </div>
+
+          {/* Size / position of the layer box */}
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs text-slate-400">Size &amp; position</label>
+            <button
+              type="button"
+              onClick={fillCanvas}
+              className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs font-medium transition"
+              title={`Set the box to the full ${compositionWidth}×${compositionHeight} canvas`}
+            >
+              Fill canvas
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              X
+              <input type="number" value={posX} onChange={(e) => setPosX(Math.round(Number(e.target.value) || 0))}
+                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              Y
+              <input type="number" value={posY} onChange={(e) => setPosY(Math.round(Number(e.target.value) || 0))}
+                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              W
+              <input type="number" min={1} value={boxW} onChange={(e) => setBoxW(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              H
+              <input type="number" min={1} value={boxH} onChange={(e) => setBoxH(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+            </label>
           </div>
 
           {/* Timing */}

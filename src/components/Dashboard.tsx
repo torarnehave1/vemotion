@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { CompositionData } from '../lib/api';
+import { ChevronLeft, ChevronRight, Play, Square } from 'lucide-react';
+import type { CompositionData, Layer } from '../lib/api';
 import { CompositionEditor } from './CompositionEditor';
 import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
@@ -79,6 +79,65 @@ export const Dashboard: React.FC = () => {
   // restore, deep-link, popstate handler), set this true so the sync effect
   // skips its next run.
   const skipUrlSyncRef = useRef(false);
+
+  // ── In-place "build-up replay" ────────────────────────────────────────────
+  // Drives the REAL editor: clears the live composition to zero layers, then
+  // adds the original layers back one per interval, so the canvas + timeline
+  // visibly assemble themselves. The user points their own screen recorder at
+  // the unchanged app. Autosave is paused while replaying (replayingRef) so the
+  // half-built intermediate states never reach the cloud; the full composition
+  // is restored at the end (final slice === full script) and on Stop/unmount.
+  const [replayActive, setReplayActive] = useState(false);
+  const [replayStep, setReplayStep] = useState(0);
+  const [replayTotal, setReplayTotal] = useState(0);
+  const [replaySec, setReplaySec] = useState(1);
+  const replayingRef = useRef(false);
+  const replayScriptRef = useRef<Layer[]>([]);
+  const replayTimerRef = useRef<number | null>(null);
+
+  const finishReplay = useCallback(() => {
+    if (replayTimerRef.current) { window.clearInterval(replayTimerRef.current); replayTimerRef.current = null; }
+    // Restore the full composition (no-op if the last tick already did).
+    const script = replayScriptRef.current;
+    setComposition(c => ({ ...c, layers: script }));
+    replayingRef.current = false;
+    setReplayActive(false);
+  }, []);
+
+  const startReplay = useCallback(() => {
+    if (replayingRef.current) return;
+    const script = composition.layers;
+    if (script.length === 0) return;
+    // Cancel any pending autosave so it can't fire mid-replay.
+    if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
+    replayScriptRef.current = script;
+    replayingRef.current = true;
+    setReplayTotal(script.length);
+    setReplayStep(0);
+    setReplayActive(true);
+    setComposition(c => ({ ...c, layers: [] }));
+    let step = 0;
+    replayTimerRef.current = window.setInterval(() => {
+      step += 1;
+      setComposition(c => ({ ...c, layers: script.slice(0, step) }));
+      setReplayStep(step);
+      if (step >= script.length) {
+        if (replayTimerRef.current) { window.clearInterval(replayTimerRef.current); replayTimerRef.current = null; }
+        // Last slice already equals the full script; just lift the pause.
+        replayingRef.current = false;
+        setReplayActive(false);
+      }
+    }, Math.max(200, replaySec * 1000));
+  }, [composition.layers, replaySec]);
+
+  // Safety: if Dashboard unmounts mid-replay, stop the timer and restore.
+  useEffect(() => () => {
+    if (replayTimerRef.current) window.clearInterval(replayTimerRef.current);
+    if (replayingRef.current) {
+      replayingRef.current = false;
+      setComposition(c => ({ ...c, layers: replayScriptRef.current }));
+    }
+  }, []);
 
   const handleTimelineSeek = (frame: number) => {
     setSeekFrame(frame);
@@ -235,6 +294,9 @@ export const Dashboard: React.FC = () => {
   }, [auth?.email]);
 
   useEffect(() => {
+    // Paused during build-up replay so half-built states never hit the cloud.
+    if (replayingRef.current) return;
+
     const nextSnapshot = JSON.stringify(composition);
 
     if (!auth?.email || !hasCloudToken()) {
@@ -318,7 +380,6 @@ export const Dashboard: React.FC = () => {
         <FileMenu
           composition={composition}
           userEmail={auth?.email}
-          currentFrame={currentFrame}
           currentCloudId={cloudCompositionId}
           currentCloudName={cloudCompositionName}
           onCloudMetaChange={({ id, name }) => {
@@ -351,6 +412,35 @@ export const Dashboard: React.FC = () => {
             setAutosaveState('saved');
           }}
         />
+
+        {/* Build-up replay: rebuilds the live composition one layer per interval
+            in the real editor, for screen recording. Autosave pauses while it runs. */}
+        {!replayActive ? (
+          <button
+            onClick={startReplay}
+            title="Replay build-up — re-add layers one per second in the editor (for screen recording)"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm rounded-lg border border-slate-700 transition flex-shrink-0"
+          >
+            <Play className="w-3.5 h-3.5" /> Replay
+          </button>
+        ) : (
+          <button
+            onClick={finishReplay}
+            title="Stop replay and restore the full composition"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg transition flex-shrink-0"
+          >
+            <Square className="w-3.5 h-3.5" /> Stop {replayStep}/{replayTotal}
+          </button>
+        )}
+        <label className="flex items-center gap-1 text-xs text-slate-500 flex-shrink-0" title="Seconds between each layer">
+          <input
+            type="number" min={0.2} step={0.1} value={replaySec}
+            disabled={replayActive}
+            onChange={e => setReplaySec(Math.max(0.2, parseFloat(e.target.value) || 1))}
+            className="w-12 bg-slate-800 border border-slate-700 text-slate-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
+          />
+          s
+        </label>
       </div>
 
       {/* Deep-link load failure banner */}

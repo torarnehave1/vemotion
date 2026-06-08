@@ -3,7 +3,7 @@ import { AudioLayerForm } from './AudioLayerForm';
 import { VideoLayerForm } from './VideoLayerForm';
 import { KnittingChartForm } from './KnittingChartForm';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon } from 'lucide-react';
+import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off } from 'lucide-react';
 import type { AudioTrack, Layer, MotionScene } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
@@ -452,6 +452,24 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [imgPosY,   setImgPosY]   = useState(editingLayer?.position.y ?? 0);
   const [imgWidth,  setImgWidth]  = useState(editingLayer?.size.width ?? 400);
   const [imgHeight, setImgHeight] = useState(editingLayer?.size.height ?? 400);
+  // Aspect-ratio lock: when on, editing one dimension scales the other to keep
+  // the current width:height ratio, so a single-axis resize never distorts.
+  const [lockAspect, setLockAspect] = useState(true);
+
+  const setWidthLinked = (raw: string) => {
+    const w = parseInt(raw);
+    if (lockAspect && !Number.isNaN(w) && imgWidth > 0 && imgHeight > 0) {
+      setImgHeight(Math.max(1, Math.round(w * (imgHeight / imgWidth))));
+    }
+    setImgWidth(w);
+  };
+  const setHeightLinked = (raw: string) => {
+    const h = parseInt(raw);
+    if (lockAspect && !Number.isNaN(h) && imgWidth > 0 && imgHeight > 0) {
+      setImgWidth(Math.max(1, Math.round(h * (imgWidth / imgHeight))));
+    }
+    setImgHeight(h);
+  };
   const [imgFit,    setImgFit]    = useState((editingLayer?.properties.fit as string) ?? 'cover');
   // The image source the edit form will save. Starts as the layer's current
   // src; "Replace image" swaps it via the album/upload picker without touching
@@ -1142,11 +1160,23 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
                   <input type="number" value={imgPosY} onChange={e => setImgPosY(parseInt(e.target.value))}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Width</label>
-                  <input type="number" value={imgWidth} onChange={e => setImgWidth(parseInt(e.target.value))}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-slate-400">Width</label>
+                    <button
+                      type="button"
+                      onClick={() => setLockAspect(v => !v)}
+                      title={lockAspect ? 'Aspect ratio locked — width & height scale together. Click to unlock.' : 'Aspect ratio unlocked — width & height resize independently. Click to lock.'}
+                      className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition ${lockAspect ? 'text-sky-400 hover:text-sky-300' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      {lockAspect ? <Link2 className="w-3.5 h-3.5" /> : <Link2Off className="w-3.5 h-3.5" />}
+                      {lockAspect ? 'Linked' : 'Free'}
+                    </button>
+                  </div>
+                  <input type="number" value={imgWidth} onChange={e => setWidthLinked(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
                 <div><label className="text-xs text-slate-400 mb-1 block">Height</label>
-                  <input type="number" value={imgHeight} onChange={e => setImgHeight(parseInt(e.target.value))}
+                  <input type="number" value={imgHeight} onChange={e => setHeightLinked(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
 

@@ -105,25 +105,70 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     onChange({ ...composition, layers });
   };
 
-  // Drag-to-reorder in the label rail: drop a layer above/below another to set
-  // its z-order in one gesture instead of clicking the arrows repeatedly. The
-  // moved layer adopts the target row's group membership so it lands exactly
-  // where it is dropped (keeping group members contiguous).
-  const [draggingLayerId, setDraggingLayerId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ layerId: string; pos: 'above' | 'below' } | null>(null);
+  // Drag-to-reorder in the label rail: drop a row above/below another to set
+  // z-order in one gesture instead of clicking the arrows repeatedly. A dragged
+  // LAYER adopts the target's group membership (drop onto a group's row to join
+  // it). A dragged GROUP moves its whole member block as a unit, keeping each
+  // member's group membership (groups don't nest here). Row keys: `L:<layerId>`
+  // / `G:<groupId>`.
+  const [dragItem, setDragItem] = useState<{ kind: 'layer' | 'group'; id: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ key: string; pos: 'above' | 'below' } | null>(null);
 
-  const reorderLayer = (draggedId: string, targetId: string, pos: 'above' | 'below') => {
-    if (draggedId === targetId) return;
+  const reorderLayer = (draggedId: string, anchorId: string, pos: 'above' | 'below') => {
+    if (draggedId === anchorId) return;
     const layers = [...composition.layers];
     const from = layers.findIndex((l) => l.id === draggedId);
-    const target = layers.find((l) => l.id === targetId);
-    if (from < 0 || !target) return;
+    const anchor = layers.find((l) => l.id === anchorId);
+    if (from < 0 || !anchor) return;
     const [moved] = layers.splice(from, 1);
-    let to = layers.findIndex((l) => l.id === targetId);
+    let to = layers.findIndex((l) => l.id === anchorId);
     if (to < 0) return;
     if (pos === 'below') to += 1;
-    layers.splice(to, 0, { ...moved, groupId: target.groupId });
+    layers.splice(to, 0, { ...moved, groupId: anchor.groupId });
     onChange({ ...composition, layers });
+  };
+
+  // Move every member of `groupId` as a contiguous block to the drop position.
+  const reorderGroup = (groupId: string, target: { kind: 'layer' | 'group'; id: string }, pos: 'above' | 'below') => {
+    if (target.kind === 'group' && target.id === groupId) return;
+    const members = composition.layers.filter((l) => l.groupId === groupId);
+    if (members.length === 0) return;
+    const memberIds = new Set(members.map((l) => l.id));
+    if (target.kind === 'layer' && memberIds.has(target.id)) return; // dropped onto own member
+    const rest = composition.layers.filter((l) => !memberIds.has(l.id));
+    let anchorId: string | undefined;
+    if (target.kind === 'layer') {
+      anchorId = target.id;
+    } else {
+      const tMembers = rest.filter((l) => l.groupId === target.id);
+      if (tMembers.length === 0) return;
+      anchorId = pos === 'above' ? tMembers[0].id : tMembers[tMembers.length - 1].id;
+    }
+    let to = rest.findIndex((l) => l.id === anchorId);
+    if (to < 0) return;
+    if (pos === 'below') to += 1;
+    const layers = [...rest.slice(0, to), ...members, ...rest.slice(to)];
+    onChange({ ...composition, layers });
+  };
+
+  const handleRowDrop = (targetKind: 'layer' | 'group', targetId: string, pos: 'above' | 'below') => {
+    const drag = dragItem;
+    setDragItem(null);
+    setDropTarget(null);
+    if (!drag) return;
+    if (drag.kind === 'group') {
+      reorderGroup(drag.id, { kind: targetKind, id: targetId }, pos);
+      return;
+    }
+    if (targetKind === 'layer') {
+      reorderLayer(drag.id, targetId, pos);
+    } else {
+      // Layer dropped onto a group's header row → join the group at its edge.
+      const tMembers = composition.layers.filter((l) => l.groupId === targetId && l.id !== drag.id);
+      if (tMembers.length === 0) return;
+      const anchor = pos === 'above' ? tMembers[0].id : tMembers[tMembers.length - 1].id;
+      reorderLayer(drag.id, anchor, pos);
+    }
   };
 
   const dropPosFromEvent = (e: React.DragEvent<HTMLElement>): 'above' | 'below' => {
@@ -572,21 +617,55 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     ticks.push(parseFloat(t.toFixed(2)));
   }
 
+  // Shared native-DnD handlers for a label row (layer or group header).
+  const dndRowProps = (kind: 'layer' | 'group', id: string, canDrag: boolean) => ({
+    draggable: canDrag,
+    onDragStart: (e: React.DragEvent<HTMLDivElement>) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', `${kind}:${id}`);
+      setDragItem({ kind, id });
+    },
+    onDragEnd: () => { setDragItem(null); setDropTarget(null); },
+    onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
+      if (!dragItem || (dragItem.kind === kind && dragItem.id === id)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const pos = dropPosFromEvent(e);
+      const key = `${kind === 'group' ? 'G' : 'L'}:${id}`;
+      setDropTarget((prev) => (prev?.key === key && prev.pos === pos ? prev : { key, pos }));
+    },
+    onDrop: (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      handleRowDrop(kind, id, dropPosFromEvent(e));
+    },
+  });
+
+  const dropEdgeClass = (key: string) => [
+    dropTarget?.key === key && dropTarget.pos === 'above' && 'shadow-[inset_0_2px_0_0_#38bdf8]',
+    dropTarget?.key === key && dropTarget.pos === 'below' && 'shadow-[inset_0_-2px_0_0_#38bdf8]',
+  ];
+
   const renderLabelRow = (row: TimelineRow) => {
     if (row.kind === 'group') {
       const members = row.members;
       const anyHidden = members.every((layer) => layer.visible === false);
+      const dragging = dragItem?.kind === 'group' && dragItem.id === row.group.id;
       return (
         <div
           key={`group-${row.group.id}`}
           data-no-marquee="true"
+          {...dndRowProps('group', row.group.id, true)}
           className={[
-            'flex items-center px-3 text-xs text-slate-300 gap-1 transition bg-slate-800/50',
+            'flex items-center px-3 text-xs text-slate-300 gap-1 transition bg-slate-800/50 cursor-grab active:cursor-grabbing',
+            dragging && 'opacity-40',
             selectedGroupId === row.group.id && 'ring-1 ring-sky-500/60',
+            ...dropEdgeClass(`G:${row.group.id}`),
           ].join(' ')}
           style={{ height: LAYER_HEIGHT, marginBottom: LAYER_GAP }}
           onClick={() => selectGroup(row.group.id)}
+          title="Drag to reorder the whole group"
         >
+          <GripVertical className="w-3 h-3 flex-shrink-0 text-slate-500" />
           <button data-no-marquee="true" className="text-slate-400 hover:text-white transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupCollapsed(row.group.id); }}>
             {row.group.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
@@ -599,37 +678,18 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     }
 
     const layer = row.layer;
+    const dragging = dragItem?.kind === 'layer' && dragItem.id === layer.id;
     return (
       <div
         key={layer.id}
         data-no-marquee="true"
-        draggable={renamingLayerId !== layer.id}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', layer.id);
-          setDraggingLayerId(layer.id);
-        }}
-        onDragEnd={() => { setDraggingLayerId(null); setDropTarget(null); }}
-        onDragOver={(e) => {
-          if (!draggingLayerId || draggingLayerId === layer.id) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          const pos = dropPosFromEvent(e);
-          setDropTarget((prev) => (prev?.layerId === layer.id && prev.pos === pos ? prev : { layerId: layer.id, pos }));
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          if (draggingLayerId) reorderLayer(draggingLayerId, layer.id, dropPosFromEvent(e));
-          setDraggingLayerId(null);
-          setDropTarget(null);
-        }}
+        {...dndRowProps('layer', layer.id, renamingLayerId !== layer.id)}
         className={[
           'flex items-center px-3 text-xs text-slate-400 truncate gap-1 transition cursor-grab active:cursor-grabbing',
           layer.visible === false && 'opacity-50',
-          draggingLayerId === layer.id && 'opacity-40',
+          dragging && 'opacity-40',
           selectedLayerIds.has(layer.id) && 'ring-1 ring-sky-500/60 bg-slate-800/40',
-          dropTarget?.layerId === layer.id && dropTarget.pos === 'above' && 'shadow-[inset_0_2px_0_0_#38bdf8]',
-          dropTarget?.layerId === layer.id && dropTarget.pos === 'below' && 'shadow-[inset_0_-2px_0_0_#38bdf8]',
+          ...dropEdgeClass(`L:${layer.id}`),
           layer.groupId && 'pl-8',
         ].join(' ')}
         style={{ height: LAYER_HEIGHT, marginBottom: LAYER_GAP }}

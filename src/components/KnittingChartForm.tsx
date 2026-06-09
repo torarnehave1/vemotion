@@ -37,6 +37,10 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
   const [showNumbers, setShowNumbers] = useState(true);
   const [showLegend, setShowLegend] = useState(true);
   const [chart, setChart] = useState<KnittingChart | null>(null);
+  // Editable palette: starts as the auto-quantized colors, the user can
+  // override any swatch. Re-synced whenever the chart rebuilds (new image /
+  // grid / colour-count), since indices change.
+  const [palette, setPalette] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -64,6 +68,15 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
     setChart(buildKnittingChart(img, cols, paletteSize));
   }, [img, cols, paletteSize]);
 
+  // Reset the editable palette to the auto colours whenever the chart rebuilds.
+  useEffect(() => {
+    setPalette(chart ? chart.palette.slice() : []);
+  }, [chart]);
+
+  // The palette actually used for preview + the saved layer: the user's edits
+  // when they line up with the current chart, else the auto palette.
+  const effectivePalette = (chart && palette.length === chart.palette.length) ? palette : (chart?.palette ?? []);
+
   // Redraw the live preview when the chart or display toggles change.
   useEffect(() => {
     const canvas = previewRef.current;
@@ -76,14 +89,14 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       return;
     }
-    renderKnittingChart(ctx, 0, 0, canvas.width, canvas.height, chart, {
+    renderKnittingChart(ctx, 0, 0, canvas.width, canvas.height, { ...chart, palette: effectivePalette }, {
       showGrid,
       showNumbers,
       showLegend,
       background: BACKGROUND,
       gridColor: GRID_COLOR,
     });
-  }, [chart, showGrid, showNumbers, showLegend]);
+  }, [chart, effectivePalette, showGrid, showNumbers, showLegend]);
 
   const handleAdd = () => {
     if (!chart) return;
@@ -109,7 +122,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       properties: {
         cols: chart.cols,
         rows: chart.rows,
-        palette: chart.palette,
+        palette: effectivePalette,
         cells: chart.cells,
         showGrid,
         showNumbers,
@@ -210,6 +223,30 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Editable palette — click a swatch to recolor every pixel using it */}
+      {chart && effectivePalette.length > 0 && (
+        <div className="space-y-2">
+          <label className="text-xs text-slate-400 block">Colors (click to change)</label>
+          <div className="grid grid-cols-8 gap-2">
+            {effectivePalette.map((hex, i) => (
+              <label key={i} className="flex flex-col items-center gap-1 cursor-pointer" title={`Color ${i + 1}: ${hex}`}>
+                <input
+                  type="color"
+                  value={/^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#000000'}
+                  onChange={(e) => setPalette((prev) => {
+                    const base = prev.length === effectivePalette.length ? prev.slice() : effectivePalette.slice();
+                    base[i] = e.target.value;
+                    return base;
+                  })}
+                  className="w-full h-8 rounded border border-slate-600 bg-transparent cursor-pointer"
+                />
+                <span className="text-[10px] text-slate-500">{i + 1}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <button
         onClick={handleAdd}

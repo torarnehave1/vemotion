@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AudioLayerForm } from './AudioLayerForm';
 import { VideoLayerForm } from './VideoLayerForm';
+import { PixelGridEditForm } from './PixelGridEditForm';
 import { KnittingChartForm } from './KnittingChartForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off } from 'lucide-react';
@@ -339,6 +340,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const isKgCard   = editingLayer?.type === 'card';
   const isImgLayer = editingLayer?.type === 'image';
   const isVideoLayer = editingLayer?.type === 'video';
+  const isPixelGrid = editingLayer?.type === 'knitting-chart';
   const [tab, setTab] = useState<'manual' | 'ai' | 'shapes' | 'cards' | 'images' | 'animations' | 'audio' | 'video' | 'knitting'>('manual');
   const [kgShapes, setKgShapes] = useState<KgShapeNode[]>([]);
   const [kgCards,  setKgCards]  = useState<KgCardNode[]>([]);
@@ -424,7 +426,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   // this guard the dispatch falls through to the manual TEXT form, and saving
   // rebuilds the layer as a 'Hello World' text layer — silently destroying the
   // original (e.g. knitting-chart, path). See handleSaveGeneric.
-  const isGenericEdit = isEditing && !isImgLayer && !isVideoLayer && !isKgShape && !isKgCard
+  const isGenericEdit = isEditing && !isImgLayer && !isVideoLayer && !isKgShape && !isKgCard && !isPixelGrid
     && !(editingLayer && ['text', 'shape', 'math-shape'].includes(editingLayer.type));
 
   const handleSaveGeneric = () => {
@@ -1336,6 +1338,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 Save Changes
               </button>
             </>
+          ) : isPixelGrid ? (
+            <PixelGridEditForm
+              editingLayer={editingLayer!}
+              compositionDuration={compositionDuration}
+              onAdd={(layer) => { onAdd(layer); onClose(); }}
+            />
           ) : isGenericEdit ? (
             <>
               <p className="text-xs text-slate-400">

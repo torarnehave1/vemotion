@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save, Image as ImageIcon, FolderPlus, Plus, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
+import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save, Image as ImageIcon, FolderPlus, Plus, ChevronDown, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
 import type { CompositionData, CompositionMeta } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
-import { getCompositionFromCloud, saveCompositionToCloud } from '../lib/cloud-compositions';
+import { getCompositionFromCloud, saveCompositionToCloud, suggestCompositionMeta } from '../lib/cloud-compositions';
 import { renderThumbnail } from '../lib/thumbnail';
 import {
   listProjects,
@@ -81,6 +81,28 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   const [editMetaArea, setEditMetaArea] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [aiFilling, setAiFilling] = useState(false);
+  const [aiFillError, setAiFillError] = useState<string | null>(null);
+
+  // AI fill: ask the worker (gemma) to suggest description/category/tags/
+  // metaArea from the composition, then drop them into the form for review.
+  const aiFillMeta = async (item: CompositionSummary) => {
+    if (aiFilling) return;
+    setAiFilling(true);
+    setAiFillError(null);
+    try {
+      const full = await getCompositionFromCloud(item.id);
+      const meta = await suggestCompositionMeta(full.composition);
+      if (meta.description) setEditDescription(meta.description);
+      if (meta.tags.length) setEditTagsInput(meta.tags.join(', '));
+      if (meta.category) setEditCategory(meta.category);
+      if (meta.metaArea) setEditMetaArea(meta.metaArea);
+    } catch (err) {
+      setAiFillError(err instanceof Error ? err.message : 'AI fill failed.');
+    } finally {
+      setAiFilling(false);
+    }
+  };
 
   const [openingId, setOpeningId] = useState<string | null>(null);
 
@@ -778,6 +800,19 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                       {/* Edit form */}
                       {isEditing && (
                         <div className="border-t border-slate-700 pt-2 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-slate-500">Description, tags, category & meta area</span>
+                            <button
+                              onClick={() => void aiFillMeta(item)}
+                              disabled={aiFilling || savingEdit}
+                              title="Let AI (gemma) suggest these from the composition"
+                              className="px-2 py-1 text-xs bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 text-white rounded transition flex items-center gap-1"
+                            >
+                              {aiFilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                              AI fill
+                            </button>
+                          </div>
+                          {aiFillError && <p className="text-[11px] text-red-400">{aiFillError}</p>}
                           <textarea
                             placeholder="Description (one paragraph)"
                             value={editDescription}

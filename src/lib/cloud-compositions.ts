@@ -191,3 +191,33 @@ export const assistComposition = async ({
   }
   return data as AssistResponse;
 };
+
+export type SuggestedMeta = {
+  description: string;
+  category: string;
+  tags: string[];
+  metaArea: string;
+};
+
+/**
+ * Ask the worker (gemma via Workers AI) to suggest description / category /
+ * tags / metaArea for a composition. The editor drops the result into the
+ * portfolio meta form for the user to review + save.
+ */
+export const suggestCompositionMeta = async (composition: CompositionData): Promise<SuggestedMeta> => {
+  const token = getToken();
+  if (!token) throw new Error('Sign in to use AI fill.');
+  const res = await fetch(`${VEMOTION_API}/suggest-meta`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+    body: JSON.stringify({ composition }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'AI fill request failed.');
+  return {
+    description: typeof data.description === 'string' ? data.description : '',
+    category: typeof data.category === 'string' ? data.category : '',
+    tags: Array.isArray(data.tags) ? data.tags.filter((t: unknown) => typeof t === 'string') : [],
+    metaArea: typeof data.metaArea === 'string' ? data.metaArea : '',
+  };
+};

@@ -136,6 +136,7 @@ Can we build a composable, AI-assisted video generation system that is lightweig
 - `GET  /vemotion/renders` — list all render jobs for the authed user
 - `POST /vemotion/video/upload` — upload a video file to the `vemotion-video` R2 bucket (binary body, `X-File-Name` header). Returns `{ url, key }`. Authed.
 - `GET  /vemotion/video?key=<key>` — **public** (no auth — a `<video>` element can't send headers). Streams the file from `vemotion-video` R2 with HTTP Range support (206) so the player can seek. Video-layer sources upload here, NOT the audio/transcription R2.
+- `POST /vemotion/suggest-meta` — body `{ composition }`. Runs **gemma** (`@cf/google/gemma-4-26b-a4b-it`) via the worker's Workers AI binding (`[ai] binding = "AI"`) to suggest `{ description, category, tags[], metaArea }` from a composition summary. Authed. Gemma is a reasoning model — read `resp.choices[0].message.content`, give it `max_tokens >= 4096`.
 
 **Remaining gaps:**
 - Video layer: visual playback + MP4 export shipped (canvas-drawn, z-order respected). NOT yet: muxing the video's own audio into the export (use a separate audio layer), trimming a sub-range of the source clip, looping.

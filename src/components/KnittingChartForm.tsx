@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Upload, Grid3x3 } from 'lucide-react';
+import { Upload, Grid3x3, Loader2 } from 'lucide-react';
 import type { Layer } from '../lib/api';
 import { buildKnittingChart, renderKnittingChart, type KnittingChart } from '../lib/knitting';
+import { uploadImageToAlbum } from '../lib/photoAlbum';
 
 interface KnittingChartFormProps {
   onAdd: (layer: Layer) => void;
@@ -41,6 +42,10 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
   // override any swatch. Re-synced whenever the chart rebuilds (new image /
   // grid / colour-count), since indices change.
   const [palette, setPalette] = useState<string[]>([]);
+  // Source image is persisted to the VEmotion album so the layer can be
+  // re-pixelated later (in the edit form) at a different stitch/colour count.
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceUploading, setSourceUploading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -49,6 +54,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     setName(file.name.replace(/\.[^.]+$/, ''));
+    // Local preview source.
     const reader = new FileReader();
     reader.onload = () => {
       const image = new Image();
@@ -56,6 +62,15 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       image.src = reader.result as string;
     };
     reader.readAsDataURL(file);
+    // Persist the source to the VEmotion album so the grid stays re-editable
+    // (re-pixelate at a new stitch/colour count from the edit form). Non-fatal:
+    // if it fails, the grid still works — it just won't be re-pixelatable.
+    setSourceUrl('');
+    setSourceUploading(true);
+    uploadImageToAlbum(file)
+      .then(setSourceUrl)
+      .catch(() => { /* leave sourceUrl empty; grid still usable */ })
+      .finally(() => setSourceUploading(false));
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -130,6 +145,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         background: BACKGROUND,
         gridColor: GRID_COLOR,
         name: name || 'pixel grid',
+        ...(sourceUrl ? { sourceImage: sourceUrl } : {}),
       },
     };
     onAdd(layer);
@@ -152,9 +168,11 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
           <Upload className="w-4 h-4" /> Choose image
         </button>
         {name && <span className="text-sm text-slate-300 truncate">{name}</span>}
+        {sourceUploading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
       </div>
       <p className="text-xs text-slate-500">
-        The image is pixelated into stitches — it is not stored. Tweak the grid, then add it as a layer.
+        The image is pixelated into stitches. The source is saved to your VEmotion album so you can
+        re-pixelate (change stitches/colours) later from the layer's edit form.
       </p>
 
       {/* Live preview */}
@@ -224,25 +242,24 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         </div>
       </div>
 
-      {/* Editable palette — click a swatch to recolor every pixel using it */}
+      {/* Editable palette — click a small swatch to recolor every pixel using it */}
       {chart && effectivePalette.length > 0 && (
         <div className="space-y-2">
           <label className="text-xs text-slate-400 block">Colors (click to change)</label>
-          <div className="grid grid-cols-8 gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {effectivePalette.map((hex, i) => (
-              <label key={i} className="flex flex-col items-center gap-1 cursor-pointer" title={`Color ${i + 1}: ${hex}`}>
-                <input
-                  type="color"
-                  value={/^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#000000'}
-                  onChange={(e) => setPalette((prev) => {
-                    const base = prev.length === effectivePalette.length ? prev.slice() : effectivePalette.slice();
-                    base[i] = e.target.value;
-                    return base;
-                  })}
-                  className="w-full h-8 rounded border border-slate-600 bg-transparent cursor-pointer"
-                />
-                <span className="text-[10px] text-slate-500">{i + 1}</span>
-              </label>
+              <input
+                key={i}
+                type="color"
+                title={`Color ${i + 1}: ${hex}`}
+                value={/^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#000000'}
+                onChange={(e) => setPalette((prev) => {
+                  const base = prev.length === effectivePalette.length ? prev.slice() : effectivePalette.slice();
+                  base[i] = e.target.value;
+                  return base;
+                })}
+                className="w-6 h-6 rounded border border-slate-600 bg-transparent cursor-pointer p-0"
+              />
             ))}
           </div>
         </div>

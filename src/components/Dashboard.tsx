@@ -483,7 +483,7 @@ export const Dashboard: React.FC = () => {
           style={{ width: sidebarWidth }}
         >
           <div className="p-4" style={{ width: sidebarWidth }}>
-            <CompositionEditor composition={composition} onChange={setComposition} />
+            <CompositionEditor composition={composition} onChange={setComposition} currentFrame={currentFrame} />
           </div>
         </aside>
 

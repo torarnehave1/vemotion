@@ -7,14 +7,16 @@ import { CanvasRenderer } from './renderer';
  * works for any composition). Mirrors the offscreen-canvas setup in
  * thumbnail.ts and the anchor-click download in exporter.ts.
  *
- * Defaults to frame 0, which is correct for a static chart. Image / video
- * layers are preloaded first so they appear; layers that fetch assets inside
- * their draw call (kg-shape, card) may render empty on the first call.
+ * Captures the given frame (the editor passes the current playhead frame).
+ * Image and video layers are preloaded first so they appear; video layers are
+ * seeked to this frame's source time so the screenshot matches the canvas.
+ * Layers that fetch assets inside their draw call (kg-shape, card) may render
+ * empty on the first call.
  */
 export async function exportFramePng(
   composition: CompositionData,
   frameNumber = 0,
-  fileName = 'knitting-chart.png',
+  fileName = 'vemotion-frame.png',
 ): Promise<void> {
   if (!composition || composition.width <= 0 || composition.height <= 0) {
     throw new Error('Invalid composition dimensions');
@@ -23,6 +25,9 @@ export async function exportFramePng(
   const canvas = document.createElement('canvas');
   const renderer = new CanvasRenderer(canvas);
   await renderer.preloadImages(composition);
+  await renderer.preloadVideos(composition);
+  // Seek video layers to this frame's time so the captured frame is correct.
+  await renderer.seekVideos(composition, frameNumber / composition.fps);
   renderer.renderFrame(composition, frameNumber);
 
   const blob = await new Promise<Blob | null>((resolve) =>

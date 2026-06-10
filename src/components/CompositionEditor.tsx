@@ -28,9 +28,11 @@ const SIZE_PRESETS = [
 interface CompositionEditorProps {
   composition: CompositionData;
   onChange: (c: CompositionData) => void;
+  /** Playhead position, so "Export PNG" captures the frame on screen, not frame 0. */
+  currentFrame?: number;
 }
 
-export const CompositionEditor: React.FC<CompositionEditorProps> = ({ composition, onChange }) => {
+export const CompositionEditor: React.FC<CompositionEditorProps> = ({ composition, onChange, currentFrame = 0 }) => {
   const [showModal, setShowModal] = useState(false);
   const [showAnimModal, setShowAnimModal] = useState(false);
   const [showRefitModal, setShowRefitModal] = useState(false);
@@ -57,7 +59,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
     if (exportingPng) return;
     setExportingPng(true);
     try {
-      await exportFramePng(composition);
+      await exportFramePng(composition, Math.max(0, Math.round(currentFrame)));
     } catch (err) {
       console.error('PNG export failed:', err);
     } finally {

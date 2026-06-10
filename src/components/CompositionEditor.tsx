@@ -5,7 +5,8 @@ import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
-import { exportFramePng } from '../lib/screenshot';
+import { exportFramePng, captureFramePngBlob } from '../lib/screenshot';
+import { uploadImageToAlbum, VEMOTION_ALBUM } from '../lib/photoAlbum';
 
 const FONT_PRESETS = [
   { label: 'Inter — neutral default',        value: 'Inter' },
@@ -64,6 +65,28 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       console.error('PNG export failed:', err);
     } finally {
       setExportingPng(false);
+    }
+  };
+
+  const [savingPng, setSavingPng] = useState(false);
+  const [pngAlbumUrl, setPngAlbumUrl] = useState<string | null>(null);
+  const [pngAlbumError, setPngAlbumError] = useState<string | null>(null);
+  const handleSavePngToAlbum = async () => {
+    if (savingPng) return;
+    setSavingPng(true);
+    setPngAlbumUrl(null);
+    setPngAlbumError(null);
+    try {
+      const frame = Math.max(0, Math.round(currentFrame));
+      const blob = await captureFramePngBlob(composition, frame);
+      const file = new File([blob], `vemotion-frame-${frame}.png`, { type: 'image/png' });
+      const url = await uploadImageToAlbum(file);
+      setPngAlbumUrl(url);
+    } catch (err) {
+      console.error('Save PNG to album failed:', err);
+      setPngAlbumError('Save failed. See console.');
+    } finally {
+      setSavingPng(false);
     }
   };
 
@@ -404,6 +427,25 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           : <><ImageIcon className="w-4 h-4" /> Export PNG (screenshot)</>
         }
       </button>
+
+      <button
+        onClick={handleSavePngToAlbum}
+        disabled={savingPng}
+        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        title={`Save the current frame to your "${VEMOTION_ALBUM}" photo album`}
+      >
+        {savingPng
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving to album…</>
+          : <><ImageIcon className="w-4 h-4" /> Save PNG to {VEMOTION_ALBUM} album</>
+        }
+      </button>
+      {pngAlbumUrl && (
+        <p className="text-xs text-emerald-400">
+          Saved to {VEMOTION_ALBUM}.{' '}
+          <a href={pngAlbumUrl} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">View image</a>
+        </p>
+      )}
+      {pngAlbumError && <p className="text-xs text-red-400">{pngAlbumError}</p>}
     </div>
   );
 };

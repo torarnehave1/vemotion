@@ -22,6 +22,27 @@ export async function exportFramePng(
     throw new Error('Invalid composition dimensions');
   }
 
+  const blob = await captureFramePngBlob(composition, frameNumber);
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Render one frame to a PNG Blob (no download). Same rendering path as
+ * exportFramePng — used to save a screenshot to the photo album.
+ */
+export async function captureFramePngBlob(
+  composition: CompositionData,
+  frameNumber = 0,
+): Promise<Blob> {
+  if (!composition || composition.width <= 0 || composition.height <= 0) {
+    throw new Error('Invalid composition dimensions');
+  }
   const canvas = document.createElement('canvas');
   const renderer = new CanvasRenderer(canvas);
   await renderer.preloadImages(composition);
@@ -34,11 +55,5 @@ export async function exportFramePng(
     canvas.toBlob((b) => resolve(b), 'image/png'),
   );
   if (!blob) throw new Error('Failed to encode PNG');
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  return blob;
 }

@@ -19,7 +19,10 @@ export async function uploadImageToAlbum(file: File | Blob, album: string = VEMO
   if (!token || !email) throw new Error('Not authenticated');
 
   const fd = new FormData();
-  fd.append('file', file);
+  // The worker keeps only entries that are `instanceof File`; appending a raw
+  // Blob with a filename makes FormData wrap it as a File so it isn't dropped.
+  const filename = file instanceof File ? file.name : 'screenshot.png';
+  fd.append('file', file, filename);
   fd.append('album', album);
   fd.append('userEmail', email);
 

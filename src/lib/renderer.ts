@@ -1,4 +1,4 @@
-import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnchor } from './api';
+import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnchor, PathMask } from './api';
 import { samplePath } from './pathSampling';
 import { sampleAudioTrack } from './audioAnalysis';
 import { renderKnittingChart, type KnittingChart } from './knitting';
@@ -1355,7 +1355,47 @@ export class CanvasRenderer {
 
     if (!img.complete || img.naturalWidth === 0) return;
 
+    // Optional clip mask (collage cut-out). Applied within drawLayer's
+    // save/restore, so the clip is scoped to this layer only. The mask is
+    // mapped from the SAME draw rect as the image (x,y,w,h) — which already
+    // includes the animation offset — and the layer scale transform is already
+    // on ctx, so the clip travels + scales with the image automatically.
+    const mask = values.mask as PathMask | undefined;
+    if (mask && mask.type === 'path') {
+      this.clipToMask(mask, x, y, w, h);
+    }
+
     drawImageFitted(this.ctx, img, x, y, w, h, fit);
+  }
+
+  /**
+   * Build a clip path from an image layer's local-space mask and apply it to
+   * ctx. Anchors are 0..1 fractions of the layer box; (originX, originY, w, h)
+   * is the image's current draw rect. Bezier handles (in/out) are fractional
+   * offsets in the same space. The region is always closed. No-op for < 3
+   * anchors (can't enclose area). Mirrors drawPath's segment logic.
+   */
+  private clipToMask(mask: PathMask, originX: number, originY: number, w: number, h: number): void {
+    const anchors = mask.anchors;
+    if (!Array.isArray(anchors) || anchors.length < 3) return;
+    const px = (a: PathAnchor) => originX + a.x * w;
+    const py = (a: PathAnchor) => originY + a.y * h;
+    this.ctx.beginPath();
+    this.ctx.moveTo(px(anchors[0]), py(anchors[0]));
+    const seg = (a: PathAnchor, b: PathAnchor) => {
+      if (a.out || b.in) {
+        const c1x = a.out ? px(a) + a.out.x * w : px(a);
+        const c1y = a.out ? py(a) + a.out.y * h : py(a);
+        const c2x = b.in  ? px(b) + b.in.x  * w : px(b);
+        const c2y = b.in  ? py(b) + b.in.y  * h : py(b);
+        this.ctx.bezierCurveTo(c1x, c1y, c2x, c2y, px(b), py(b));
+      } else {
+        this.ctx.lineTo(px(b), py(b));
+      }
+    };
+    for (let i = 1; i < anchors.length; i += 1) seg(anchors[i - 1], anchors[i]);
+    seg(anchors[anchors.length - 1], anchors[0]); // masks are always closed
+    this.ctx.clip();
   }
 
   /**

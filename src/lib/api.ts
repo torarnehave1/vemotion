@@ -257,6 +257,33 @@ export type PathAnchor = {
   out?: { x: number; y: number };
 };
 
+/**
+ * Optional clip mask on an `image` layer (`properties.mask`). When present the
+ * image is clipped to this closed outline — everything outside the outline is
+ * transparent. Lets a single image read as a cut-out shape in a collage.
+ *
+ * Coordinate space: LOCAL to the layer box (the architect-approved choice).
+ * Anchor `x`/`y` are FRACTIONS in 0..1 of the layer's current width/height —
+ * `(0,0)` is the layer's top-left, `(1,1)` its bottom-right. The renderer maps
+ * them to canvas pixels from the layer's live `position` + `size` each frame, so
+ * the mask travels and scales WITH the image when it's moved, resized, or scaled
+ * by an animation. Bezier handles (`in`/`out`, inherited from PathAnchor) are
+ * fractional offsets in the same 0..1 space.
+ *
+ * A mask is always a CLOSED region (the renderer closes it implicitly); needs
+ * at least 3 anchors to enclose area. `invert` and `feather` are reserved for a
+ * later slice and are NOT yet honored by the renderer.
+ */
+export type PathMask = {
+  type: 'path';
+  /** Closed outline in local 0..1 space. >= 3 anchors to enclose a region. */
+  anchors: PathAnchor[];
+  /** Reserved (later slice): clip OUTSIDE the outline instead of inside. */
+  invert?: boolean;
+  /** Reserved (later slice): soft edge width in px. */
+  feather?: number;
+};
+
 export const api = {
   async createVideo(composition: CompositionData) {
     const res = await fetch('/api/video/create', {

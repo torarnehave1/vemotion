@@ -548,6 +548,20 @@ export const Dashboard: React.FC = () => {
                     : l),
                 }));
               }}
+              onRemoveLayerMask={(layerId) => {
+                // Remove an image layer's clip mask. Strip via delete on a spread
+                // copy so every OTHER property survives (Lesson 21, point 2 —
+                // delete, don't rebuild). Rides autosave.
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => {
+                    if (l.id !== layerId) return l;
+                    const properties = { ...l.properties };
+                    delete properties.mask;
+                    return { ...l, properties };
+                  }),
+                }));
+              }}
               onUpdateGuides={(guides) => {
                 // Persist ruler guides into composition.meta.guides. Editor-only
                 // (excluded from MP4 export); rides the existing autosave.

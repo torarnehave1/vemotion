@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
 import type { CompositionData, Layer, PathAnchor, PathMask, Guide } from '../lib/api';
@@ -45,6 +45,11 @@ interface VideoPreviewProps {
    */
   onUpdateLayerMask?: (layerId: string, mask: PathMask) => void;
   /**
+   * Remove an image layer's clip mask (delete `properties.mask`) → the full
+   * image returns. Called by the "Remove mask" button. Rides autosave.
+   */
+  onRemoveLayerMask?: (layerId: string) => void;
+  /**
    * Replace the composition's ruler guides (composition.meta.guides). Called
    * when a guide is created (dragged from a ruler), moved, or deleted (dragged
    * off-canvas). When omitted, the rulers + guide interactions are disabled.
@@ -52,7 +57,7 @@ interface VideoPreviewProps {
   onUpdateGuides?: (guides: Guide[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -770,14 +775,26 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               if (!sel || sel.type !== 'image') return null;
               const hasMask = !!(sel.properties as Record<string, unknown>).mask;
               return (
-                <button
-                  onClick={() => { setMaskTargetId(selectedLayerId); setPenMode(true); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
-                  title={hasMask ? 'Redraw this image’s clip mask' : 'Draw a clip mask to cut this image into a shape'}
-                >
-                  <Scissors className="w-4 h-4" />
-                  {hasMask ? 'Redraw mask' : 'Mask'}
-                </button>
+                <>
+                  <button
+                    onClick={() => { setMaskTargetId(selectedLayerId); setPenMode(true); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                    title={hasMask ? 'Redraw this image’s clip mask' : 'Draw a clip mask to cut this image into a shape'}
+                  >
+                    <Scissors className="w-4 h-4" />
+                    {hasMask ? 'Redraw mask' : 'Mask'}
+                  </button>
+                  {hasMask && onRemoveLayerMask && (
+                    <button
+                      onClick={() => onRemoveLayerMask(selectedLayerId)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-slate-200 border-slate-700 hover:border-rose-700"
+                      title="Remove the clip mask — the full image returns"
+                    >
+                      <Eraser className="w-4 h-4" />
+                      Remove mask
+                    </button>
+                  )}
+                </>
               );
             })()}
             {editMode && selectedLayerId && (() => {

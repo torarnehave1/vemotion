@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download, MousePointer2, PenTool } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
-import type { CompositionData, Layer, PathAnchor, Guide } from '../lib/api';
+import type { CompositionData, Layer, PathAnchor, PathMask, Guide } from '../lib/api';
 import { layerLabel } from '../lib/api';
 import { PenToolOverlay } from './PenToolOverlay';
 import { PathEditOverlay } from './PathEditOverlay';
@@ -39,6 +39,12 @@ interface VideoPreviewProps {
    */
   onUpdatePathAnchors?: (layerId: string, anchors: PathAnchor[]) => void;
   /**
+   * Set (or replace) an image layer's clip mask (`properties.mask`). Called once
+   * when a mask is committed from the pen tool in mask mode. Anchors are already
+   * in the layer's LOCAL 0..1 space. Rides the existing autosave pipeline.
+   */
+  onUpdateLayerMask?: (layerId: string, mask: PathMask) => void;
+  /**
    * Replace the composition's ruler guides (composition.meta.guides). Called
    * when a guide is created (dragged from a ruler), moved, or deleted (dragged
    * off-canvas). When omitted, the rulers + guide interactions are disabled.
@@ -46,7 +52,7 @@ interface VideoPreviewProps {
   onUpdateGuides?: (guides: Guide[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -69,6 +75,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   // Pen Mode — mutually exclusive with Edit Mode. Switching one on turns
   // the other off (see the toggle effects below).
   const [penMode, setPenMode] = useState(false);
+  // When non-null, the pen tool is in MASK mode authoring a clip outline for
+  // this image layer (instead of creating a new path layer). Set by the Mask
+  // button; cleared whenever pen mode exits.
+  const [maskTargetId, setMaskTargetId] = useState<string | null>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [hoverLayerId, setHoverLayerId] = useState<string | null>(null);
   // Drag in-flight state. Tracks final committed position; on mouseup we
@@ -198,6 +208,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       setEditMode(false);
       setSelectedLayerId(null);
       setHoverLayerId(null);
+    } else {
+      // Leaving pen mode (finish, cancel, or toggling the button) always
+      // clears the mask target so the next pen session starts as a plain path.
+      setMaskTargetId(null);
     }
   }, [penMode]);
 
@@ -206,6 +220,32 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   // follower dot whose motionScene references the path id. Reuses the
   // existing onAddLayers wire so autosave catches the change.
   const handlePenFinish = useCallback((pathLayer: Layer) => {
+    // ── Mask mode ──────────────────────────────────────────────────────────
+    // The outline was authored in composition-pixel coords. Convert each anchor
+    // (and its Bezier handles) into the target image layer's LOCAL 0..1 space so
+    // the mask travels + scales with the image (PathMask contract). Then hand it
+    // to the mask-update callback instead of adding a new path layer.
+    if (maskTargetId) {
+      const target = composition.layers.find((l) => l.id === maskTargetId);
+      const px = (pathLayer.properties.anchors as PathAnchor[] | undefined) ?? [];
+      if (onUpdateLayerMask && target && target.size.width > 0 && target.size.height > 0 && px.length >= 3) {
+        const w = target.size.width;
+        const h = target.size.height;
+        const ox = target.position.x;
+        const oy = target.position.y;
+        const localAnchors: PathAnchor[] = px.map((a) => ({
+          x: (a.x - ox) / w,
+          y: (a.y - oy) / h,
+          ...(a.in  ? { in:  { x: a.in.x  / w, y: a.in.y  / h } } : {}),
+          ...(a.out ? { out: { x: a.out.x / w, y: a.out.y / h } } : {}),
+        }));
+        onUpdateLayerMask(maskTargetId, { type: 'path', anchors: localAnchors });
+      }
+      setPenMode(false); // effect clears maskTargetId
+      return;
+    }
+
+    // ── Path mode (default) ────────────────────────────────────────────────
     if (!onAddLayers) {
       setPenMode(false);
       return;
@@ -235,7 +275,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     };
     onAddLayers([pathLayer, dotLayer]);
     setPenMode(false);
-  }, [composition.duration, onAddLayers]);
+  }, [composition.duration, composition.layers, onAddLayers, maskTargetId, onUpdateLayerMask]);
 
   // Seek when timeline sends a frame
   useEffect(() => {
@@ -631,6 +671,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               <PenToolOverlay
                 compositionWidth={composition.width}
                 compositionHeight={composition.height}
+                mode={maskTargetId ? 'mask' : 'path'}
                 onFinish={handlePenFinish}
                 onCancel={() => setPenMode(false)}
               />
@@ -721,6 +762,24 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               <PenTool className="w-4 h-4" />
               {penMode ? 'Drawing' : 'Pen'}
             </button>
+            {/* Mask button — only for a selected IMAGE layer. Enters the pen
+                tool in mask mode bound to that image; the committed outline
+                becomes the image's clip mask (collage cut-out). */}
+            {editMode && selectedLayerId && onUpdateLayerMask && (() => {
+              const sel = composition.layers.find((l) => l.id === selectedLayerId);
+              if (!sel || sel.type !== 'image') return null;
+              const hasMask = !!(sel.properties as Record<string, unknown>).mask;
+              return (
+                <button
+                  onClick={() => { setMaskTargetId(selectedLayerId); setPenMode(true); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                  title={hasMask ? 'Redraw this image’s clip mask' : 'Draw a clip mask to cut this image into a shape'}
+                >
+                  <Scissors className="w-4 h-4" />
+                  {hasMask ? 'Redraw mask' : 'Mask'}
+                </button>
+              );
+            })()}
             {editMode && selectedLayerId && (() => {
               const sel = composition.layers.find((l) => l.id === selectedLayerId);
               return (

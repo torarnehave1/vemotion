@@ -5,6 +5,14 @@ interface PenToolOverlayProps {
   /** Composition dimensions — drives the SVG viewBox so anchor coords map 1:1 to canvas pixels. */
   compositionWidth: number;
   compositionHeight: number;
+  /**
+   * 'path' (default) authors an open path layer (>= 2 anchors). 'mask' authors a
+   * CLOSED clip outline (>= 3 anchors) for an image layer. The committed layer's
+   * `properties.anchors` are still in composition-pixel coords either way; the
+   * caller converts them to the image's local space in mask mode. The mode only
+   * changes labels, the minimum anchor count, and the `closed` flag.
+   */
+  mode?: 'path' | 'mask';
   /** Called when the user finishes the path (Enter / Escape / Finish button). */
   onFinish: (layer: Layer) => void;
   /** Called when the user cancels without committing (no anchors yet, or explicit Cancel). */
@@ -53,6 +61,7 @@ type Gesture =
 export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   compositionWidth,
   compositionHeight,
+  mode = 'path',
   onFinish,
   onCancel,
 }) => {
@@ -62,6 +71,10 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   // Live "alt-held" so the dragging-handle gesture knows whether to mirror.
   const altRef = useRef(false);
+  // A mask must ENCLOSE area → needs >= 3 anchors and a closed outline; an
+  // open path is usable with 2.
+  const isMask = mode === 'mask';
+  const minAnchors = isMask ? 3 : 2;
 
   // ── client ↔ SVG userspace coords + screen-px → SVG-units factor ───────────
   const clientToUserspace = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -264,7 +277,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
 
   // ── Finish + cancel + undo ─────────────────────────────────────────────────
   const finish = useCallback(() => {
-    if (anchors.length < 2) {
+    if (anchors.length < minAnchors) {
       onCancel();
       return;
     }
@@ -280,7 +293,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
           ...(a.in  ? { in:  { x: Math.round(a.in.x),  y: Math.round(a.in.y)  } } : {}),
           ...(a.out ? { out: { x: Math.round(a.out.x), y: Math.round(a.out.y) } } : {}),
         })),
-        closed: false,
+        closed: isMask,
         strokeColor: '#fbbf24',
         strokeWidth: 2,
         showInPreview: true,
@@ -288,7 +301,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     };
     onFinish(layer);
     setAnchors([]);
-  }, [anchors, compositionWidth, compositionHeight, onFinish]);
+  }, [anchors, compositionWidth, compositionHeight, onFinish, minAnchors, isMask]);
 
   // Keyboard: Enter / Esc / Backspace.
   useEffect(() => {
@@ -458,9 +471,9 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
       {/* Floating instruction + action bar */}
       <div className="absolute left-3 top-3 z-10 flex items-center gap-2 pointer-events-none">
         <div className="pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 shadow-2xl flex items-center gap-3">
-          <span className="font-medium">Pen tool</span>
+          <span className="font-medium">{isMask ? 'Mask tool' : 'Pen tool'}</span>
           <span className="text-slate-400">
-            {anchors.length === 0 ? 'Click to start path (drag to set curve)'
+            {anchors.length === 0 ? (isMask ? 'Click around the part of the image to keep (drag to set curve)' : 'Click to start path (drag to set curve)')
               : `${anchors.length} anchor${anchors.length === 1 ? '' : 's'}`}
             {' · drag handles to reshape · right-click anchor to toggle smooth/corner'}
             {' · Enter to finish · Esc to cancel · Backspace to undo'}
@@ -468,10 +481,10 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
         </div>
         <button
           onClick={finish}
-          disabled={anchors.length < 2}
+          disabled={anchors.length < minAnchors}
           className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white shadow-2xl"
         >
-          Finish ({anchors.length})
+          {isMask ? 'Apply mask' : 'Finish'} ({anchors.length})
         </button>
         <button
           onClick={() => { setAnchors([]); onCancel(); }}

@@ -538,6 +538,16 @@ export const Dashboard: React.FC = () => {
                     : l),
                 }));
               }}
+              onUpdateLayerMask={(layerId, mask) => {
+                // Set an image layer's clip mask. Spread-and-override so every
+                // other property survives (Lesson 21). Rides autosave.
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => l.id === layerId
+                    ? { ...l, properties: { ...l.properties, mask } }
+                    : l),
+                }));
+              }}
               onUpdateGuides={(guides) => {
                 // Persist ruler guides into composition.meta.guides. Editor-only
                 // (excluded from MP4 export); rides the existing autosave.

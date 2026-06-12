@@ -5,7 +5,7 @@ import { PixelGridEditForm } from './PixelGridEditForm';
 import { KnittingChartForm } from './KnittingChartForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off } from 'lucide-react';
-import type { AudioTrack, Layer, MotionScene } from '../lib/api';
+import type { AudioTrack, Layer, MotionScene, PathMask } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
@@ -514,6 +514,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     _ea ? _ea.keyframes[_ea.keyframes.length - 1].time : Math.min(2, compositionDuration)
   );
 
+  // Existing clip mask on the image being edited (if any) + its feather, so the
+  // form can offer a soft-edge control (Slice 5, control C — the number field).
+  const editMask = (editingLayer?.properties as Record<string, unknown> | undefined)?.mask as PathMask | undefined;
+  const [maskFeather, setMaskFeather] = useState<number>(
+    typeof editMask?.feather === 'number' ? editMask.feather : 0,
+  );
+
   const handleSaveImage = () => {
     if (!editingLayer || !isImgLayer) return;
     let motionScenes: MotionScene[] | undefined;
@@ -563,6 +570,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         name: imgName,
         fit: imgFit,
         opacity: opacityValue,
+        // Update feather on the existing mask only (don't invent one). 0 → drop
+        // the key for a hard edge. Spread preserves anchors/invert (Lesson 21).
+        ...(editMask ? { mask: { ...editMask, feather: maskFeather > 0 ? maskFeather : undefined } } : {}),
         ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
       },
     });
@@ -1153,6 +1163,22 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               </div>
 
               {opacityField}
+
+              {/* Mask feather (Slice 5, control C — number field). Only shown
+                  when this image already has a clip mask. 0 = hard edge. */}
+              {editMask && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Mask feather (soft edge, px)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={maskFeather}
+                    onChange={e => setMaskFeather(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">0 = hard edge · higher = softer. Same value as the canvas Feather slider.</p>
+                </div>
+              )}
 
               {/* Position & size */}
               <div className="grid grid-cols-2 gap-3">

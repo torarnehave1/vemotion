@@ -271,8 +271,7 @@ export type PathAnchor = {
  * fractional offsets in the same 0..1 space.
  *
  * A mask is always a CLOSED region (the renderer closes it implicitly); needs
- * at least 3 anchors to enclose area. `invert` and `feather` are reserved for a
- * later slice and are NOT yet honored by the renderer.
+ * at least 3 anchors to enclose area.
  */
 export type PathMask = {
   type: 'path';
@@ -280,7 +279,11 @@ export type PathMask = {
   anchors: PathAnchor[];
   /** Reserved (later slice): clip OUTSIDE the outline instead of inside. */
   invert?: boolean;
-  /** Reserved (later slice): soft edge width in px. */
+  /**
+   * Soft-edge width in pixels. Absent or 0 = hard edge (a plain clip). When > 0
+   * the renderer feathers the mask edge by that blur radius via an offscreen
+   * alpha mask. Per-mask + opt-in — default behaviour is unchanged.
+   */
   feather?: number;
 };
 

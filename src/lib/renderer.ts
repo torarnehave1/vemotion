@@ -1360,8 +1360,14 @@ export class CanvasRenderer {
     // mapped from the SAME draw rect as the image (x,y,w,h) — which already
     // includes the animation offset — and the layer scale transform is already
     // on ctx, so the clip travels + scales with the image automatically.
+    // feather > 0 → soft edge (offscreen alpha mask); otherwise a hard clip.
     const mask = values.mask as PathMask | undefined;
-    if (mask && mask.type === 'path') {
+    if (mask && mask.type === 'path' && Array.isArray(mask.anchors) && mask.anchors.length >= 3) {
+      const feather = typeof mask.feather === 'number' && mask.feather > 0 ? mask.feather : 0;
+      if (feather > 0) {
+        this.drawImageFeatheredMask(img, x, y, w, h, fit, mask, feather);
+        return;
+      }
       this.clipToMask(mask, x, y, w, h);
     }
 
@@ -1369,33 +1375,66 @@ export class CanvasRenderer {
   }
 
   /**
-   * Build a clip path from an image layer's local-space mask and apply it to
-   * ctx. Anchors are 0..1 fractions of the layer box; (originX, originY, w, h)
-   * is the image's current draw rect. Bezier handles (in/out) are fractional
-   * offsets in the same space. The region is always closed. No-op for < 3
-   * anchors (can't enclose area). Mirrors drawPath's segment logic.
+   * Trace an image layer's local-space mask outline into `ctx` as a closed
+   * path (no clip/fill — caller decides). Anchors are 0..1 fractions of the
+   * layer box; (originX, originY, w, h) is the draw rect. Bezier handles
+   * (in/out) are fractional offsets in the same space. Returns false (nothing
+   * traced) for < 3 anchors. Mirrors drawPath's segment logic. Shared by the
+   * hard-clip and feather paths.
    */
-  private clipToMask(mask: PathMask, originX: number, originY: number, w: number, h: number): void {
+  private traceMaskPath(ctx: CanvasRenderingContext2D, mask: PathMask, originX: number, originY: number, w: number, h: number): boolean {
     const anchors = mask.anchors;
-    if (!Array.isArray(anchors) || anchors.length < 3) return;
+    if (!Array.isArray(anchors) || anchors.length < 3) return false;
     const px = (a: PathAnchor) => originX + a.x * w;
     const py = (a: PathAnchor) => originY + a.y * h;
-    this.ctx.beginPath();
-    this.ctx.moveTo(px(anchors[0]), py(anchors[0]));
+    ctx.beginPath();
+    ctx.moveTo(px(anchors[0]), py(anchors[0]));
     const seg = (a: PathAnchor, b: PathAnchor) => {
       if (a.out || b.in) {
         const c1x = a.out ? px(a) + a.out.x * w : px(a);
         const c1y = a.out ? py(a) + a.out.y * h : py(a);
         const c2x = b.in  ? px(b) + b.in.x  * w : px(b);
         const c2y = b.in  ? py(b) + b.in.y  * h : py(b);
-        this.ctx.bezierCurveTo(c1x, c1y, c2x, c2y, px(b), py(b));
+        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, px(b), py(b));
       } else {
-        this.ctx.lineTo(px(b), py(b));
+        ctx.lineTo(px(b), py(b));
       }
     };
     for (let i = 1; i < anchors.length; i += 1) seg(anchors[i - 1], anchors[i]);
     seg(anchors[anchors.length - 1], anchors[0]); // masks are always closed
-    this.ctx.clip();
+    return true;
+  }
+
+  /** Hard-edge mask: trace + ctx.clip(). */
+  private clipToMask(mask: PathMask, originX: number, originY: number, w: number, h: number): void {
+    if (this.traceMaskPath(this.ctx, mask, originX, originY, w, h)) this.ctx.clip();
+  }
+
+  /**
+   * Soft-edge mask: draw the image into an offscreen canvas the size of the
+   * draw rect (padded by the blur falloff), knock it out with a blurred white
+   * fill of the mask via `destination-in`, then blit the result back. The blur
+   * radius IS the feather width; the padding keeps the soft edge from being
+   * clipped by the offscreen bounds. Runs under the main ctx's scale + alpha,
+   * so a feathered mask still travels/scales with the image like the hard one.
+   */
+  private drawImageFeatheredMask(img: HTMLImageElement, x: number, y: number, w: number, h: number, fit: string, mask: PathMask, feather: number): void {
+    const pad = Math.ceil(feather * 3); // cover the blur falloff on every side
+    const off = document.createElement('canvas');
+    off.width  = Math.max(1, Math.ceil(w) + pad * 2);
+    off.height = Math.max(1, Math.ceil(h) + pad * 2);
+    const octx = off.getContext('2d');
+    if (!octx) { drawImageFitted(this.ctx, img, x, y, w, h, fit); return; }
+    // Image sits at (pad,pad) so the soft edge has room to bleed into the pad.
+    drawImageFitted(octx, img, pad, pad, w, h, fit);
+    octx.globalCompositeOperation = 'destination-in';
+    octx.filter = `blur(${feather}px)`;
+    octx.fillStyle = '#ffffff';
+    if (this.traceMaskPath(octx, mask, pad, pad, w, h)) octx.fill();
+    octx.filter = 'none';
+    octx.globalCompositeOperation = 'source-over';
+    // Blit so the offscreen's (pad,pad) lands at the image's (x,y).
+    this.ctx.drawImage(off, x - pad, y - pad);
   }
 
   /**

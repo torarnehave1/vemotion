@@ -50,6 +50,11 @@ interface VideoPreviewProps {
    */
   onRemoveLayerMask?: (layerId: string) => void;
   /**
+   * Set the feather (soft-edge px) on an image layer's existing mask. Called
+   * live as the canvas Feather slider moves. 0 = hard edge. Rides autosave.
+   */
+  onSetMaskFeather?: (layerId: string, feather: number) => void;
+  /**
    * Replace the composition's ruler guides (composition.meta.guides). Called
    * when a guide is created (dragged from a ruler), moved, or deleted (dragged
    * off-canvas). When omitted, the rulers + guide interactions are disabled.
@@ -57,7 +62,7 @@ interface VideoPreviewProps {
   onUpdateGuides?: (guides: Guide[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -794,6 +799,27 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                       Remove mask
                     </button>
                   )}
+                  {hasMask && onSetMaskFeather && (() => {
+                    const mask = (sel.properties as Record<string, unknown>).mask as { feather?: number } | undefined;
+                    const featherVal = typeof mask?.feather === 'number' ? mask.feather : 0;
+                    return (
+                      <label
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-300 bg-slate-800 border border-slate-700"
+                        title="Soften the mask edge (0 = hard edge)"
+                      >
+                        Feather
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={featherVal}
+                          onChange={(e) => onSetMaskFeather(selectedLayerId, parseInt(e.target.value) || 0)}
+                          className="w-24 accent-sky-500"
+                        />
+                        <span className="w-9 tabular-nums text-right">{featherVal}px</span>
+                      </label>
+                    );
+                  })()}
                 </>
               );
             })()}

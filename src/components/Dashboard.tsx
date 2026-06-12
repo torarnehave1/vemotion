@@ -548,6 +548,21 @@ export const Dashboard: React.FC = () => {
                     : l),
                 }));
               }}
+              onSetMaskFeather={(layerId, feather) => {
+                // Update only the feather on an image layer's existing mask.
+                // Spread-and-override (Lesson 21); 0 → delete the key (hard edge).
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => {
+                    if (l.id !== layerId) return l;
+                    const props = l.properties as Record<string, unknown>;
+                    if (!props.mask) return l;
+                    const nextMask = { ...(props.mask as Record<string, unknown>) };
+                    if (feather > 0) nextMask.feather = feather; else delete nextMask.feather;
+                    return { ...l, properties: { ...l.properties, mask: nextMask } };
+                  }),
+                }));
+              }}
               onRemoveLayerMask={(layerId) => {
                 // Remove an image layer's clip mask. Strip via delete on a spread
                 // copy so every OTHER property survives (Lesson 21, point 2 —

@@ -277,7 +277,11 @@ export type PathMask = {
   type: 'path';
   /** Closed outline in local 0..1 space. >= 3 anchors to enclose a region. */
   anchors: PathAnchor[];
-  /** Reserved (later slice): clip OUTSIDE the outline instead of inside. */
+  /**
+   * When true, clip OUTSIDE the outline instead of inside — the shape becomes a
+   * hole and the rest of the image is kept. Honored by the renderer (even-odd
+   * fill with the layer rect). Absent/false = keep inside (default).
+   */
   invert?: boolean;
   /**
    * Soft-edge width in pixels. Absent or 0 = hard edge (a plain clip). When > 0

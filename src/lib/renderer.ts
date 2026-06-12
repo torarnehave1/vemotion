@@ -1375,19 +1375,18 @@ export class CanvasRenderer {
   }
 
   /**
-   * Trace an image layer's local-space mask outline into `ctx` as a closed
-   * path (no clip/fill — caller decides). Anchors are 0..1 fractions of the
-   * layer box; (originX, originY, w, h) is the draw rect. Bezier handles
-   * (in/out) are fractional offsets in the same space. Returns false (nothing
-   * traced) for < 3 anchors. Mirrors drawPath's segment logic. Shared by the
-   * hard-clip and feather paths.
+   * Append an image layer's local-space mask outline to `ctx`'s CURRENT path as
+   * one closed subpath (does NOT call beginPath or clip/fill — caller decides,
+   * so an outer rect can be prepended for the inverted/even-odd case). Anchors
+   * are 0..1 fractions of the layer box; (originX, originY, w, h) is the draw
+   * rect. Bezier handles (in/out) are fractional offsets in the same space.
+   * Returns false (nothing appended) for < 3 anchors. Mirrors drawPath's logic.
    */
-  private traceMaskPath(ctx: CanvasRenderingContext2D, mask: PathMask, originX: number, originY: number, w: number, h: number): boolean {
+  private appendMaskOutline(ctx: CanvasRenderingContext2D, mask: PathMask, originX: number, originY: number, w: number, h: number): boolean {
     const anchors = mask.anchors;
     if (!Array.isArray(anchors) || anchors.length < 3) return false;
     const px = (a: PathAnchor) => originX + a.x * w;
     const py = (a: PathAnchor) => originY + a.y * h;
-    ctx.beginPath();
     ctx.moveTo(px(anchors[0]), py(anchors[0]));
     const seg = (a: PathAnchor, b: PathAnchor) => {
       if (a.out || b.in) {
@@ -1405,9 +1404,17 @@ export class CanvasRenderer {
     return true;
   }
 
-  /** Hard-edge mask: trace + ctx.clip(). */
+  /**
+   * Hard-edge mask clip. `invert` clips OUTSIDE the outline (keep everything
+   * except the shape): trace the draw-rect rectangle PLUS the mask outline and
+   * clip with the even-odd rule, so the mask region becomes the hole.
+   */
   private clipToMask(mask: PathMask, originX: number, originY: number, w: number, h: number): void {
-    if (this.traceMaskPath(this.ctx, mask, originX, originY, w, h)) this.ctx.clip();
+    this.ctx.beginPath();
+    if (mask.invert) this.ctx.rect(originX, originY, w, h);
+    const traced = this.appendMaskOutline(this.ctx, mask, originX, originY, w, h);
+    if (!traced && !mask.invert) return;
+    this.ctx.clip(mask.invert ? 'evenodd' : 'nonzero');
   }
 
   /**
@@ -1417,6 +1424,11 @@ export class CanvasRenderer {
    * radius IS the feather width; the padding keeps the soft edge from being
    * clipped by the offscreen bounds. Runs under the main ctx's scale + alpha,
    * so a feathered mask still travels/scales with the image like the hard one.
+   *
+   * `invert` keeps the area OUTSIDE the outline: fill the whole (padded)
+   * offscreen and even-odd-subtract the mask, so only the hole edge is
+   * feathered — the image's own border stays crisp (the outer rect's blurred
+   * edge falls in the padding, beyond the image).
    */
   private drawImageFeatheredMask(img: HTMLImageElement, x: number, y: number, w: number, h: number, fit: string, mask: PathMask, feather: number): void {
     const pad = Math.ceil(feather * 3); // cover the blur falloff on every side
@@ -1430,7 +1442,10 @@ export class CanvasRenderer {
     octx.globalCompositeOperation = 'destination-in';
     octx.filter = `blur(${feather}px)`;
     octx.fillStyle = '#ffffff';
-    if (this.traceMaskPath(octx, mask, pad, pad, w, h)) octx.fill();
+    octx.beginPath();
+    if (mask.invert) octx.rect(0, 0, off.width, off.height);
+    this.appendMaskOutline(octx, mask, pad, pad, w, h);
+    octx.fill(mask.invert ? 'evenodd' : 'nonzero');
     octx.filter = 'none';
     octx.globalCompositeOperation = 'source-over';
     // Blit so the offscreen's (pad,pad) lands at the image's (x,y).

@@ -55,6 +55,11 @@ interface VideoPreviewProps {
    */
   onSetMaskFeather?: (layerId: string, feather: number) => void;
   /**
+   * Toggle invert on an image layer's existing mask (clip outside the outline).
+   * Called by the canvas Invert toggle. false = keep inside. Rides autosave.
+   */
+  onSetMaskInvert?: (layerId: string, invert: boolean) => void;
+  /**
    * Replace the composition's ruler guides (composition.meta.guides). Called
    * when a guide is created (dragged from a ruler), moved, or deleted (dragged
    * off-canvas). When omitted, the rulers + guide interactions are disabled.
@@ -62,7 +67,7 @@ interface VideoPreviewProps {
   onUpdateGuides?: (guides: Guide[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -818,6 +823,25 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                         />
                         <span className="w-9 tabular-nums text-right">{featherVal}px</span>
                       </label>
+                    );
+                  })()}
+                  {hasMask && onSetMaskInvert && (() => {
+                    const mask = (sel.properties as Record<string, unknown>).mask as { invert?: boolean } | undefined;
+                    const inverted = !!mask?.invert;
+                    return (
+                      <button
+                        onClick={() => onSetMaskInvert(selectedLayerId, !inverted)}
+                        className={[
+                          'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
+                          inverted
+                            ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                        ].join(' ')}
+                        title={inverted ? 'Mask is inverted — clipping OUTSIDE the outline (a hole). Click to keep inside.' : 'Invert the mask — clip OUTSIDE the outline (cut a hole) instead of keeping inside'}
+                      >
+                        <Scissors className="w-4 h-4" />
+                        {inverted ? 'Inverted' : 'Invert'}
+                      </button>
                     );
                   })()}
                 </>

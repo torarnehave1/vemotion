@@ -563,6 +563,21 @@ export const Dashboard: React.FC = () => {
                   }),
                 }));
               }}
+              onSetMaskInvert={(layerId, invert) => {
+                // Toggle invert on an image layer's existing mask. Spread-and-
+                // override (Lesson 21); false → delete the key (keep inside).
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => {
+                    if (l.id !== layerId) return l;
+                    const props = l.properties as Record<string, unknown>;
+                    if (!props.mask) return l;
+                    const nextMask = { ...(props.mask as Record<string, unknown>) };
+                    if (invert) nextMask.invert = true; else delete nextMask.invert;
+                    return { ...l, properties: { ...l.properties, mask: nextMask } };
+                  }),
+                }));
+              }}
               onRemoveLayerMask={(layerId) => {
                 // Remove an image layer's clip mask. Strip via delete on a spread
                 // copy so every OTHER property survives (Lesson 21, point 2 —

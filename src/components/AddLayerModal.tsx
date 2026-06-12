@@ -520,6 +520,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [maskFeather, setMaskFeather] = useState<number>(
     typeof editMask?.feather === 'number' ? editMask.feather : 0,
   );
+  const [maskInvert, setMaskInvert] = useState<boolean>(!!editMask?.invert);
 
   const handleSaveImage = () => {
     if (!editingLayer || !isImgLayer) return;
@@ -570,9 +571,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         name: imgName,
         fit: imgFit,
         opacity: opacityValue,
-        // Update feather on the existing mask only (don't invent one). 0 → drop
-        // the key for a hard edge. Spread preserves anchors/invert (Lesson 21).
-        ...(editMask ? { mask: { ...editMask, feather: maskFeather > 0 ? maskFeather : undefined } } : {}),
+        // Update feather + invert on the existing mask only (don't invent one).
+        // 0 / false → drop the key. Spread preserves anchors (Lesson 21).
+        ...(editMask ? { mask: { ...editMask, feather: maskFeather > 0 ? maskFeather : undefined, invert: maskInvert ? true : undefined } } : {}),
         ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
       },
     });
@@ -1177,6 +1178,15 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">0 = hard edge · higher = softer. Same value as the canvas Feather slider.</p>
+                  <label className="flex items-center gap-2 mt-3 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={maskInvert}
+                      onChange={e => setMaskInvert(e.target.checked)}
+                      className="accent-sky-500"
+                    />
+                    Invert (clip outside the outline — cut a hole)
+                  </label>
                 </div>
               )}
 

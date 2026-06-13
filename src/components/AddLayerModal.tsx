@@ -254,8 +254,13 @@ function buildAnimation(
   }
 }
 
+// Monotonic suffix so ids stay unique even when many layers are created in
+// the same millisecond (e.g. multi-image batch insert builds them in one
+// synchronous .map() — Date.now() alone collided, giving every layer the same
+// id so the editor dragged/toggled them as one).
+let idCounter = 0;
 function generateId() {
-  return `layer-${Date.now().toString(36)}`;
+  return `layer-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
 }
 
 function detectPresetFromAnimation(animation: Layer['animation'] | undefined): AnimationPreset {

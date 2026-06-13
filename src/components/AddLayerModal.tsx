@@ -1030,10 +1030,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800 shrink-0">
           <h2 className="text-lg font-semibold text-white">{isEditing ? `Edit layer — ${editingLayer.id}` : 'Add Layer'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition">
             <X className="w-5 h-5" />
@@ -1042,7 +1042,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
         {/* Tabs — hidden when editing an existing layer */}
         {!isEditing && (
-          <div className="flex border-b border-slate-800">
+          <div className="flex border-b border-slate-800 shrink-0">
             <button
               onClick={() => setTab('manual')}
               className={`flex-1 py-3 text-sm font-medium transition ${tab === 'manual' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
@@ -1100,7 +1100,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
           </div>
         )}
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
           {isVideoLayer ? (
             <VideoLayerForm
               compositionWidth={compositionWidth}

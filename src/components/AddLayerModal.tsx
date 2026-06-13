@@ -4,7 +4,7 @@ import { VideoLayerForm } from './VideoLayerForm';
 import { PixelGridEditForm } from './PixelGridEditForm';
 import { KnittingChartForm } from './KnittingChartForm';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off } from 'lucide-react';
+import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off, Check } from 'lucide-react';
 import type { AudioTrack, Layer, MotionScene, PathMask } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
@@ -102,6 +102,12 @@ interface AlbumImage {
 
 interface AddLayerModalProps {
   onAdd: (layer: Layer) => void;
+  /**
+   * Optional — batch insert. Used by the Images tab to add several image
+   * layers in one composition update (multi-select). Falls back to repeated
+   * onAdd when absent.
+   */
+  onAddLayers?: (layers: Layer[]) => void;
   /**
    * Optional — forwarded to AudioLayerForm. When provided, adding an audio
    * layer triggers Web-Audio amplitude analysis on the audio file; the
@@ -333,7 +339,7 @@ function parseMotionScenes(json: string): MotionScene[] | undefined {
 }
 
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
-  onAdd, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
+  onAdd, onAddLayers, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
 }) => {
   const isEditing  = !!editingLayer;
   const isKgShape  = editingLayer?.type === 'kg-shape';
@@ -622,6 +628,21 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Multi-select state for the Images tab. Holds the `key` of each selected
+  // album image. Only active in add mode (not the edit-mode "Replace image"
+  // flow, which stays single-click).
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [inserting, setInserting] = useState(false);
+
+  const toggleSelect = (key: string) => {
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   // Available albums (fetched from vegvisr-albums-worker). Lazily populated
   // the first time the Images tab is opened. The current `albumName` is
   // always rendered as an option even if it is not in the returned list,
@@ -721,6 +742,53 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       onClose();
     };
     el.src = img.url;
+  };
+
+  // Measure an image's natural size off-DOM. Resolves to a half-canvas
+  // fallback if the image can't be loaded, so a batch insert never stalls.
+  const measureImage = (url: string): Promise<{ w: number; h: number }> =>
+    new Promise(resolve => {
+      const el = new Image();
+      el.crossOrigin = 'anonymous';
+      el.onload = () => resolve({ w: el.naturalWidth || 400, h: el.naturalHeight || 400 });
+      el.onerror = () =>
+        resolve({ w: Math.round(compositionWidth / 2), h: Math.round(compositionHeight / 2) });
+      el.src = url;
+    });
+
+  // Insert every selected album image as its own image layer in one batch.
+  // Each is clamped to the canvas (aspect preserved) and cascade-offset
+  // ~40px down-right from the previous so they fan out instead of stacking.
+  const handleInsertSelected = async () => {
+    const picked = albumImages.filter(img => selectedKeys.has(img.key));
+    if (picked.length === 0) return;
+    setInserting(true);
+    try {
+      const sizes = await Promise.all(picked.map(img => measureImage(img.url)));
+      const layers: Layer[] = picked.map((img, i) => {
+        const scale = Math.min(
+          sizes[i].w > compositionWidth ? compositionWidth / sizes[i].w : 1,
+          sizes[i].h > compositionHeight ? compositionHeight / sizes[i].h : 1,
+        );
+        const w = Math.round(sizes[i].w * scale);
+        const h = Math.round(sizes[i].h * scale);
+        const off = i * 40;
+        const x = Math.min(Math.max(0, Math.round((compositionWidth - w) / 2) + off), Math.max(0, compositionWidth - w));
+        const y = Math.min(Math.max(0, Math.round((compositionHeight - h) / 2) + off), Math.max(0, compositionHeight - h));
+        return {
+          id: generateId(),
+          type: 'image',
+          position: { x, y },
+          size: { width: w, height: h },
+          properties: { src: img.url, fit: 'cover', name: img.displayName ?? img.name ?? img.key },
+        };
+      });
+      if (onAddLayers) onAddLayers(layers);
+      else layers.forEach(onAdd);
+      onClose();
+    } finally {
+      setInserting(false);
+    }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -952,6 +1020,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     </div>
   );
 
+  // Multi-image selection is available in add mode only. The edit-mode
+  // "Replace image" flow keeps single-click-to-swap.
+  const multiImageSelect = !(isImgLayer && replacingImage);
+  const allImagesSelected = albumImages.length > 0 && albumImages.every(img => selectedKeys.has(img.key));
+  const toggleSelectAll = () =>
+    setSelectedKeys(allImagesSelected ? new Set() : new Set(albumImages.map(img => img.key)));
+
   // Album picker + upload + image grid. Shared by the Add-layer Images tab and
   // the edit-mode "Replace image" flow. `handleImagePick` branches on
   // `replacingImage` to decide whether to add a new layer or swap the source.
@@ -964,6 +1039,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             onChange={e => {
               const next = e.target.value;
               setAlbumName(next);
+              setSelectedKeys(new Set());
               fetchAlbum(next);
             }}
             disabled={albumsLoading}
@@ -997,13 +1073,42 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       {imagesLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
       {imagesError && <p className="text-red-400 text-sm">{imagesError}</p>}
 
+      {/* Selection toolbar — add mode only. In replace mode the grid is a
+          single-click source swap, so no multi-select affordances are shown. */}
+      {multiImageSelect && albumImages.length > 0 && (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            onClick={toggleSelectAll}
+            className="text-xs text-sky-400 hover:text-sky-300 transition"
+          >
+            {allImagesSelected ? 'Clear selection' : 'Select all'}
+          </button>
+          <span className="text-xs text-slate-500">
+            {selectedKeys.size > 0 ? `${selectedKeys.size} selected` : 'Click images to select'}
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-3 max-h-80 overflow-y-auto">
-        {albumImages.map(img => (
+        {albumImages.map(img => {
+          const selected = selectedKeys.has(img.key);
+          return (
           <button
             key={img.key}
-            onClick={() => handleImagePick(img)}
-            className="flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-sky-500 rounded-xl transition group"
+            onClick={() => (multiImageSelect ? toggleSelect(img.key) : handleImagePick(img))}
+            className={`relative flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 border rounded-xl transition group ${
+              selected ? 'border-sky-500 ring-2 ring-sky-500/50' : 'border-slate-700 hover:border-sky-500'
+            }`}
           >
+            {multiImageSelect && (
+              <span
+                className={`absolute top-1.5 left-1.5 z-10 w-5 h-5 rounded-md flex items-center justify-center border transition ${
+                  selected ? 'bg-sky-500 border-sky-500 text-white' : 'bg-slate-900/70 border-slate-500 text-transparent'
+                }`}
+              >
+                <Check className="w-3.5 h-3.5" />
+              </span>
+            )}
             <div className="w-full aspect-square bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
               <img
                 src={img.url}
@@ -1023,8 +1128,21 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               </div>
             )}
           </button>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Insert action — add mode only, shown once at least one is selected. */}
+      {multiImageSelect && selectedKeys.size > 0 && (
+        <button
+          onClick={handleInsertSelected}
+          disabled={inserting}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white font-medium rounded-lg text-sm transition"
+        >
+          {inserting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+          {`Insert ${selectedKeys.size} image${selectedKeys.size === 1 ? '' : 's'}`}
+        </button>
+      )}
     </>
   );
 

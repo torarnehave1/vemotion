@@ -360,6 +360,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         {showModal && (
           <AddLayerModal
             onAdd={addLayer}
+            onAddLayers={addLayers}
             onUpdateMeta={(patch) => {
               // Merge the audio amp track into composition.meta. Used by
               // AudioLayerForm after Web-Audio analysis completes — drives

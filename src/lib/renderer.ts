@@ -1,4 +1,4 @@
-import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnchor, PathMask } from './api';
+import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnchor, PathMask, ImagePatch } from './api';
 import { samplePath } from './pathSampling';
 import { sampleAudioTrack } from './audioAnalysis';
 import { renderKnittingChart, type KnittingChart } from './knitting';
@@ -1361,17 +1361,21 @@ export class CanvasRenderer {
     // includes the animation offset — and the layer scale transform is already
     // on ctx, so the clip travels + scales with the image automatically.
     // feather > 0 → soft edge (offscreen alpha mask); otherwise a hard clip.
+    const patches = Array.isArray(values.patches) ? (values.patches as ImagePatch[]) : undefined;
+
     const mask = values.mask as PathMask | undefined;
     if (mask && mask.type === 'path' && Array.isArray(mask.anchors) && mask.anchors.length >= 3) {
       const feather = typeof mask.feather === 'number' && mask.feather > 0 ? mask.feather : 0;
       if (feather > 0) {
         this.drawImageFeatheredMask(img, x, y, w, h, fit, mask, feather);
+        if (patches) this.drawPatches(img, x, y, w, h, fit, patches);
         return;
       }
       this.clipToMask(mask, x, y, w, h);
     }
 
     drawImageFitted(this.ctx, img, x, y, w, h, fit);
+    if (patches) this.drawPatches(img, x, y, w, h, fit, patches);
   }
 
   /**
@@ -1383,7 +1387,16 @@ export class CanvasRenderer {
    * Returns false (nothing appended) for < 3 anchors. Mirrors drawPath's logic.
    */
   private appendMaskOutline(ctx: CanvasRenderingContext2D, mask: PathMask, originX: number, originY: number, w: number, h: number): boolean {
-    const anchors = mask.anchors;
+    return this.appendOutline(ctx, mask.anchors, originX, originY, w, h);
+  }
+
+  /**
+   * Trace a closed outline (anchor list in local 0..1) onto `ctx`'s CURRENT path
+   * as one closed subpath — shared by image masks (appendMaskOutline) and clone
+   * patches (drawPatches). Does NOT begin/clip/fill; the caller decides. Returns
+   * false (nothing appended) for < 3 anchors.
+   */
+  private appendOutline(ctx: CanvasRenderingContext2D, anchors: PathAnchor[], originX: number, originY: number, w: number, h: number): boolean {
     if (!Array.isArray(anchors) || anchors.length < 3) return false;
     const px = (a: PathAnchor) => originX + a.x * w;
     const py = (a: PathAnchor) => originY + a.y * h;
@@ -1450,6 +1463,59 @@ export class CanvasRenderer {
     octx.globalCompositeOperation = 'source-over';
     // Blit so the offscreen's (pad,pad) lands at the image's (x,y).
     this.ctx.drawImage(off, x - pad, y - pad);
+  }
+
+  /**
+   * Draw clone/heal patches over an already-drawn image. Each patch copies clean
+   * texture from `outline + source` onto `outline` — covering a blemish/tag with
+   * nearby pixels of the SAME image. Done by clipping to the outline and redrawing
+   * the image translated by `-source`, so the source region's pixels land in the
+   * clipped region. feather > 0 routes through an offscreen alpha mask (same path
+   * as drawImageFeatheredMask) so the clone blends into its surroundings.
+   * (x,y,w,h,fit) is the image's draw rect — identical to drawImage's base draw.
+   */
+  private drawPatches(img: HTMLImageElement, x: number, y: number, w: number, h: number, fit: string, patches: ImagePatch[]): void {
+    for (const patch of patches) {
+      const outline = patch?.outline;
+      if (!Array.isArray(outline) || outline.length < 3) continue;
+      const dx = patch.source?.dx ?? 0;
+      const dy = patch.source?.dy ?? 0;
+      // Shifted draw origin: drawing the image at (x - source) makes the texture
+      // at (outline + source) appear under the outline once we clip to it.
+      const sx = x - dx * w;
+      const sy = y - dy * h;
+      const feather = typeof patch.feather === 'number' && patch.feather > 0 ? patch.feather : 0;
+
+      if (feather > 0) {
+        const pad = Math.ceil(feather * 3);
+        const off = document.createElement('canvas');
+        off.width = Math.max(1, Math.ceil(w) + pad * 2);
+        off.height = Math.max(1, Math.ceil(h) + pad * 2);
+        const octx = off.getContext('2d');
+        if (octx) {
+          // Shifted source image, positioned in the offscreen so its (x,y) maps to (pad,pad).
+          drawImageFitted(octx, img, pad + (sx - x), pad + (sy - y), w, h, fit);
+          octx.globalCompositeOperation = 'destination-in';
+          octx.filter = `blur(${feather}px)`;
+          octx.fillStyle = '#ffffff';
+          octx.beginPath();
+          this.appendOutline(octx, outline, pad, pad, w, h);
+          octx.fill('nonzero');
+          octx.filter = 'none';
+          octx.globalCompositeOperation = 'source-over';
+          this.ctx.drawImage(off, x - pad, y - pad);
+          continue;
+        }
+        // No offscreen context → fall through to a hard-edged clone.
+      }
+
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.appendOutline(this.ctx, outline, x, y, w, h);
+      this.ctx.clip();
+      drawImageFitted(this.ctx, img, sx, sy, w, h, fit);
+      this.ctx.restore();
+    }
   }
 
   /**

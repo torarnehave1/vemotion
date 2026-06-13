@@ -291,6 +291,40 @@ export type PathMask = {
   feather?: number;
 };
 
+/**
+ * A clone/heal patch on an `image` layer (`properties.patches[]`). Covers an
+ * unwanted region of the image (a blemish, a tag, a watermark) by copying clean
+ * pixels from a nearby part of the SAME image over it — the canvas equivalent of
+ * a clone-stamp. The image carries its own repairs; nothing is baked into the
+ * source file, so a patch is fully reversible by deleting it.
+ *
+ * Coordinate space: LOCAL to the layer box, identical to PathMask. `outline`
+ * anchors are FRACTIONS 0..1 of the layer's current width/height; the renderer
+ * maps them to pixels from the layer's live `position` + `size` each frame, so a
+ * patch travels and scales WITH the image.
+ *
+ * Render: clip to `outline` (the region to repair), then redraw the same image
+ * shifted by `-source`, so the texture at `outline + source` lands over the
+ * region. The outline must enclose area (>= 3 anchors).
+ */
+export type ImagePatch = {
+  /** Closed region to repair, in local 0..1 space. >= 3 anchors. */
+  outline: PathAnchor[];
+  /**
+   * Offset (local 0..1, fractions of the layer box) from the repair region to
+   * the clean texture copied into it. `(0.1, 0)` pulls source from 10% of the
+   * layer width to the right; `(0, -0.05)` from just above. Drawn as a -source
+   * translation of the image under the outline clip.
+   */
+  source: { dx: number; dy: number };
+  /**
+   * Soft blend width in pixels for the patch edge. Absent or 0 = hard edge.
+   * When > 0 the renderer feathers the patch via an offscreen alpha mask, the
+   * same path PathMask.feather uses — so the clone blends into surrounding pixels.
+   */
+  feather?: number;
+};
+
 export const api = {
   async createVideo(composition: CompositionData) {
     const res = await fetch('/api/video/create', {

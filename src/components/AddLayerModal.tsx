@@ -490,6 +490,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [imgSrc,    setImgSrc]    = useState((editingLayer?.properties.src as string) ?? '');
   const [imgName,   setImgName]   = useState((editingLayer?.properties.name as string) ?? '');
   const [replacingImage, setReplacingImage] = useState(false);
+  // Image border. Width 0 = no border (default for existing images, so opening
+  // an old image never paints a border onto it). Enabling a border defaults the
+  // width to 2px. Color is black/white presets or any colour-wheel value.
+  const [imgBorderColor, setImgBorderColor] = useState((editingLayer?.properties.borderColor as string) ?? '#000000');
+  const [imgBorderWidth, setImgBorderWidth] = useState(
+    typeof editingLayer?.properties.borderWidth === 'number' ? (editingLayer.properties.borderWidth as number) : 0,
+  );
 
   // Animation — canvas coordinate based
   const _ea = isImgLayer ? editingLayer?.animation : undefined;
@@ -582,6 +589,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         name: imgName,
         fit: imgFit,
         opacity: opacityValue,
+        // Border: width 0 → drop both keys (no border). Spread above preserves
+        // any other props (Lesson 21).
+        borderColor: imgBorderWidth > 0 ? imgBorderColor : undefined,
+        borderWidth: imgBorderWidth > 0 ? imgBorderWidth : undefined,
         // Update feather + invert on the existing mask only (don't invent one).
         // 0 / false → drop the key. Spread preserves anchors (Lesson 21).
         ...(editMask ? { mask: { ...editMask, feather: maskFeather > 0 ? maskFeather : undefined, invert: maskInvert ? true : undefined } } : {}),
@@ -1284,6 +1295,60 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Border — width 0 = none. Black/White presets + colour wheel. */}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Border</label>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={() => setImgBorderWidth(0)}
+                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth === 0 ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                  >
+                    None
+                  </button>
+                  <button
+                    onClick={() => { setImgBorderColor('#000000'); setImgBorderWidth(w => (w > 0 ? w : 2)); }}
+                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth > 0 && imgBorderColor.toLowerCase() === '#000000' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                  >
+                    Black
+                  </button>
+                  <button
+                    onClick={() => { setImgBorderColor('#ffffff'); setImgBorderWidth(w => (w > 0 ? w : 2)); }}
+                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth > 0 && imgBorderColor.toLowerCase() === '#ffffff' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                  >
+                    White
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Color (wheel)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={imgBorderColor}
+                        onChange={e => { setImgBorderColor(e.target.value); setImgBorderWidth(w => (w > 0 ? w : 2)); }}
+                        className="w-10 h-10 rounded cursor-pointer border border-slate-600 bg-transparent"
+                      />
+                      <input
+                        value={imgBorderColor}
+                        onChange={e => setImgBorderColor(e.target.value)}
+                        className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Width (px)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={imgBorderWidth}
+                      onChange={e => setImgBorderWidth(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">0 = no border · default 2px. Drawn around the image rectangle.</p>
               </div>
 
               {opacityField}

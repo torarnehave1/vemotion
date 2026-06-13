@@ -1363,6 +1363,7 @@ export class CanvasRenderer {
     // feather > 0 → soft edge (offscreen alpha mask); otherwise a hard clip.
     const patches = Array.isArray(values.patches) ? (values.patches as ImagePatch[]) : undefined;
 
+    let clipped = false;
     const mask = values.mask as PathMask | undefined;
     if (mask && mask.type === 'path' && Array.isArray(mask.anchors) && mask.anchors.length >= 3) {
       const feather = typeof mask.feather === 'number' && mask.feather > 0 ? mask.feather : 0;
@@ -1372,10 +1373,25 @@ export class CanvasRenderer {
         return;
       }
       this.clipToMask(mask, x, y, w, h);
+      clipped = true;
     }
 
     drawImageFitted(this.ctx, img, x, y, w, h, fit);
     if (patches) this.drawPatches(img, x, y, w, h, fit, patches);
+
+    // Border stroke around the image rectangle. Skipped when a mask clip is
+    // active — a rectangle stroke would be cut by the clip and look wrong on a
+    // cut-out. globalAlpha (layer opacity) is already on ctx, so the border
+    // fades with the layer.
+    if (!clipped) {
+      const borderWidth = typeof values.borderWidth === 'number' ? (values.borderWidth as number) : 0;
+      const borderColor = typeof values.borderColor === 'string' ? (values.borderColor as string) : '';
+      if (borderWidth > 0 && borderColor) {
+        this.ctx.strokeStyle = borderColor;
+        this.ctx.lineWidth = borderWidth;
+        this.ctx.strokeRect(x, y, w, h);
+      }
+    }
   }
 
   /**

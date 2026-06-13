@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save, Image as ImageIcon, FolderPlus, Plus, ChevronDown, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
+import { X, Loader2, Trash2, Edit2, FolderOpen, RefreshCw, Save, Image as ImageIcon, FolderPlus, Plus, ChevronDown, ChevronRight, BookOpen, Sparkles, Share2, Check } from 'lucide-react';
 import type { CompositionData, CompositionMeta } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { getCompositionFromCloud, saveCompositionToCloud, suggestCompositionMeta } from '../lib/cloud-compositions';
+import { publishTemplate } from '../lib/cloud-templates';
 import { renderThumbnail } from '../lib/thumbnail';
 import {
   listProjects,
@@ -105,6 +106,12 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   };
 
   const [openingId, setOpeningId] = useState<string | null>(null);
+
+  // Publish-as-template state. publishedIds tracks compositions published this
+  // session so the card can show "Published" without re-fetching the list.
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [publishedIds, setPublishedIds] = useState<Set<string>>(new Set());
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   // ── Projects (book/chapter outline, backed by KG) ───────────────────────────
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -425,6 +432,21 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
     }
   };
 
+  const handlePublishTemplate = async (item: CompositionSummary) => {
+    setPublishError(null);
+    setPublishingId(item.id);
+    try {
+      const res = await publishTemplate(item.id, item.name);
+      setPublishedIds(prev => new Set(prev).add(item.id));
+      // Show which compositions are live as templates without re-fetching the list.
+      void res;
+    } catch (e) {
+      setPublishError(e instanceof Error ? e.message : 'Publish failed');
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
   const beginEdit = (item: CompositionSummary) => {
     setEditingId(item.id);
     setEditTagsInput((item.meta?.tags ?? []).join(', '));
@@ -733,6 +755,11 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                 {error}
               </div>
             )}
+            {publishError && (
+              <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                {publishError}
+              </div>
+            )}
 
             {loading && items.length === 0 ? (
               <div className="text-center text-slate-500 text-sm py-10">Loading…</div>
@@ -920,6 +947,18 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                                 })}
                               </select>
                             )}
+                            <button
+                              onClick={() => void handlePublishTemplate(item)}
+                              disabled={publishingId === item.id}
+                              className={`p-1 transition disabled:opacity-50 ${publishedIds.has(item.id) ? 'text-emerald-400' : 'text-slate-500 hover:text-sky-400'}`}
+                              title={publishedIds.has(item.id) ? 'Published as template — click to update the snapshot' : 'Publish as a template others can use'}
+                            >
+                              {publishingId === item.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : publishedIds.has(item.id)
+                                  ? <Check className="w-3.5 h-3.5" />
+                                  : <Share2 className="w-3.5 h-3.5" />}
+                            </button>
                             <button
                               onClick={() => beginEdit(item)}
                               className="p-1 text-slate-500 hover:text-emerald-400 transition"

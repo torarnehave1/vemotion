@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp } from 'lucide-react';
 import { CanvasRenderer, PlaybackController } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
-import type { CompositionData, Layer, PathAnchor, PathMask, Guide } from '../lib/api';
+import type { CompositionData, Layer, PathAnchor, PathMask, ImagePatch, Guide } from '../lib/api';
 import { layerLabel } from '../lib/api';
 import { PenToolOverlay } from './PenToolOverlay';
+import { PatchToolOverlay } from './PatchToolOverlay';
 import { PathEditOverlay } from './PathEditOverlay';
 
 interface VideoPreviewProps {
@@ -60,6 +61,17 @@ interface VideoPreviewProps {
    */
   onSetMaskInvert?: (layerId: string, invert: boolean) => void;
   /**
+   * Append a clone/heal patch to an image layer (`properties.patches[]`). Called
+   * when the Patch tool commits — outline + source are already in the layer's
+   * LOCAL 0..1 space. Rides the existing autosave pipeline.
+   */
+  onAddPatch?: (layerId: string, patch: ImagePatch) => void;
+  /**
+   * Remove ALL clone patches from an image layer (delete `properties.patches`).
+   * Called by the "Clear patches" button. Rides autosave.
+   */
+  onClearPatches?: (layerId: string) => void;
+  /**
    * Replace the composition's ruler guides (composition.meta.guides). Called
    * when a guide is created (dragged from a ruler), moved, or deleted (dragged
    * off-canvas). When omitted, the rulers + guide interactions are disabled.
@@ -67,7 +79,7 @@ interface VideoPreviewProps {
   onUpdateGuides?: (guides: Guide[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -94,6 +106,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   // this image layer (instead of creating a new path layer). Set by the Mask
   // button; cleared whenever pen mode exits.
   const [maskTargetId, setMaskTargetId] = useState<string | null>(null);
+  // When non-null, the Patch (clone-stamp) tool is authoring a clone patch for
+  // this image layer. Mutually exclusive with pen/edit interactions (the overlay
+  // sits on top of the canvas and captures its own events).
+  const [patchTargetId, setPatchTargetId] = useState<string | null>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [hoverLayerId, setHoverLayerId] = useState<string | null>(null);
   // Drag in-flight state. Tracks final committed position; on mouseup we
@@ -291,6 +307,30 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     onAddLayers([pathLayer, dotLayer]);
     setPenMode(false);
   }, [composition.duration, composition.layers, onAddLayers, maskTargetId, onUpdateLayerMask]);
+
+  // Patch-tool finish handler: the overlay emits the region outline + the source
+  // offset in composition-pixel coords. Convert BOTH into the target image
+  // layer's LOCAL 0..1 space (same contract as PathMask / ImagePatch) so the
+  // patch travels + scales with the image, then append it via onAddPatch.
+  const handlePatchFinish = useCallback((patch: { outline: PathAnchor[]; source: { x: number; y: number } }) => {
+    const target = patchTargetId ? composition.layers.find((l) => l.id === patchTargetId) : null;
+    if (onAddPatch && target && target.size.width > 0 && target.size.height > 0 && patch.outline.length >= 3) {
+      const w = target.size.width;
+      const h = target.size.height;
+      const ox = target.position.x;
+      const oy = target.position.y;
+      const outline: PathAnchor[] = patch.outline.map((a) => ({
+        x: (a.x - ox) / w,
+        y: (a.y - oy) / h,
+      }));
+      onAddPatch(patchTargetId!, {
+        outline,
+        source: { dx: patch.source.x / w, dy: patch.source.y / h },
+        feather: 6,
+      });
+    }
+    setPatchTargetId(null);
+  }, [patchTargetId, composition.layers, onAddPatch]);
 
   // Seek when timeline sends a frame
   useEffect(() => {
@@ -691,10 +731,18 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 onCancel={() => setPenMode(false)}
               />
             )}
-            {editMode && !penMode && onUpdatePathAnchors && (
+            {editMode && !penMode && !patchTargetId && onUpdatePathAnchors && (
               <PathEditOverlay
                 composition={composition}
                 onUpdatePath={onUpdatePathAnchors}
+              />
+            )}
+            {patchTargetId && (
+              <PatchToolOverlay
+                compositionWidth={composition.width}
+                compositionHeight={composition.height}
+                onFinish={handlePatchFinish}
+                onCancel={() => setPatchTargetId(null)}
               />
             )}
           </div>
@@ -844,6 +892,42 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                       </button>
                     );
                   })()}
+                </>
+              );
+            })()}
+            {/* Patch (clone-stamp) — only for a selected IMAGE layer. Opens the
+                two-phase patch tool: draw a region over a blemish/tag, then
+                click a clean area to copy over it. */}
+            {editMode && selectedLayerId && onAddPatch && (() => {
+              const sel = composition.layers.find((l) => l.id === selectedLayerId);
+              if (!sel || sel.type !== 'image') return null;
+              const patches = (sel.properties as Record<string, unknown>).patches;
+              const count = Array.isArray(patches) ? patches.length : 0;
+              return (
+                <>
+                  <button
+                    onClick={() => {
+                      controllerRef.current?.pause();
+                      setIsPlaying(false);
+                      setPenMode(false);
+                      setPatchTargetId(selectedLayerId);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                    title="Patch tool — cover a blemish/tag by cloning a clean part of the same image over it"
+                  >
+                    <Stamp className="w-4 h-4" />
+                    {count > 0 ? 'Add patch' : 'Patch'}
+                  </button>
+                  {count > 0 && onClearPatches && (
+                    <button
+                      onClick={() => onClearPatches(selectedLayerId)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-slate-200 border-slate-700 hover:border-rose-700"
+                      title={`Remove all ${count} clone patch${count === 1 ? '' : 'es'} from this image`}
+                    >
+                      <Eraser className="w-4 h-4" />
+                      Clear patches ({count})
+                    </button>
+                  )}
                 </>
               );
             })()}

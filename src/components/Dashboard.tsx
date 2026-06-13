@@ -592,6 +592,33 @@ export const Dashboard: React.FC = () => {
                   }),
                 }));
               }}
+              onAddPatch={(layerId, patch) => {
+                // Append a clone patch to an image layer's properties.patches[].
+                // Spread-and-override so every other property survives (Lesson 21);
+                // multiple patches accumulate (one per blemish). Rides autosave.
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => {
+                    if (l.id !== layerId) return l;
+                    const props = l.properties as Record<string, unknown>;
+                    const existing = Array.isArray(props.patches) ? (props.patches as unknown[]) : [];
+                    return { ...l, properties: { ...l.properties, patches: [...existing, patch] } };
+                  }),
+                }));
+              }}
+              onClearPatches={(layerId) => {
+                // Remove all clone patches. Strip via delete on a spread copy so
+                // every OTHER property survives (Lesson 21 point 2). Rides autosave.
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => {
+                    if (l.id !== layerId) return l;
+                    const properties = { ...l.properties };
+                    delete properties.patches;
+                    return { ...l, properties };
+                  }),
+                }));
+              }}
               onUpdateGuides={(guides) => {
                 // Persist ruler guides into composition.meta.guides. Editor-only
                 // (excluded from MP4 export); rides the existing autosave.

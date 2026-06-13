@@ -1363,35 +1363,58 @@ export class CanvasRenderer {
     // feather > 0 → soft edge (offscreen alpha mask); otherwise a hard clip.
     const patches = Array.isArray(values.patches) ? (values.patches as ImagePatch[]) : undefined;
 
-    let clipped = false;
+    // Border params. globalAlpha (layer opacity) is already on ctx, so the
+    // border fades with the layer either way.
+    const borderWidth = typeof values.borderWidth === 'number' ? (values.borderWidth as number) : 0;
+    const borderColor = typeof values.borderColor === 'string' ? (values.borderColor as string) : '';
+    const hasBorder = borderWidth > 0 && !!borderColor;
+
     const mask = values.mask as PathMask | undefined;
     if (mask && mask.type === 'path' && Array.isArray(mask.anchors) && mask.anchors.length >= 3) {
       const feather = typeof mask.feather === 'number' && mask.feather > 0 ? mask.feather : 0;
       if (feather > 0) {
         this.drawImageFeatheredMask(img, x, y, w, h, fit, mask, feather);
         if (patches) this.drawPatches(img, x, y, w, h, fit, patches);
-        return;
+      } else {
+        // Scope the clip to its own save/restore so the border stroke below
+        // (the SAME outline) isn't cut in half by the clip.
+        this.ctx.save();
+        this.clipToMask(mask, x, y, w, h);
+        drawImageFitted(this.ctx, img, x, y, w, h, fit);
+        if (patches) this.drawPatches(img, x, y, w, h, fit, patches);
+        this.ctx.restore();
       }
-      this.clipToMask(mask, x, y, w, h);
-      clipped = true;
+      // Border on a cut-out = stroke the mask outline (the cut shape), not a
+      // rectangle. Unclipped, so the full stroke width shows on the edge.
+      if (hasBorder) this.strokeMaskOutline(mask, x, y, w, h, borderColor, borderWidth);
+      return;
     }
 
     drawImageFitted(this.ctx, img, x, y, w, h, fit);
     if (patches) this.drawPatches(img, x, y, w, h, fit, patches);
 
-    // Border stroke around the image rectangle. Skipped when a mask clip is
-    // active — a rectangle stroke would be cut by the clip and look wrong on a
-    // cut-out. globalAlpha (layer opacity) is already on ctx, so the border
-    // fades with the layer.
-    if (!clipped) {
-      const borderWidth = typeof values.borderWidth === 'number' ? (values.borderWidth as number) : 0;
-      const borderColor = typeof values.borderColor === 'string' ? (values.borderColor as string) : '';
-      if (borderWidth > 0 && borderColor) {
-        this.ctx.strokeStyle = borderColor;
-        this.ctx.lineWidth = borderWidth;
-        this.ctx.strokeRect(x, y, w, h);
-      }
+    // Border stroke around the (rectangular) image.
+    if (hasBorder) {
+      this.ctx.strokeStyle = borderColor;
+      this.ctx.lineWidth = borderWidth;
+      this.ctx.strokeRect(x, y, w, h);
     }
+  }
+
+  /**
+   * Stroke a mask outline as the image's border (the cut shape's edge). Traces
+   * the same closed outline used for clipping and strokes it — round joins so a
+   * hand-drawn shape's corners read smoothly. Caller decides colour/width; the
+   * ctx already carries the layer scale + opacity.
+   */
+  private strokeMaskOutline(mask: PathMask, originX: number, originY: number, w: number, h: number, color: string, width: number): void {
+    this.ctx.beginPath();
+    const traced = this.appendMaskOutline(this.ctx, mask, originX, originY, w, h);
+    if (!traced) return;
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = width;
+    this.ctx.lineJoin = 'round';
+    this.ctx.stroke();
   }
 
   /**

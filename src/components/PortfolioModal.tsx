@@ -5,6 +5,7 @@ import type { CompositionData, CompositionMeta } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { getCompositionFromCloud, saveCompositionToCloud, suggestCompositionMeta } from '../lib/cloud-compositions';
 import { publishTemplate } from '../lib/cloud-templates';
+import { TemplatesPane } from './TemplatesPane';
 import { renderThumbnail } from '../lib/thumbnail';
 import {
   listProjects,
@@ -106,6 +107,9 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
   };
 
   const [openingId, setOpeningId] = useState<string | null>(null);
+
+  // Top-level view: own compositions vs the cross-user templates library.
+  const [view, setView] = useState<'compositions' | 'templates'>('compositions');
 
   // Publish-as-template state. publishedIds tracks compositions published this
   // session so the card can show "Published" without re-fetching the list.
@@ -519,20 +523,37 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
-          <div className="flex items-baseline gap-3">
-            <h2 className="text-sm font-semibold text-slate-200">Compositions Portfolio</h2>
-            <span className="text-xs text-slate-500">{visible.length} of {items.length}</span>
-            {!userEmail && <span className="text-xs text-red-400">Sign in to load compositions</span>}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-lg bg-slate-800 p-0.5 text-xs">
+              <button
+                onClick={() => setView('compositions')}
+                className={`px-2.5 py-1 rounded-md transition ${view === 'compositions' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                My Compositions
+              </button>
+              <button
+                onClick={() => setView('templates')}
+                className={`px-2.5 py-1 rounded-md transition ${view === 'templates' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Templates
+              </button>
+            </div>
+            {view === 'compositions'
+              ? <span className="text-xs text-slate-500">{visible.length} of {items.length}</span>
+              : <span className="text-xs text-slate-500">Reusable starting points</span>}
+            {!userEmail && <span className="text-xs text-red-400">Sign in to load {view === 'templates' ? 'templates' : 'compositions'}</span>}
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => void fetchAll()}
-              disabled={loading || !userEmail}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition disabled:opacity-40"
-              title="Refresh"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            </button>
+            {view === 'compositions' && (
+              <button
+                onClick={() => void fetchAll()}
+                disabled={loading || !userEmail}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition disabled:opacity-40"
+                title="Refresh"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
@@ -545,8 +566,8 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
 
         {/* Body: sidebar + main */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <aside className="w-60 flex-shrink-0 border-r border-slate-800 overflow-y-auto p-4 space-y-5 bg-slate-900/40">
+          {/* Sidebar (composition filters only; hidden in templates view) */}
+          <aside className={`w-60 flex-shrink-0 border-r border-slate-800 overflow-y-auto p-4 space-y-5 bg-slate-900/40 ${view === 'templates' ? 'hidden' : ''}`}>
             <Section title="Sort by">
               <select
                 value={sortBy}
@@ -716,8 +737,8 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
             </Section>
           </aside>
 
-          {/* Main */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Main (compositions) */}
+          <div className={`flex-1 overflow-y-auto p-4 space-y-3 ${view === 'templates' ? 'hidden' : ''}`}>
             <input
               type="search"
               placeholder="Search name, description, tags, category, area…"
@@ -982,6 +1003,17 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
               </div>
             )}
           </div>
+
+          {/* Templates pane — cross-user published-template library. Always
+              mounted so its `active` prop can drive the one-time load; hidden
+              (not unmounted) when the compositions view is active. Using a
+              template opens the clone in the editor and closes this modal. */}
+          <TemplatesPane
+            active={view === 'templates'}
+            className={view === 'templates' ? '' : 'hidden'}
+            userEmail={userEmail}
+            onOpen={(composition, id, name) => { onOpen(composition, id, name); onClose(); }}
+          />
         </div>
       </div>
     </div>,

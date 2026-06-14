@@ -740,13 +740,13 @@ export class CanvasRenderer {
     // 8 resize handles (4 corners + 4 edge midpoints) — white fill + sky
     // border so they read over any image content. Illustrator layout.
     this.ctx.setLineDash([]);
-    const dot = 9;
+    const dot = 12; // larger handle for an easier grab target (option B)
     const pts = selectionHandlePoints(bounds);
     for (const key of Object.keys(pts) as ResizeHandle[]) {
       const [dx, dy] = pts[key];
       this.ctx.fillStyle = '#ffffff';
       this.ctx.fillRect(dx - dot / 2, dy - dot / 2, dot, dot);
-      this.ctx.lineWidth = 1.5;
+      this.ctx.lineWidth = 2;
       this.ctx.strokeStyle = '#38bdf8';
       this.ctx.strokeRect(dx - dot / 2, dy - dot / 2, dot, dot);
     }
@@ -773,7 +773,7 @@ export class CanvasRenderer {
     const bounds = computeLayerBounds(layer, time - startTime, composition);
     if (bounds === null) return null;
     const pts = selectionHandlePoints(bounds);
-    const TOL = 8; // canvas px grab radius (half handle + a little)
+    const TOL = 10; // canvas px grab radius — half the 12px handle + margin
     let best: ResizeHandle | null = null;
     let bestD = Infinity;
     for (const key of Object.keys(pts) as ResizeHandle[]) {

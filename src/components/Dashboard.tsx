@@ -19,6 +19,29 @@ function lighten(hex: string, amt = 0.5): string {
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 
+// Parse a pasted narration script — one cue per line: "time | text" (time =
+// m:ss, h:mm:ss, or seconds). Lines without a leading timecode append to the
+// previous cue (multi-line cues). Returns cues sorted by time.
+function tcToSeconds(tc: string): number {
+  const parts = tc.split(':').map((s) => Number(s));
+  if (parts.some((n) => Number.isNaN(n))) return NaN;
+  return parts.reduce((acc, p) => acc * 60 + p, 0);
+}
+function parseNarrationScript(raw: string): { time: number; text: string }[] {
+  const cues: { time: number; text: string }[] = [];
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const m = /^(\d{1,2}(?::\d{1,2}){0,2})\s*[|\-–:]?\s+(.*)$/.exec(line) || /^(\d{1,2}(?::\d{1,2}){1,2})\s*[|\-–]?\s*(.*)$/.exec(line);
+    if (m && /\d/.test(m[1])) {
+      const t = tcToSeconds(m[1]);
+      if (Number.isFinite(t)) { cues.push({ time: t, text: (m[2] || '').trim() }); continue; }
+    }
+    if (cues.length) cues[cues.length - 1].text += ' ' + line; // continuation line
+  }
+  return cues.filter((c) => c.text).sort((a, b) => a.time - b.time);
+}
+
 
 const DEFAULT_SIDEBAR_WIDTH = 420;
 const MIN_SIDEBAR_WIDTH = 260;
@@ -122,6 +145,32 @@ export const Dashboard: React.FC = () => {
       const i = layers.findIndex((l) => l.id === pathId);
       layers.splice(i + 1, 0, ...dots);
       return { ...prev, layers };
+    });
+  }, []);
+
+  // Rebuild the hidden "Narration" group from a pasted timed script. Replaces
+  // any existing Narration group; every other layer is preserved (spread, L21).
+  const setNarrationScript = useCallback((raw: string) => {
+    setComposition((prev) => {
+      const GID = 'grp-narration';
+      const cues = parseNarrationScript(raw);
+      const groupsOld = prev.groups || [];
+      const narrGroupIds = new Set(groupsOld.filter((g) => (g.name || '').toLowerCase() === 'narration').map((g) => g.id));
+      narrGroupIds.add(GID);
+      const kept = prev.layers.filter((l) => !(l.groupId && narrGroupIds.has(l.groupId)));
+      const newLayers: Layer[] = cues.map((c, i) => {
+        const end = i + 1 < cues.length ? cues[i + 1].time : prev.duration;
+        const dur = Math.max(0.5, +(end - c.time).toFixed(2));
+        return {
+          id: `narr-${i + 1}`, type: 'text', groupId: GID, visible: false,
+          position: { x: 90, y: 268 }, size: { width: 1100, height: 200 },
+          startTime: +c.time.toFixed(2), layerDuration: dur,
+          properties: { text: c.text, fontSize: 26, color: '#991b1b', align: 'center', fontWeight: '500', opacity: 1 },
+        };
+      });
+      const groups = groupsOld.filter((g) => !narrGroupIds.has(g.id));
+      groups.push({ id: GID, name: 'Narration', collapsed: false, visible: false });
+      return { ...prev, groups, layers: [...kept, ...newLayers] };
     });
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(
@@ -569,6 +618,7 @@ export const Dashboard: React.FC = () => {
               selectedLayerId={selectedLayerId}
               onSelectLayer={setSelectedLayerId}
               onUpdatePathStream={applyPathStream}
+              onSetNarrationScript={setNarrationScript}
               onSetLayerVolume={(layerId, volume) => {
                 setComposition(prev => ({
                   ...prev,

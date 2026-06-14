@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp, Mic, Type } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp, Mic, Type, FileText } from 'lucide-react';
 import { uploadAudioBlob } from '../lib/audioPortfolio';
 import { Teleprompter } from './Teleprompter';
+import { NarrationScriptModal } from './NarrationScriptModal';
 import { CanvasRenderer, PlaybackController, type ResizeHandle } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
 import type { CompositionData, Layer, PathAnchor, PathMask, ImagePatch, Guide } from '../lib/api';
@@ -63,6 +64,8 @@ interface VideoPreviewProps {
   onUpdatePathStream?: (pathId: string, settings: StreamSettings) => void;
   /** Set an audio layer's volume (0..1) from the floating volume slider. */
   onSetLayerVolume?: (layerId: string, volume: number) => void;
+  /** Rebuild the hidden "Narration" group from a pasted timed script. */
+  onSetNarrationScript?: (raw: string) => void;
   /**
    * Set (or replace) an image layer's clip mask (`properties.mask`). Called once
    * when a mask is committed from the pen tool in mask mode. Anchors are already
@@ -163,7 +166,7 @@ function computeResizedBox(
   return { x, y, w, h };
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onSetLayerVolume, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onSetLayerVolume, onSetNarrationScript, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -492,6 +495,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   const narrRecorderRef = useRef<MediaRecorder | null>(null);
   const narrChunksRef = useRef<Blob[]>([]);
   const [showTeleprompter, setShowTeleprompter] = useState(false);
+  const [showNarrModal, setShowNarrModal] = useState(false);
 
   const probeDuration = (url: string) => new Promise<number>((resolve) => {
     const a = new Audio(url);
@@ -1108,6 +1112,27 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
             nxt = lines.find((l) => l.s > t)?.text ?? null;
           }
           return <Teleprompter line={cur} next={nxt} onClose={() => setShowTeleprompter(false)} />;
+        })()}
+        {onSetNarrationScript && (
+          <button
+            onClick={() => setShowNarrModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+            title="Edit the teleprompter script — paste timed lines (time | text)"
+          >
+            <FileText className="w-4 h-4" /> Script
+          </button>
+        )}
+        {showNarrModal && onSetNarrationScript && (() => {
+          const fmtT = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+          const grp = (composition.groups || []).find((g) => (g.name || '').toLowerCase() === 'narration');
+          const initial = grp
+            ? composition.layers
+                .filter((l) => l.groupId === grp.id && l.type === 'text')
+                .sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0))
+                .map((l) => `${fmtT(l.startTime ?? 0)} | ${String((l.properties as Record<string, unknown>).text || '')}`)
+                .join('\n')
+            : '';
+          return <NarrationScriptModal initialText={initial} onApply={onSetNarrationScript} onClose={() => setShowNarrModal(false)} />;
         })()}
         {onAddLayers && (narrState === 'idle' ? (
           <button

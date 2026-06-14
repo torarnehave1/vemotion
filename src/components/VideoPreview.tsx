@@ -913,6 +913,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               <PathEditOverlay
                 composition={composition}
                 currentTime={currentFrame / (composition.fps || 30)}
+                selectedLayerId={selectedLayerId}
+                onSelectPath={setSelectedLayerId}
                 onUpdatePath={onUpdatePathAnchors}
               />
             )}

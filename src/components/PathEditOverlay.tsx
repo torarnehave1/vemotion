@@ -5,6 +5,10 @@ interface PathEditOverlayProps {
   composition: CompositionData;
   /** Current playhead time (seconds). Only paths active at this time are shown. */
   currentTime: number;
+  /** Currently selected layer id — the selected path's anchors are highlighted. */
+  selectedLayerId?: string | null;
+  /** Select a path (e.g. to open the Path stream panel). Called on anchor click. */
+  onSelectPath?: (id: string) => void;
   /** Replace a single path layer's properties (atomic). */
   onUpdatePath: (layerId: string, nextAnchors: PathAnchor[]) => void;
 }
@@ -39,7 +43,7 @@ type Gesture =
  * fast because the [composition] effect re-uses the existing renderer
  * (no recreate).
  */
-export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, currentTime, onUpdatePath }) => {
+export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, currentTime, selectedLayerId, onSelectPath, onUpdatePath }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [gesture, setGesture] = useState<Gesture>({ kind: 'idle' });
 
@@ -137,6 +141,7 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
     if (e.button !== 0) return; // left only
     e.preventDefault();
     e.stopPropagation();
+    onSelectPath?.(layerId); // clicking an anchor selects its path (opens the Path stream panel)
     const pt = clientToUserspace(e.clientX, e.clientY);
     if (!pt) return;
     setGesture({
@@ -153,6 +158,7 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    onSelectPath?.(layerId);
     setGesture({
       kind: 'dragging-handle',
       layerId,
@@ -209,8 +215,9 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
     >
       {pathLayers.map(layer => {
         const anchors = ((layer.properties as Record<string, unknown>).anchors as PathAnchor[] | undefined) ?? [];
+        const isSel = layer.id === selectedLayerId;
         return (
-          <g key={layer.id}>
+          <g key={layer.id} style={{ opacity: !selectedLayerId || isSel ? 1 : 0.45 }}>
             {/* Handle lines */}
             {anchors.map((a, i) => (
               <React.Fragment key={`h-${layer.id}-${i}`}>
@@ -260,12 +267,12 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
               return (
                 <circle
                   key={`a-${layer.id}-${i}`}
-                  cx={a.x} cy={a.y} r={8}
+                  cx={a.x} cy={a.y} r={isSel ? 10 : 8}
                   fill={smooth ? (isStart ? '#22c55e' : '#fbbf24') : '#0f172a'}
-                  stroke={isStart ? '#22c55e' : '#fbbf24'}
-                  strokeWidth={2}
+                  stroke={isSel ? '#38bdf8' : (isStart ? '#22c55e' : '#fbbf24')}
+                  strokeWidth={isSel ? 3 : 2}
                   vectorEffect="non-scaling-stroke"
-                  style={{ pointerEvents: 'auto', cursor: 'grab' }}
+                  style={{ pointerEvents: 'auto', cursor: 'pointer' }}
                   onMouseDown={startAnchorDrag(layer.id, i, a)}
                   onContextMenu={toggleSmoothCorner(layer.id, i)}
                 />

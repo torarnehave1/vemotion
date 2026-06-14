@@ -925,7 +925,16 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               const rs = resolveStreamPath(composition, selectedLayerId);
               if (!rs) return null;
               return (
-                <div className="absolute top-2 right-2 z-20 w-72 max-h-[92%] overflow-y-auto" style={{ pointerEvents: 'auto' }}>
+                <div
+                  className="absolute top-2 right-2 z-20 w-72 max-h-[92%] overflow-y-auto"
+                  style={{ pointerEvents: 'auto' }}
+                  // Keep clicks inside the panel from reaching the canvas's
+                  // edit-mode selection handler (which would select the layer
+                  // behind and close the panel).
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <PathStreamPanel key={rs.pathId} pathId={rs.pathId} settings={rs.settings} onApply={(s) => onUpdatePathStream(rs.pathId, s)} />
                 </div>
               );

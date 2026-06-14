@@ -1,6 +1,14 @@
 # Vemotion Composition Briefing (for an AI agent)
 
-System prompt / context document for an agent that creates and edits Vemotion compositions programmatically. Grounded in source files in this repo as of 2026-05-23.
+System prompt / context document for an agent that creates and edits Vemotion compositions programmatically. Grounded in source files in this repo and the live worker as of **2026-06-14**.
+
+> **What's new since 2026-05-23** (the previous grounding date):
+> - **Image layers gained real authoring power** — optional **border** (`borderColor` + `borderWidth`, default 2px when on), **cut-out masks** (`mask`, hand-drawn pen-tool clip with feather + invert), and **clone/heal patches** (`patches[]`, blemish/tag removal). Full schema + a worked sample in the new **§20**.
+> - **Video layers are live** — visual playback + MP4 export (canvas-drawn, z-order respected). Source files upload to a dedicated R2 bucket and stream publicly. See **§22**.
+> - **Public templates** — publish a composition as a frozen snapshot, list cross-user, clone. See **§21**.
+> - **`POST /vemotion/suggest-meta`** — Workers-AI (gemma) suggestion of `meta` fields from a composition. See **§23**.
+> - **Endpoint additions** — `composition/history`, `project/create`, `project/update`, `template*`, `assist`, `suggest-meta`, `video/*`. Table in §4 updated.
+> - Editor-only (not composition data, no agent impact): Illustrator-style 8-point resize handles on the selected layer (Shift = constrain aspect).
 
 ---
 
@@ -15,10 +23,11 @@ Layer `type` discriminators (the agent must use one of these):
 - `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 (the `x0`/`y0` convention — required) and §13 (authoring patterns + worked example).**
 - `path` — hand-authored polyline or cubic-Bezier curve, drawn as a stroke + usable as a motion source by other layers. **See §18.** Authored via the Pen tool in the editor; programmatic via `properties.anchors[]`. Coexists with `math-shape` (formula curves) and `motionScenes` formulas — pick the tool that fits.
 - `audio` — sound layer (voice-over, music, sound effects). Reuses the existing vegvisr audio-portfolio + transcription workers — see §17.
-- `image` — raster, with `src`, `fit`, `offset`
-- `video` — type exists in schema; not yet exposed in Add Layer UI
+- `image` — raster, with `src`, `fit`, `opacity`, `offset`. **Plus (new): optional `borderColor`+`borderWidth` border, a `mask` cut-out clip, and `patches[]` clone/heal repairs — see §20.**
+- `video` — **live**: visual playback + MP4 export, canvas-drawn, z-order respected. Source uploads to a dedicated R2 bucket and streams publicly. See §22.
 - `kg-shape` — SVG snapshotted from KG graph `vemotion-shapes`
 - `card` — card snapshotted from KG graph `vemotion-cards`
+- `knitting-chart` — grid of coloured cells ("pixel" layer); niche, authored in-editor.
 
 ---
 
@@ -37,7 +46,9 @@ type CompositionData = {
 
 type Layer = {
   id: string;
-  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape';
+  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card'
+      | 'math-shape' | 'audio' | 'path' | 'knitting-chart';
+  name?: string;             // display label in timeline/layer list (renderer ignores it)
   groupId?: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
@@ -127,14 +138,25 @@ Base URL: `https://api.vegvisr.org/vemotion`. All endpoints require `X-API-Token
 | GET | `/compositions` | List user compositions (returns id, name, duration, fps, width, height, layerCount, createdAt, updatedAt, version) |
 | GET | `/composition?id=<id>` | Fetch a single composition with full layer/animation data |
 | POST | `/composition/save` | Save / update — body `{ id?, name, composition }` |
-| POST | `/composition/refit` | Reformat for a new canvas size — body `{ compositionId? \| composition, targetWidth, targetHeight, mode, name? }`. See §12 for the algorithm and curl recipes. |
+| GET | `/composition/history?id=<id>` | List the latest 30 saved versions of a composition |
+| POST | `/composition/refit` | Reformat for a new canvas size — body `{ compositionId? \| composition, targetWidth, targetHeight, mode, name? }`. See §12. |
 | DELETE | `/composition?id=<id>` | Delete composition |
 | GET | `/projects` | List projects |
-| POST | `/project` | Create / update project |
+| GET | `/project?id=<id>` | Fetch a single project |
+| POST | `/project/create` | Create a new project |
+| POST | `/project/update` | Update an existing project |
 | DELETE | `/project?id=<id>` | Delete project |
 | POST | `/render` | Queue render — `{ compositionId? \| composition, format? }` |
 | GET | `/render?id=<id>` | Poll render job status |
 | GET | `/renders` | List render jobs |
+| POST | `/assist` | AI editing assistant (Claude) over the composition JSON. See §19. |
+| POST | `/suggest-meta` | Workers-AI (gemma) suggestion of `meta` fields. See §23. |
+| POST | `/template/publish` | Publish a composition as a frozen template snapshot. See §21. |
+| GET | `/templates` | List published templates (cross-user). See §21. |
+| GET | `/template?id=<id>` | Fetch one published template (full frozen composition). |
+| DELETE | `/template?id=<id>` | Unpublish a template (author only). |
+| POST | `/video/upload` | Upload a video file to the `vemotion-video` R2 bucket (binary body, `X-File-Name` header) → `{ url, key }`. See §22. |
+| GET | `/video?key=<key>` | **Public** (no auth) — stream a video with HTTP Range support. See §22. |
 
 ### Asset lookup (read-only, also auth-gated):
 
@@ -1414,3 +1436,288 @@ A reference implementation of the chat panel lives in `src/components/Compositio
 - An "Apply" button on every assistant message that contains a ```` ```json ```` block, which drops the block into the modal's editable textarea (where the user can review + click Save through the existing structural validator)
 
 External agents building their own UI follow the same pattern.
+
+---
+
+## 20. Image layers — fit, border, cut-out masks, clone patches
+
+A `type: 'image'` layer draws a raster from `src` into the layer box. Beyond the
+basics it now carries three optional, fully composable authoring features:
+a **border**, a **cut-out mask**, and **clone/heal patches**. All three are static
+layer properties (not animations) and ride the existing `position` / `size` /
+`opacity` / animation / `motionScenes` machinery.
+
+### 20.1 — Properties
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `src` | string (URL) | — | Image URL. Must be **CORS-accessible** (`crossOrigin='anonymous'`); failing CORS → image silently doesn't draw. |
+| `fit` | `'cover' \| 'contain' \| 'fill'` | `'cover'` | How the image is sized into the layer box. |
+| `opacity` | number `0..1` | `1` | Layer alpha. The border inherits it. |
+| `name` | string | — | Display label (UI only). |
+| `borderColor` | string (hex) | — | Border stroke colour. Only drawn when `borderWidth > 0`. Black `#000000` / white `#ffffff` are the editor presets; any hex works. |
+| `borderWidth` | number (px) | `0`/absent = no border | Border thickness. The editor defaults it to **2** when a border is turned on. |
+| `mask` | `PathMask` | — | Clip the image to a closed outline — a cut-out. See §20.3. |
+| `patches` | `ImagePatch[]` | — | Clone/heal repairs (blemish / tag / watermark removal). See §20.4. |
+
+### 20.2 — Border
+
+The renderer strokes the image **after** drawing it, so the border sits on top of
+the image edge. Two cases, handled automatically:
+
+- **Rectangular image (no mask):** strokes the layer rectangle (`strokeRect`).
+- **Cut-out image (has `mask`):** strokes the **mask outline** instead of a
+  rectangle, so the border follows the cut shape (works for feathered and
+  inverted masks too). The stroke centres on the cut edge.
+
+The border is drawn under the layer's `globalAlpha`, so it fades with `opacity`
+and any opacity animation. `borderWidth: 0` (or absent `borderColor`) = no border;
+existing images without these keys are unchanged.
+
+> **Refit caveat (§12):** `borderWidth` is a pixel quantity that `refit` does
+> **not** currently auto-scale (it scales `strokeWidth` / `borderRadius` / font
+> sizes, not `borderWidth`). After a large refit, re-check the border thickness.
+> `mask` and `patches` use local 0..1 coordinates, so they travel + scale with
+> the image automatically and need no refit adjustment.
+
+### 20.3 — Cut-out mask (`mask`)
+
+```ts
+type PathMask = {
+  type: 'path';
+  anchors: PathAnchor[];   // closed outline, LOCAL 0..1 fractions of the layer box; >= 3 anchors
+  invert?: boolean;        // true = clip OUTSIDE the outline (cut a hole); default false = keep inside
+  feather?: number;        // px soft-edge blur radius; absent/0 = hard edge
+};
+// PathAnchor: { x, y, in?: {x,y}, out?: {x,y} }  — all in local 0..1; in/out are Bezier handle offsets
+```
+
+`anchors` are FRACTIONS of the layer's current width/height — `(0,0)` top-left,
+`(1,1)` bottom-right — so the mask is resolution-independent and follows the image
+when it moves / resizes / scales. The renderer closes the outline implicitly. In
+the editor this is authored with the **Mask** (scissors) pen tool on a selected
+image; programmatically, supply `anchors` directly.
+
+### 20.4 — Clone/heal patches (`patches[]`)
+
+```ts
+type ImagePatch = {
+  outline: PathAnchor[];        // closed region to repair, LOCAL 0..1; >= 3 anchors
+  source: { dx: number; dy: number };  // offset (local 0..1) to the CLEAN texture copied into the region
+  feather?: number;             // px soft blend at the patch edge; absent/0 = hard
+};
+```
+
+Each patch covers `outline` by copying the image's own pixels from `outline + source`
+over it — a clone-stamp. Nothing is baked into `src`; deleting the patch fully
+reverts. `source: { dx: 0.1, dy: 0 }` pulls clean texture from 10% of the layer
+width to the right; `{ dx: 0, dy: -0.05 }` from just above. Authored with the
+**Patch** tool in the editor; programmatically, supply the array.
+
+### 20.5 — Worked sample (the requested sample) — image collage with borders, a cut-out, and a patch
+
+A 1280×720, 4 s composition that exercises every image feature. Three photos over a
+dark background:
+
+1. **`photo-plain`** — a cover-fit image with a **6px white border**, fading in.
+2. **`photo-cutout`** — the same kind of image **masked to a diamond cut-out**
+   (4 anchors in local 0..1) with a soft `feather` and a **3px border that strokes
+   the diamond outline** (not a rectangle).
+3. **`photo-healed`** — an image with a **clone patch** covering a blemish in the
+   lower-left, sampling clean texture from just to the right.
+
+```jsonc
+{
+  "duration": 4, "fps": 30, "width": 1280, "height": 720,
+  "fontFamily": "Inter",
+  "meta": {
+    "description": "Three-photo collage demonstrating the image-layer authoring features. photo-plain (left) is a cover-fit image with a 6px white border, fading in over 0.5s. photo-cutout (centre) is masked to a diamond cut-out (4 anchors in local 0..1) with a 4px feather and a 3px sky-blue border that strokes the diamond outline rather than a rectangle. photo-healed (right) carries a clone patch over a blemish in its lower-left, sampling clean texture 12% of the width to the right. Used as the §20.5 reference sample for borders + masks + patches.",
+    "tags": ["collage", "image", "border", "demo"],
+    "category": "Explainers"
+  },
+  "layers": [
+    {
+      "id": "bg", "type": "shape",
+      "position": { "x": 0, "y": 0 }, "size": { "width": 1280, "height": 720 },
+      "properties": { "shape": "rect", "color": "#0f172a", "opacity": 1 }
+    },
+
+    {
+      "id": "photo-plain", "type": "image",
+      "position": { "x": 60, "y": 160 }, "size": { "width": 360, "height": 400 },
+      "animation": {
+        "property": "opacity",
+        "keyframes": [{ "time": 0, "value": 0 }, { "time": 0.5, "value": 1 }]
+      },
+      "properties": {
+        "src": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200",
+        "fit": "cover",
+        "opacity": 1,
+        "borderColor": "#ffffff",
+        "borderWidth": 6
+      }
+    },
+
+    {
+      "id": "photo-cutout", "type": "image",
+      "position": { "x": 460, "y": 160 }, "size": { "width": 360, "height": 400 },
+      "properties": {
+        "src": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200",
+        "fit": "cover",
+        "opacity": 1,
+        "borderColor": "#38bdf8",
+        "borderWidth": 3,
+        "mask": {
+          "type": "path",
+          "feather": 4,
+          "anchors": [
+            { "x": 0.5, "y": 0.02 },
+            { "x": 0.98, "y": 0.5 },
+            { "x": 0.5, "y": 0.98 },
+            { "x": 0.02, "y": 0.5 }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "photo-healed", "type": "image",
+      "position": { "x": 860, "y": 160 }, "size": { "width": 360, "height": 400 },
+      "properties": {
+        "src": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200",
+        "fit": "cover",
+        "opacity": 1,
+        "borderColor": "#000000",
+        "borderWidth": 2,
+        "patches": [
+          {
+            "outline": [
+              { "x": 0.15, "y": 0.70 },
+              { "x": 0.30, "y": 0.70 },
+              { "x": 0.30, "y": 0.88 },
+              { "x": 0.15, "y": 0.88 }
+            ],
+            "source": { "dx": 0.12, "dy": 0 },
+            "feather": 6
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Save + open it:
+
+```bash
+curl -sS -X POST https://api.vegvisr.org/vemotion/composition/save \
+  -H "X-API-Token: <token>" -H "Content-Type: application/json" \
+  -d '{ "name": "Image features sample", "composition": { … paste the JSON above … } }'
+# → 201 { ok: true, id: "comp_…", version: 1 }
+# open: https://vemotion.vegvisr.org/?compositionId=<id>
+```
+
+`photo-plain` shows a crisp white frame; `photo-cutout` is a diamond with a soft
+edge and a sky-blue outline tracing the diamond; `photo-healed` has the blemish
+region painted over with neighbouring texture, inside a thin black frame.
+
+### 20.6 — Rules for agents (image layers)
+
+- **CORS:** `src` must allow cross-origin reads, or the image (and its border) silently won't render. Unsplash `?w=` URLs and `vegvisr.imgix.net/<key>` both work.
+- **Border on a cut-out strokes the outline, not a rectangle** — don't expect a box frame on a masked image.
+- **`mask` / `patches` coordinates are local 0..1**, never canvas pixels. `(0.5, 0.5)` is always the image centre regardless of `size`.
+- **Spread-and-override when editing** an existing image layer's `properties` — preserve `mask` / `patches` / `border*` you aren't changing (the rebuild-from-scratch strip bug; see `_project/lessons_learned.md`).
+- **All three features survive MP4 export** — they live in the shared `CanvasRenderer.renderFrame` path used by preview, PNG, and the render pipeline.
+
+---
+
+## 21. Public templates — publish a snapshot, list, clone
+
+A composition can be published as a **template**: a frozen, deep-copied snapshot
+that any authenticated user can view and clone. Publishing does not link to the
+source — later edits to the source do NOT change the template until you re-publish.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/vemotion/template/publish` | Body `{ compositionId, name? }`. Owner-checks the source, snapshots it. **Deterministic id `tmpl_<compositionId>`** — re-publishing overwrites in place (`republished: true`). → `201`/`200 { ok, id, ... }`. |
+| GET | `/vemotion/templates` | List all published templates (cross-user), each with an `isMine` flag. Cursor-paginated. |
+| GET | `/vemotion/template?id=<id>` | Fetch one template incl. the full frozen composition. Any authed caller. |
+| DELETE | `/vemotion/template?id=<id>` | Unpublish (author only). |
+
+**Clone = fetch + save as new.** There's no dedicated clone endpoint; an agent
+fetches the template body and saves it as a fresh composition:
+
+```bash
+# fetch the frozen snapshot
+BODY=$(curl -sS -H "X-API-Token: <token>" "https://api.vegvisr.org/vemotion/template?id=tmpl_comp_abc123")
+# extract .template.composition and re-save under a new name (jq shown for clarity)
+echo "$BODY" | jq '{ name: "My copy of \(.template.name)", composition: .template.composition }' \
+  | curl -sS -X POST https://api.vegvisr.org/vemotion/composition/save \
+      -H "X-API-Token: <token>" -H "Content-Type: application/json" --data-binary @-
+```
+
+Note: a freshly published template can take ~3 s to appear in `/templates` (KV
+propagation). Fetch-by-id is immediate.
+
+---
+
+## 22. Video layers
+
+`type: 'video'` is live: the frame at the current composition time is drawn to the
+canvas (z-order respected) and the source is included in the MP4 export.
+
+```jsonc
+{
+  "id": "clip-1", "type": "video",
+  "position": { "x": 0, "y": 0 }, "size": { "width": 1280, "height": 720 },
+  "startTime": 0, "layerDuration": 6,
+  "properties": {
+    "src": "https://api.vegvisr.org/vemotion/video?key=<r2-key>",
+    "fit": "cover",
+    "opacity": 1
+  }
+}
+```
+
+Upload + stream:
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/vemotion/video/upload` | Auth. Binary body, header `X-File-Name: <name>`. Uploads to the `vemotion-video` R2 bucket. → `{ url, key }`. |
+| GET | `/vemotion/video?key=<key>` | **Public, no auth** (a `<video>` element can't send headers). Streams from R2 with HTTP **Range** support (206) so the player can seek. |
+
+```bash
+curl -sS -X POST https://api.vegvisr.org/vemotion/video/upload \
+  -H "X-API-Token: <token>" -H "X-File-Name: intro.mp4" \
+  --data-binary @intro.mp4
+# → { "url": "https://api.vegvisr.org/vemotion/video?key=...", "key": "..." }
+```
+
+Use that returned `url` as the video layer's `properties.src`.
+
+**Known gaps:** the video's OWN audio is not yet muxed into the export (use a
+separate `audio` layer for sound); no sub-range trim of the source clip; no loop.
+
+---
+
+## 23. Meta suggestion — `POST /vemotion/suggest-meta`
+
+Server-side helper that runs **gemma** (`@cf/google/gemma-4-26b-a4b-it`) via the
+worker's Workers-AI binding to propose `meta` fields from a composition summary.
+
+- **URL:** `POST https://api.vegvisr.org/vemotion/suggest-meta`
+- **Auth:** `X-API-Token` (same token as every endpoint).
+- **Body:** `{ "composition": { /* CompositionData */ } }`
+- **Returns:** `{ description, category, tags[], metaArea }` — drop straight into
+  `composition.meta` (§16). gemma is a reasoning model; the worker reads
+  `choices[0].message.content` and runs with `max_tokens >= 4096`.
+
+```bash
+curl -sS -X POST https://api.vegvisr.org/vemotion/suggest-meta \
+  -H "X-API-Token: <token>" -H "Content-Type: application/json" \
+  -d '{ "composition": { "duration": 5, "fps": 30, "width": 1280, "height": 720, "layers": [ /* ... */ ] } }'
+```
+
+Use it to auto-populate `meta` before saving, then let the user refine in the
+Portfolio modal. Agents should still follow §16's convention — a tight, intent-first
+`description`.

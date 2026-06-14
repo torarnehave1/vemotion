@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp, Mic, Type, FileText } from 'lucide-react';
-import { uploadAudioBlob } from '../lib/audioPortfolio';
+import { uploadAudioBlob, saveRecordingMetadata, VEMOTION_AUDIO_CATEGORY, VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG } from '../lib/audioPortfolio';
+import { readStoredUser } from '../lib/auth';
 import { Teleprompter } from './Teleprompter';
 import { NarrationScriptModal } from './NarrationScriptModal';
 import { CanvasRenderer, PlaybackController, type ResizeHandle } from '../lib/renderer';
@@ -529,8 +530,29 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         if (blob.size === 0) return;
         setNarrSaving(true);
         try {
-          const { audioUrl, r2Key } = await uploadAudioBlob(blob, `narration-${Date.now()}.webm`);
+          const fileName = `narration-${Date.now()}.webm`;
+          const { audioUrl, r2Key } = await uploadAudioBlob(blob, fileName);
           const dur = (await probeDuration(audioUrl)) || composition.duration;
+          // Register in the audio portfolio too (Lesson 22 two-worker pattern):
+          // /upload writes the binary, /save-recording writes the metadata that
+          // makes it show up in the Audio Portfolio. Best-effort; tagged like
+          // AudioLayerForm's voice-over recordings so it lists consistently.
+          const userEmail = readStoredUser()?.email;
+          if (userEmail) {
+            await saveRecordingMetadata({
+              userEmail,
+              fileName,
+              displayName: `Narration — ${new Date().toLocaleString()}`,
+              r2Key,
+              r2Url: audioUrl,
+              fileSize: blob.size,
+              duration: dur,
+              tags: [VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG],
+              category: VEMOTION_AUDIO_CATEGORY,
+              audioFormat: 'webm',
+              publicationState: 'published',
+            });
+          }
           onAddLayers?.([{
             id: `narration-${Date.now().toString(36)}`, type: 'audio', visible: true,
             position: { x: 0, y: 0 }, size: { width: 0, height: 0 },

@@ -569,6 +569,14 @@ export const Dashboard: React.FC = () => {
               selectedLayerId={selectedLayerId}
               onSelectLayer={setSelectedLayerId}
               onUpdatePathStream={applyPathStream}
+              onSetLayerVolume={(layerId, volume) => {
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => l.id === layerId
+                    ? { ...l, properties: { ...l.properties, volume } }
+                    : l),
+                }));
+              }}
               onLayerMove={(layerId, position) => {
                 // Commit the post-drag position into composition state. Flows
                 // through the existing autosave pipeline automatically.

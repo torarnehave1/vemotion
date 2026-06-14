@@ -60,6 +60,8 @@ interface VideoPreviewProps {
   onUpdatePathAnchors?: (layerId: string, anchors: PathAnchor[]) => void;
   /** Rebuild a path + its follower dots from the Path stream panel. */
   onUpdatePathStream?: (pathId: string, settings: StreamSettings) => void;
+  /** Set an audio layer's volume (0..1) from the floating volume slider. */
+  onSetLayerVolume?: (layerId: string, volume: number) => void;
   /**
    * Set (or replace) an image layer's clip mask (`properties.mask`). Called once
    * when a mask is committed from the pen tool in mask mode. Anchors are already
@@ -160,7 +162,7 @@ function computeResizedBox(
   return { x, y, w, h };
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onSetLayerVolume, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -991,6 +993,33 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                   onClick={(e) => e.stopPropagation()}
                 >
                   <PathStreamPanel key={rs.pathId} pathId={rs.pathId} settings={rs.settings} onApply={(s) => onUpdatePathStream(rs.pathId, s)} />
+                </div>
+              );
+            })()}
+            {onSetLayerVolume && (() => {
+              const sel = composition.layers.find((l) => l.id === selectedLayerId);
+              if (!sel || sel.type !== 'audio') return null;
+              const vol = typeof (sel.properties as Record<string, unknown>).volume === 'number'
+                ? (sel.properties as Record<string, unknown>).volume as number : 1;
+              const label = ((sel.properties as Record<string, unknown>).displayName as string) || 'Audio';
+              return (
+                <div
+                  className="absolute top-2 left-2 z-20 w-64 rounded-lg border border-slate-700 bg-slate-900 p-3"
+                  style={{ pointerEvents: 'auto' }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-100 truncate" title={label}>🔊 {label}</span>
+                    <span className="text-xs text-slate-400">{Math.round(vol * 100)}%</span>
+                  </div>
+                  <input
+                    type="range" min={0} max={1} step={0.05} value={vol}
+                    onChange={(e) => onSetLayerVolume(sel.id, Number(e.target.value))}
+                    className="w-full accent-sky-500"
+                    aria-label="Audio volume"
+                  />
                 </div>
               );
             })()}

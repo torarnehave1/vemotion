@@ -24,6 +24,11 @@ const FONT_OPTIONS = [
   { label: 'DM Sans',             value: 'DM Sans' },
   { label: 'Plus Jakarta Sans',   value: 'Plus Jakarta Sans' },
   { label: 'Space Grotesk',       value: 'Space Grotesk' },
+  { label: 'Playfair Display',    value: 'Playfair Display' },
+  { label: 'Lora (serif)',        value: 'Lora' },
+  { label: 'Anek Devanagari (देवनागरी)',       value: 'Anek Devanagari' },
+  { label: 'Noto Sans Devanagari (देवनागरी)',  value: 'Noto Sans Devanagari' },
+  { label: 'Tiro Devanagari Sanskrit (देवनागरी)', value: 'Tiro Devanagari Sanskrit' },
 ];
 
 const MATH_SHAPE_PRESETS = {

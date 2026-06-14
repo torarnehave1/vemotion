@@ -53,6 +53,10 @@ export async function exportToMp4(
   onProgress?.({ stage: 'loading', percent: 10, message: 'Preloading images...' });
   await renderer.preloadImages(composition);
 
+  // Force fonts (incl. Devanagari) to fetch before drawing — the off-DOM export
+  // canvas won't trigger Google Fonts' lazy @font-face on its own.
+  await renderer.preloadFonts(composition);
+
   // Preload video layers into off-DOM <video> elements. Frames are drawn onto
   // the canvas (see the per-frame seekVideos below), so each video bakes into
   // the PNG sequence and respects layer z-order. The video's own audio is NOT

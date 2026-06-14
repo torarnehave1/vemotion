@@ -469,6 +469,44 @@ export class CanvasRenderer {
     await Promise.all(urls.filter(Boolean).map(src => this.loadImageAsync(src)));
   }
 
+  /**
+   * Force every font the composition uses to be fetched before any frame is
+   * drawn. Google Fonts ships each family as a lazy `@font-face` — the browser
+   * only fetches it once something on the page actually uses it. The export
+   * canvas is off-DOM and draws via `ctx.font`, which does NOT trigger that
+   * fetch and silently falls back to a default face. For Latin that is merely a
+   * wrong typeface; for Devanagari (Anek/Noto/Tiro) the fallback has no glyphs,
+   * so the MP4/PNG exports as blank boxes even when the live preview is correct.
+   *
+   * `document.fonts.load(<shorthand>, <sampleText>)` explicitly requests the
+   * matching face (the sample text spans Latin + Devanagari so Google's split
+   * subsets both load), then `document.fonts.ready` waits for them all. Failures
+   * resolve silently — a missing font just falls back, same posture as images.
+   */
+  async preloadFonts(composition: CompositionData): Promise<void> {
+    if (typeof document === 'undefined' || !document.fonts) return;
+    const sample = 'Ag देवनागरी';
+    const specs = new Set<string>();
+    const add = (family?: unknown, weight?: unknown) => {
+      if (typeof family !== 'string' || !family.trim()) return;
+      const w = typeof weight === 'string' || typeof weight === 'number' ? weight : '400';
+      specs.add(`${w} 48px ${family}`);
+    };
+    if (composition.fontFamily) add(composition.fontFamily, '400');
+    for (const l of composition.layers) {
+      if (l.type === 'text' || l.type === 'card') {
+        const p = l.properties as Record<string, unknown>;
+        add(p.fontFamily, p.fontWeight);
+      }
+    }
+    await Promise.all(
+      [...specs].map(spec =>
+        document.fonts.load(spec, sample).catch(() => undefined)
+      )
+    );
+    await document.fonts.ready;
+  }
+
   private loadImageAsync(src: string): Promise<void> {
     if (this.imageCache.get(src)?.complete) return Promise.resolve();
     return new Promise((resolve) => {

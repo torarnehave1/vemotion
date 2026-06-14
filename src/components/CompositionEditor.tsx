@@ -16,6 +16,11 @@ const FONT_PRESETS = [
   { label: 'DM Sans — minimal',              value: 'DM Sans' },
   { label: 'Plus Jakarta Sans — techy',      value: 'Plus Jakarta Sans' },
   { label: 'Space Grotesk — geometric',      value: 'Space Grotesk' },
+  { label: 'Playfair Display — elegant serif', value: 'Playfair Display' },
+  { label: 'Lora — readable serif',          value: 'Lora' },
+  { label: 'Anek Devanagari — देवनागरी sans',   value: 'Anek Devanagari' },
+  { label: 'Noto Sans Devanagari — देवनागरी',   value: 'Noto Sans Devanagari' },
+  { label: 'Tiro Devanagari Sanskrit — देवनागरी serif', value: 'Tiro Devanagari Sanskrit' },
 ] as const;
 
 const SIZE_PRESETS = [

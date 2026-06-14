@@ -46,6 +46,7 @@ export async function captureFramePngBlob(
   const canvas = document.createElement('canvas');
   const renderer = new CanvasRenderer(canvas);
   await renderer.preloadImages(composition);
+  await renderer.preloadFonts(composition);
   await renderer.preloadVideos(composition);
   // Seek video layers to this frame's time so the captured frame is correct.
   await renderer.seekVideos(composition, frameNumber / composition.fps);

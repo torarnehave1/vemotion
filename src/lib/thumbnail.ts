@@ -39,6 +39,7 @@ export async function renderThumbnail(
   const renderer = new CanvasRenderer(fullCanvas);
 
   await renderer.preloadImages(composition);
+  await renderer.preloadFonts(composition);
   renderer.renderFrame(composition, 0);
 
   // Downscale to thumbnail.

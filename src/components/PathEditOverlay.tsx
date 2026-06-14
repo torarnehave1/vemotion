@@ -3,6 +3,8 @@ import type { CompositionData, Layer, PathAnchor } from '../lib/api';
 
 interface PathEditOverlayProps {
   composition: CompositionData;
+  /** Current playhead time (seconds). Only paths active at this time are shown. */
+  currentTime: number;
   /** Replace a single path layer's properties (atomic). */
   onUpdatePath: (layerId: string, nextAnchors: PathAnchor[]) => void;
 }
@@ -37,7 +39,7 @@ type Gesture =
  * fast because the [composition] effect re-uses the existing renderer
  * (no recreate).
  */
-export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, onUpdatePath }) => {
+export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, currentTime, onUpdatePath }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [gesture, setGesture] = useState<Gesture>({ kind: 'idle' });
 
@@ -62,7 +64,24 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, o
 
   // Path layers we'll render handles for (in render order, so later ones
   // sit on top visually — matches the canvas z-order).
-  const pathLayers: Layer[] = composition.layers.filter(l => l.type === 'path' && l.visible !== false);
+  // Only paths active at the current playhead — a path scoped to another slide
+  // must not clutter (or steal clicks on) the slide being edited. A path counts
+  // as active if ITS window or ANY of its follower dots' windows contains the
+  // playhead, so a path with a brief stroke window is still editable for the
+  // whole slide its stream runs on.
+  const activeAt = (l: Layer) => {
+    const s = l.startTime ?? 0;
+    const e = s + (l.layerDuration ?? composition.duration);
+    return currentTime >= s && currentTime < e;
+  };
+  const dotStreamActive = (pid: string) => composition.layers.some((l) => {
+    if (l.type !== 'shape') return false;
+    const ms = ((l.properties as Record<string, unknown>)?.motionScenes as Array<{ pathLayerId?: string }>) || [];
+    return ms.some((s) => s?.pathLayerId === pid) && activeAt(l);
+  });
+  const pathLayers: Layer[] = composition.layers.filter(
+    (l) => l.type === 'path' && l.visible !== false && (activeAt(l) || dotStreamActive(l.id)),
+  );
 
   // Window-level mousemove / mouseup during drag — catch releases that
   // land outside the SVG bounds.

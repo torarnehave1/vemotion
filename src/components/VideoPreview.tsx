@@ -912,6 +912,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
             {editMode && !penMode && !patchTargetId && onUpdatePathAnchors && (
               <PathEditOverlay
                 composition={composition}
+                currentTime={currentFrame / (composition.fps || 30)}
                 onUpdatePath={onUpdatePathAnchors}
               />
             )}

@@ -2,6 +2,7 @@ import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnch
 import { samplePath } from './pathSampling';
 import { sampleAudioTrack } from './audioAnalysis';
 import { renderKnittingChart, type KnittingChart } from './knitting';
+import { layoutTelemetryTrack, type TelemetryTrackProps } from './telemetryTrack';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -901,6 +902,9 @@ export class CanvasRenderer {
       case 'knitting-chart':
         this.drawKnittingChart(layer, values);
         break;
+      case 'telemetry-track':
+        this.drawTelemetryTrack(layer, values);
+        break;
     }
 
     this.ctx.restore();
@@ -929,6 +933,102 @@ export class CanvasRenderer {
       background: (values.background as string) ?? '#ffffff',
       gridColor: (values.gridColor as string) ?? '#999999',
     });
+  }
+
+  /**
+   * Draw a `type: 'telemetry-track'` layer — one lane per meeting participant
+   * across a shared time axis. Each lane has a `present` base span plus
+   * `speaking` / `muted` / `videoOff` overlays. The animatable `progress`
+   * (0..1, read the same nullish way as drawProgress) maps to a meeting-time
+   * play-head: spans are drawn only up to the head, the span under the head is
+   * highlighted (the live state), and the head advances as progress animates.
+   * Pure geometry lives in layoutTelemetryTrack; this method only paints.
+   */
+  private drawTelemetryTrack(layer: Layer, values: Record<string, unknown>): void {
+    const participants = values.participants as TelemetryTrackProps['participants'] | undefined;
+    const meetingDurationMs = Number(values.meetingDurationMs);
+    if (!Array.isArray(participants) || participants.length === 0 || !(meetingDurationMs > 0)) return;
+
+    // 0 is a valid "nothing revealed yet" progress — use ?? not || (see drawProgress).
+    const progress = Math.max(0, Math.min(1, Number(values.progress ?? 1)));
+
+    const props: TelemetryTrackProps = {
+      meetingDurationMs,
+      participants,
+      laneHeight: values.laneHeight as number | undefined,
+      laneGap: values.laneGap as number | undefined,
+      cornerRadius: values.cornerRadius as number | undefined,
+      labelWidth: values.labelWidth as number | undefined,
+      statWidth: values.statWidth as number | undefined,
+      colors: values.colors as TelemetryTrackProps['colors'],
+    };
+    const geom = { x: layer.position.x, y: layer.position.y, width: layer.size.width, height: layer.size.height };
+    const layout = layoutTelemetryTrack(props, geom, progress);
+
+    const label = (values.label as { color?: string; font?: string; size?: number } | undefined) ?? {};
+    const labelColor = label.color ?? '#1f2937';
+    const labelFont = label.font ?? 'Inter';
+    const labelSize = label.size ?? 13;
+    const radius = layout.cornerRadius;
+    const showPlayhead = values.showPlayhead !== false;
+    const playheadColor = (values.playheadColor as string) ?? '#111827';
+    const highlightActive = values.highlightActive !== false;
+    const laneBg = (values.laneBg as string) ?? 'rgba(148,148,148,0.12)';
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.textBaseline = 'middle';
+
+    for (const lane of layout.lanes) {
+      const midY = lane.trackY + lane.height / 2;
+
+      // lane background track (full width)
+      ctx.fillStyle = laneBg;
+      this.roundedRect(layout.trackX, lane.trackY, layout.trackW, lane.height, radius);
+      ctx.fill();
+
+      // present base first, then state overlays (already ordered by layout)
+      for (const seg of lane.segments) {
+        if (seg.w <= 0) continue;
+        const r = Math.min(radius, seg.w / 2);
+        ctx.fillStyle = seg.color;
+        this.roundedRect(seg.x, lane.trackY, seg.w, lane.height, r);
+        ctx.fill();
+        if (highlightActive && seg.active) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          this.roundedRect(seg.x, lane.trackY, seg.w, lane.height, r);
+          ctx.stroke();
+        }
+      }
+
+      // name label (left of the track)
+      ctx.fillStyle = labelColor;
+      ctx.font = `${lane.host ? '600 ' : ''}${labelSize}px ${labelFont}`;
+      ctx.textAlign = 'left';
+      ctx.fillText(lane.host ? `${lane.name} · host` : lane.name, geom.x, midY);
+
+      // talk% stat (right of the track)
+      if (typeof lane.talkPct === 'number') {
+        ctx.textAlign = 'right';
+        ctx.fillText(`${lane.talkPct}% talk`, geom.x + geom.width, midY);
+      }
+    }
+
+    // play-head — spans all lanes
+    if (showPlayhead && layout.lanes.length > 0) {
+      const first = layout.lanes[0];
+      const last = layout.lanes[layout.lanes.length - 1];
+      ctx.strokeStyle = playheadColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(layout.playheadX, first.trackY - 4);
+      ctx.lineTo(layout.playheadX, last.trackY + last.height + 4);
+      ctx.stroke();
+    }
+
+    ctx.textAlign = 'left';
+    ctx.restore();
   }
 
   /**

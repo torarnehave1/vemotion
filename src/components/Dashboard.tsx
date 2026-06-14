@@ -7,6 +7,43 @@ import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
 import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeCompositionIdToUrl, writeLastCompositionRef } from '../lib/cloud-compositions';
+import { PathStreamPanel, type StreamSettings } from './PathStreamPanel';
+
+// Lighten a hex colour toward white (used for the trailing density dots).
+function lighten(hex: string, amt = 0.5): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  r = Math.round(r + (255 - r) * amt); g = Math.round(g + (255 - g) * amt); b = Math.round(b + (255 - b) * amt);
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+
+// Resolve the selected layer to its path + current stream settings. A path
+// resolves to itself; a follower dot resolves to the path its motionScenes
+// reference. Returns null when the selection isn't a path/stream.
+function resolveStreamPath(comp: CompositionData, selId: string | null): { pathId: string; settings: StreamSettings } | null {
+  if (!selId) return null;
+  const sel = comp.layers.find((l) => l.id === selId);
+  if (!sel) return null;
+  const msOf = (l: Layer) => ((l.properties as Record<string, unknown>)?.motionScenes as Array<{ pathLayerId?: string; start?: number; end?: number }>) || [];
+  let pathId: string | null = null;
+  if (sel.type === 'path') pathId = sel.id;
+  else if (sel.type === 'shape') pathId = msOf(sel).map((s) => s?.pathLayerId).find(Boolean) ?? null;
+  if (!pathId) return null;
+  const path = comp.layers.find((l) => l.id === pathId && l.type === 'path');
+  if (!path) return null;
+  const dots = comp.layers.filter((l) => l.type === 'shape' && msOf(l).some((s) => s?.pathLayerId === pathId));
+  const primary = dots[0];
+  const scenes = primary ? msOf(primary) : [];
+  const cycle = scenes[0] ? +(((scenes[0].end ?? 0) - (scenes[0].start ?? 0)).toFixed(2)) : 0.8;
+  const start = +((primary?.startTime ?? path.startTime ?? 0).toFixed(2));
+  const dur = primary?.layerDuration ?? path.layerDuration ?? comp.duration;
+  const end = +((start + dur).toFixed(2));
+  const color = ((path.properties as Record<string, unknown>)?.strokeColor as string)
+    || ((primary?.properties as Record<string, unknown>)?.color as string) || '#38bdf8';
+  return { pathId, settings: { color, cycle: cycle || 0.8, density: Math.max(1, dots.length || 1), start, end } };
+}
 
 const DEFAULT_SIDEBAR_WIDTH = 420;
 const MIN_SIDEBAR_WIDTH = 260;
@@ -70,6 +107,48 @@ export const Dashboard: React.FC = () => {
   // via onSelectLayer; a timeline row click pushes the same id, which flows back
   // down to the canvas — selection stays in sync both ways.
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+
+  // Slice 2: rebuild a path + its follower dots from the Path-stream panel —
+  // colour (path stroke + dots), speed (cycle), density (phase-offset dots),
+  // start/stop window. One composition update; rides autosave.
+  const applyPathStream = useCallback((pathId: string, st: StreamSettings) => {
+    setComposition((prev) => {
+      const winStart = +st.start.toFixed(2);
+      const winEnd = Math.max(winStart + 0.5, +st.end.toFixed(2));
+      const winDur = +(winEnd - winStart).toFixed(2);
+      const C = Math.max(0.1, st.cycle);
+      const density = Math.max(1, Math.min(12, Math.round(st.density)));
+      const light = lighten(st.color);
+      const mkCycles = (durTotal: number) => {
+        const sc: Array<{ start: number; end: number; pathLayerId: string }> = [];
+        for (let c = 0; c < durTotal - 1e-6; c += C) sc.push({ start: +c.toFixed(3), end: +Math.min(c + C, durTotal).toFixed(3), pathLayerId: pathId });
+        return sc;
+      };
+      const isDot = (l: Layer) => l.type === 'shape'
+        && Array.isArray((l.properties as Record<string, unknown>)?.motionScenes)
+        && ((l.properties as Record<string, unknown>).motionScenes as Array<{ pathLayerId?: string }>).some((s) => s?.pathLayerId === pathId);
+      // drop the old follower dots, recolour + rewindow the path
+      const layers = prev.layers.filter((l) => !isDot(l)).map((l) => l.id === pathId
+        ? { ...l, startTime: winStart, layerDuration: winDur, properties: { ...l.properties, strokeColor: st.color } }
+        : l);
+      // build the new density stream, phase-offset across one cycle
+      const dots: Layer[] = [];
+      for (let j = 0; j < density; j++) {
+        const ds = +(winStart + j * (C / density)).toFixed(2);
+        const dd = +(winEnd - ds).toFixed(2);
+        if (dd <= 0) continue;
+        dots.push({
+          id: `${pathId}-stream-${j}`, type: 'shape', position: { x: 0, y: 0 },
+          size: { width: j === 0 ? 14 : 12, height: j === 0 ? 14 : 12 },
+          startTime: ds, layerDuration: dd,
+          properties: { shape: 'circle', color: j === 0 ? st.color : light, opacity: j === 0 ? 1 : 0.9, strokeColor: '#0c4a6e', strokeWidth: 2, motionScenes: mkCycles(dd) },
+        });
+      }
+      const i = layers.findIndex((l) => l.id === pathId);
+      layers.splice(i + 1, 0, ...dots);
+      return { ...prev, layers };
+    });
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
@@ -489,6 +568,12 @@ export const Dashboard: React.FC = () => {
         >
           <div className="p-4" style={{ width: sidebarWidth }}>
             <CompositionEditor composition={composition} onChange={setComposition} currentFrame={currentFrame} />
+            {(() => {
+              const rs = resolveStreamPath(composition, selectedLayerId);
+              return rs ? (
+                <PathStreamPanel key={rs.pathId} pathId={rs.pathId} settings={rs.settings} onApply={(s) => applyPathStream(rs.pathId, s)} />
+              ) : null;
+            })()}
           </div>
         </aside>
 

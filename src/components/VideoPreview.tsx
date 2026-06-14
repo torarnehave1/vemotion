@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp, Mic } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp, Mic, Type } from 'lucide-react';
 import { uploadAudioBlob } from '../lib/audioPortfolio';
+import { Teleprompter } from './Teleprompter';
 import { CanvasRenderer, PlaybackController, type ResizeHandle } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
 import type { CompositionData, Layer, PathAnchor, PathMask, ImagePatch, Guide } from '../lib/api';
@@ -490,6 +491,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   const [narrSaving, setNarrSaving] = useState(false);
   const narrRecorderRef = useRef<MediaRecorder | null>(null);
   const narrChunksRef = useRef<Blob[]>([]);
+  const [showTeleprompter, setShowTeleprompter] = useState(false);
 
   const probeDuration = (url: string) => new Promise<number>((resolve) => {
     const a = new Audio(url);
@@ -1083,6 +1085,30 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         >
           <Square className="w-4 h-4" /> Stop
         </button>
+        <button
+          onClick={() => setShowTeleprompter((v) => !v)}
+          className={[
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
+            showTeleprompter ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+          ].join(' ')}
+          title="Floating teleprompter — shows the Narration line for the current playhead in its own readable panel"
+        >
+          <Type className="w-4 h-4" /> Teleprompter
+        </button>
+        {showTeleprompter && (() => {
+          const t = currentFrame / (composition.fps || 30);
+          const grp = (composition.groups || []).find((g) => (g.name || '').toLowerCase() === 'narration');
+          let cur: string | null = null, nxt: string | null = null;
+          if (grp) {
+            const lines = composition.layers
+              .filter((l) => l.groupId === grp.id && l.type === 'text')
+              .map((l) => ({ s: l.startTime ?? 0, e: (l.startTime ?? 0) + (l.layerDuration ?? composition.duration), text: String((l.properties as Record<string, unknown>).text || '') }))
+              .sort((a, b) => a.s - b.s);
+            cur = lines.find((l) => t >= l.s && t < l.e)?.text ?? null;
+            nxt = lines.find((l) => l.s > t)?.text ?? null;
+          }
+          return <Teleprompter line={cur} next={nxt} onClose={() => setShowTeleprompter(false)} />;
+        })()}
         {onAddLayers && (narrState === 'idle' ? (
           <button
             onClick={startNarration}

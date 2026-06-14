@@ -517,6 +517,16 @@ export const Dashboard: React.FC = () => {
                     : l),
                 }));
               }}
+              onLayerResize={(layerId, position, size) => {
+                // Commit the post-resize position + size. Spread-and-override so
+                // every other layer field survives (Lesson 21). Rides autosave.
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => l.id === layerId
+                    ? { ...l, position, size }
+                    : l),
+                }));
+              }}
               onAddLayers={(layers) => {
                 // Append new layers to the composition (in order — last is
                 // on top). Used by the Pen Tool: emits [pathLayer, dotLayer]

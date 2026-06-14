@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp } from 'lucide-react';
-import { CanvasRenderer, PlaybackController } from '../lib/renderer';
+import { CanvasRenderer, PlaybackController, type ResizeHandle } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
 import type { CompositionData, Layer, PathAnchor, PathMask, ImagePatch, Guide } from '../lib/api';
 import { layerLabel } from '../lib/api';
@@ -24,6 +24,12 @@ interface VideoPreviewProps {
    * without going through React state.
    */
   onLayerMove?: (layerId: string, position: { x: number; y: number }) => void;
+  /**
+   * Commit a new layer position + size after a resize-handle drag in Edit mode.
+   * Called once on mouseup. During the drag the renderer updates optimistically
+   * without going through React state (same pattern as onLayerMove).
+   */
+  onLayerResize?: (layerId: string, position: { x: number; y: number }, size: { width: number; height: number }) => void;
   /**
    * Append one or more new layers (in render order — last is drawn on top).
    * Used by the Pen Tool when finishing a path: it emits two layers
@@ -79,7 +85,67 @@ interface VideoPreviewProps {
   onUpdateGuides?: (guides: Guide[]) => void;
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
+const MIN_SIZE = 8; // smallest layer box a resize can produce (canvas px)
+
+/** CSS cursor for a given resize handle (Illustrator diagonal/axis cursors). */
+function handleCursor(handle: ResizeHandle): string {
+  if (handle === 'nw' || handle === 'se') return 'nwse-resize';
+  if (handle === 'ne' || handle === 'sw') return 'nesw-resize';
+  if (handle === 'n' || handle === 's') return 'ns-resize';
+  return 'ew-resize'; // 'e' | 'w'
+}
+
+/**
+ * Recompute a layer box from a resize-handle drag. The opposite edge(s) stay
+ * fixed (L0/T0/R0/B0 captured at mousedown); the moving edge(s) follow the
+ * mouse. `constrain` (Shift held) locks the original aspect ratio: corners
+ * scale by the larger axis delta; edge handles scale the perpendicular axis too,
+ * centred on the fixed edge's midpoint. Box never shrinks below MIN_SIZE.
+ */
+function computeResizedBox(
+  handle: ResizeHandle,
+  L0: number, T0: number, R0: number, B0: number,
+  mx: number, my: number,
+  constrain: boolean,
+): { x: number; y: number; w: number; h: number } {
+  const w0 = R0 - L0;
+  const h0 = B0 - T0;
+  const movesLeft   = handle === 'nw' || handle === 'w' || handle === 'sw';
+  const movesRight  = handle === 'ne' || handle === 'e' || handle === 'se';
+  const movesTop    = handle === 'nw' || handle === 'n' || handle === 'ne';
+  const movesBottom = handle === 'sw' || handle === 's' || handle === 'se';
+
+  if (constrain && w0 > 0 && h0 > 0) {
+    const sx = movesRight ? 1 : movesLeft ? -1 : 0;
+    const sy = movesBottom ? 1 : movesTop ? -1 : 0;
+    const ax = movesRight ? L0 : movesLeft ? R0 : (L0 + R0) / 2; // fixed anchor x
+    const ay = movesBottom ? T0 : movesTop ? B0 : (T0 + B0) / 2; // fixed anchor y
+    let sc: number;
+    if (sx !== 0 && sy !== 0) sc = Math.max(Math.abs(mx - ax) / w0, Math.abs(my - ay) / h0);
+    else if (sx !== 0)       sc = Math.abs(mx - ax) / w0;
+    else                     sc = Math.abs(my - ay) / h0;
+    const minSc = Math.max(MIN_SIZE / w0, MIN_SIZE / h0);
+    if (sc < minSc) sc = minSc;
+    const w = w0 * sc;
+    const h = h0 * sc;
+    const x = sx > 0 ? ax : sx < 0 ? ax - w : ax - w / 2;
+    const y = sy > 0 ? ay : sy < 0 ? ay - h : ay - h / 2;
+    return { x, y, w, h };
+  }
+
+  // Free resize — moving edge tracks the mouse, opposite edge fixed.
+  let x: number, w: number;
+  if (movesLeft)       { w = Math.max(MIN_SIZE, R0 - mx); x = R0 - w; }
+  else if (movesRight) { w = Math.max(MIN_SIZE, mx - L0); x = L0; }
+  else                 { w = w0; x = L0; }
+  let y: number, h: number;
+  if (movesTop)         { h = Math.max(MIN_SIZE, B0 - my); y = B0 - h; }
+  else if (movesBottom) { h = Math.max(MIN_SIZE, my - T0); y = T0; }
+  else                  { h = h0; y = T0; }
+  return { x, y, w, h };
+}
+
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -121,6 +187,17 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     finalX: number;
     finalY: number;
   } | null>(null);
+  // Resize in-flight state. Captures the layer's BASE box edges at mousedown
+  // (L0/T0/R0/B0 = left/top/right/bottom) so each move recomputes the box from
+  // the fixed anchor edge(s). Commits position+size once on mouseup.
+  const resizingRef = useRef<{
+    layerId: string;
+    handle: ResizeHandle;
+    L0: number; T0: number; R0: number; B0: number;
+    finalX: number; finalY: number; finalW: number; finalH: number;
+  } | null>(null);
+  // Which handle the cursor is hovering (for the resize cursor), null otherwise.
+  const [hoverHandle, setHoverHandle] = useState<ResizeHandle | null>(null);
 
   const totalFrames = Math.floor(composition.duration * composition.fps);
 
@@ -521,6 +598,61 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     }
 
     const time = currentFrame / composition.fps;
+
+    // Resize-handle grab takes priority over move/deselect. Only the selected
+    // layer draws handles, so resizeHandleAt returns null unless one is under
+    // the cursor. Shift (read live per move event) constrains the aspect ratio.
+    const handle = rendererRef.current.resizeHandleAt(coords.x, coords.y, composition, time);
+    if (handle && selectedLayerId) {
+      const layer = composition.layers.find(l => l.id === selectedLayerId);
+      if (layer) {
+        e.preventDefault();
+        const L0 = layer.position.x;
+        const T0 = layer.position.y;
+        const R0 = layer.position.x + layer.size.width;
+        const B0 = layer.position.y + layer.size.height;
+        resizingRef.current = {
+          layerId: selectedLayerId, handle, L0, T0, R0, B0,
+          finalX: L0, finalY: T0, finalW: layer.size.width, finalH: layer.size.height,
+        };
+        const onResizeMove = (ev: MouseEvent) => {
+          const rs = resizingRef.current;
+          if (!rs) return;
+          const now = toCanvasCoords(ev.clientX, ev.clientY);
+          if (!now) return;
+          const box = computeResizedBox(rs.handle, rs.L0, rs.T0, rs.R0, rs.B0, now.x, now.y, ev.shiftKey);
+          rs.finalX = box.x; rs.finalY = box.y; rs.finalW = box.w; rs.finalH = box.h;
+          const renderer = rendererRef.current;
+          if (!renderer) return;
+          const tempComp: CompositionData = {
+            ...composition,
+            layers: composition.layers.map(l => l.id === rs.layerId
+              ? { ...l, position: { x: box.x, y: box.y }, size: { width: box.w, height: box.h } }
+              : l),
+          };
+          renderer.selectedLayerId = rs.layerId;
+          void renderer.renderFrame(tempComp, currentFrame);
+        };
+        const onResizeUp = () => {
+          const rs = resizingRef.current;
+          resizingRef.current = null;
+          document.removeEventListener('mousemove', onResizeMove);
+          document.removeEventListener('mouseup', onResizeUp);
+          if (!rs) return;
+          const layerNow = composition.layers.find(l => l.id === rs.layerId);
+          if (!layerNow) return;
+          const x = Math.round(rs.finalX), y = Math.round(rs.finalY);
+          const w = Math.round(rs.finalW), h = Math.round(rs.finalH);
+          if (layerNow.position.x === x && layerNow.position.y === y
+            && layerNow.size.width === w && layerNow.size.height === h) return;
+          onLayerResize?.(rs.layerId, { x, y }, { width: w, height: h });
+        };
+        document.addEventListener('mousemove', onResizeMove);
+        document.addEventListener('mouseup', onResizeUp);
+        return;
+      }
+    }
+
     const hitId = rendererRef.current.hitTest(coords.x, coords.y, composition, time);
 
     if (!hitId) {
@@ -635,20 +767,24 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
 
     document.addEventListener('mousemove', onDragMove);
     document.addEventListener('mouseup', onDragUp);
-  }, [editMode, composition, currentFrame, handlePanStart, onLayerMove, toCanvasCoords, onUpdateGuides]);
+  }, [editMode, composition, currentFrame, handlePanStart, onLayerMove, onLayerResize, selectedLayerId, toCanvasCoords, onUpdateGuides]);
 
   // Cursor feedback: in edit mode, show grab when hovering a layer.
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!editMode || !rendererRef.current || draggingRef.current) {
+    if (!editMode || !rendererRef.current || draggingRef.current || resizingRef.current) {
       if (hoverLayerId !== null) setHoverLayerId(null);
+      if (hoverHandle !== null) setHoverHandle(null);
       return;
     }
     const coords = toCanvasCoords(e.clientX, e.clientY);
     if (!coords) return;
     const time = currentFrame / composition.fps;
-    const hitId = rendererRef.current.hitTest(coords.x, coords.y, composition, time);
-    if (hitId !== hoverLayerId) setHoverLayerId(hitId);
-  }, [editMode, composition, currentFrame, hoverLayerId, toCanvasCoords]);
+    // A handle hover wins over a body hover (resize cursor takes priority).
+    const handle = rendererRef.current.resizeHandleAt(coords.x, coords.y, composition, time);
+    if (handle !== hoverHandle) setHoverHandle(handle);
+    const hitId = handle ? hoverLayerId : rendererRef.current.hitTest(coords.x, coords.y, composition, time);
+    if (!handle && hitId !== hoverLayerId) setHoverLayerId(hitId);
+  }, [editMode, composition, currentFrame, hoverLayerId, hoverHandle, toCanvasCoords]);
 
   const currentTime = (currentFrame / composition.fps).toFixed(2);
   const totalTime = composition.duration.toFixed(2);
@@ -711,10 +847,12 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               width: `min(100%, calc(50vh * ${composition.width} / ${composition.height}))`,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: 'center center',
-              cursor: draggingRef.current
+              cursor: resizingRef.current
+                ? handleCursor(resizingRef.current.handle)
+                : draggingRef.current
                 ? 'grabbing'
                 : editMode
-                ? (hoverLayerId ? 'grab' : 'crosshair')
+                ? (hoverHandle ? handleCursor(hoverHandle) : hoverLayerId ? 'grab' : 'crosshair')
                 : zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
             }}
             onMouseDown={handleMouseDown}

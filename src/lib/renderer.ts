@@ -343,6 +343,25 @@ function computeLayerBounds(layer: Layer, localTime: number, composition?: Compo
   };
 }
 
+/** One of the 8 selection resize handles (Illustrator layout). */
+export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+/**
+ * Canvas-space centre point of each of the 8 resize handles for a bounds rect
+ * (4 corners + 4 edge midpoints). Shared by the selection overlay (draw) and
+ * the hit-test so the drawn handle and its grab target never drift apart.
+ */
+function selectionHandlePoints(b: { x: number; y: number; w: number; h: number }): Record<ResizeHandle, [number, number]> {
+  const { x, y, w, h } = b;
+  const mx = x + w / 2;
+  const my = y + h / 2;
+  return {
+    nw: [x, y],         n: [mx, y],       ne: [x + w, y],
+    w:  [x, my],                          e:  [x + w, my],
+    sw: [x, y + h],     s: [mx, y + h],   se: [x + w, y + h],
+  };
+}
+
 /**
  * Draw an image into a target rectangle with one of three fit modes.
  * Shared between the image layer renderer and the text image-fill path.
@@ -718,15 +737,51 @@ export class CanvasRenderer {
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([8, 4]);
     this.ctx.strokeRect(x, y, w, h);
-    // Corner dots (filled).
+    // 8 resize handles (4 corners + 4 edge midpoints) — white fill + sky
+    // border so they read over any image content. Illustrator layout.
     this.ctx.setLineDash([]);
-    this.ctx.fillStyle = '#38bdf8';
-    const dot = 8;
-    const corners: Array<[number, number]> = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]];
-    for (const [dx, dy] of corners) {
+    const dot = 9;
+    const pts = selectionHandlePoints(bounds);
+    for (const key of Object.keys(pts) as ResizeHandle[]) {
+      const [dx, dy] = pts[key];
+      this.ctx.fillStyle = '#ffffff';
       this.ctx.fillRect(dx - dot / 2, dy - dot / 2, dot, dot);
+      this.ctx.lineWidth = 1.5;
+      this.ctx.strokeStyle = '#38bdf8';
+      this.ctx.strokeRect(dx - dot / 2, dy - dot / 2, dot, dot);
     }
     this.ctx.restore();
+  }
+
+  /**
+   * Hit-test the 8 resize handles of the currently selected layer. Returns the
+   * handle under (canvasX, canvasY) within a grab tolerance, or null. Uses the
+   * SAME bounds + handle points the overlay draws, so grab matches what's seen.
+   * Time-gated identically to drawSelectionOverlay (no handles when the layer
+   * isn't on-screen at this frame).
+   */
+  resizeHandleAt(canvasX: number, canvasY: number, composition: CompositionData, time: number): ResizeHandle | null {
+    if (!this.selectedLayerId) return null;
+    const layer = composition.layers.find(l => l.id === this.selectedLayerId);
+    if (!layer || layer.visible === false) return null;
+    // Resize is only meaningful for box layers; path layers draw from absolute
+    // anchors and have no resizable box.
+    if (layer.type === 'path') return null;
+    const startTime = layer.startTime ?? 0;
+    const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
+    if (time < startTime || time > startTime + layerDuration) return null;
+    const bounds = computeLayerBounds(layer, time - startTime, composition);
+    if (bounds === null) return null;
+    const pts = selectionHandlePoints(bounds);
+    const TOL = 8; // canvas px grab radius (half handle + a little)
+    let best: ResizeHandle | null = null;
+    let bestD = Infinity;
+    for (const key of Object.keys(pts) as ResizeHandle[]) {
+      const [hx, hy] = pts[key];
+      const d = Math.max(Math.abs(canvasX - hx), Math.abs(canvasY - hy));
+      if (d <= TOL && d < bestD) { bestD = d; best = key; }
+    }
+    return best;
   }
 
   /**

@@ -379,32 +379,51 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       setPenMode(false);
       return;
     }
+    // Scope the path + dot to the SLIDE under the playhead — the full-screen
+    // image active at the current time — so the stream loops only on that slide
+    // instead of spanning the whole composition (the old [0, duration] default).
+    const t = currentFrame / (composition.fps || 30);
+    const activeAt = (l: Layer) => {
+      const s = l.startTime ?? 0;
+      const e = s + (l.layerDuration ?? composition.duration);
+      return t >= s && t < e;
+    };
+    const slide = [...composition.layers].reverse().find(
+      (l) => l.type === 'image' && activeAt(l) && l.size.width >= composition.width * 0.9,
+    );
+    const winStart = +(slide ? (slide.startTime ?? 0) : Math.max(0, Math.min(t, composition.duration - 6))).toFixed(2);
+    const winEnd = slide ? winStart + (slide.layerDuration ?? composition.duration) : Math.min(composition.duration, winStart + 6);
+    const winDur = Math.max(0.5, +(winEnd - winStart).toFixed(2));
+
+    // Default loop: a 0.8s traversal tiled across the window, so the dot streams
+    // along the path and repeats instead of crawling once.
+    const CYCLE = 0.8;
+    const cycles: Array<{ start: number; end: number; pathLayerId: string }> = [];
+    for (let c = 0; c < winDur - 1e-6; c += CYCLE) {
+      cycles.push({ start: +c.toFixed(3), end: +Math.min(c + CYCLE, winDur).toFixed(3), pathLayerId: pathLayer.id });
+    }
+
+    const scopedPath: Layer = { ...pathLayer, startTime: winStart, layerDuration: winDur };
     const dotId = `layer-${Date.now().toString(36)}-dot`;
     const dotLayer: Layer = {
       id: dotId,
       type: 'shape',
       position: { x: 0, y: 0 },
       size: { width: 14, height: 14 },
-      startTime: 0,
-      layerDuration: composition.duration,
+      startTime: winStart,
+      layerDuration: winDur,
       properties: {
         shape: 'circle',
         color: '#38bdf8',           // sky-400 to match the editor accent
         opacity: 1,
         strokeColor: '#0c4a6e',     // sky-900
         strokeWidth: 2,
-        motionScenes: [
-          {
-            start: 0,
-            end: composition.duration,
-            pathLayerId: pathLayer.id,
-          },
-        ],
+        motionScenes: cycles,
       },
     };
-    onAddLayers([pathLayer, dotLayer]);
+    onAddLayers([scopedPath, dotLayer]);
     setPenMode(false);
-  }, [composition.duration, composition.layers, onAddLayers, maskTargetId, onUpdateLayerMask]);
+  }, [composition.duration, composition.fps, composition.width, composition.layers, currentFrame, onAddLayers, maskTargetId, onUpdateLayerMask]);
 
   // Patch-tool finish handler: the overlay emits the region outline + the source
   // offset in composition-pixel coords. Convert BOTH into the target image

@@ -7,6 +7,7 @@ import { layerLabel } from '../lib/api';
 import { PenToolOverlay } from './PenToolOverlay';
 import { PatchToolOverlay } from './PatchToolOverlay';
 import { PathEditOverlay } from './PathEditOverlay';
+import { PathStreamPanel, resolveStreamPath, type StreamSettings } from './PathStreamPanel';
 
 interface VideoPreviewProps {
   composition: CompositionData;
@@ -56,6 +57,8 @@ interface VideoPreviewProps {
    * server write.
    */
   onUpdatePathAnchors?: (layerId: string, anchors: PathAnchor[]) => void;
+  /** Rebuild a path + its follower dots from the Path stream panel. */
+  onUpdatePathStream?: (pathId: string, settings: StreamSettings) => void;
   /**
    * Set (or replace) an image layer's clip mask (`properties.mask`). Called once
    * when a mask is committed from the pen tool in mask mode. Anchors are already
@@ -156,7 +159,7 @@ function computeResizedBox(
   return { x, y, w, h };
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -918,6 +921,15 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 onUpdatePath={onUpdatePathAnchors}
               />
             )}
+            {editMode && onUpdatePathStream && (() => {
+              const rs = resolveStreamPath(composition, selectedLayerId);
+              if (!rs) return null;
+              return (
+                <div className="absolute top-2 right-2 z-20 w-72 max-h-[92%] overflow-y-auto" style={{ pointerEvents: 'auto' }}>
+                  <PathStreamPanel key={rs.pathId} pathId={rs.pathId} settings={rs.settings} onApply={(s) => onUpdatePathStream(rs.pathId, s)} />
+                </div>
+              );
+            })()}
             {patchTargetId && (
               <PatchToolOverlay
                 compositionWidth={composition.width}

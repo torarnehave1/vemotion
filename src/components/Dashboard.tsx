@@ -7,7 +7,7 @@ import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { useAuth } from '../App';
 import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeCompositionIdToUrl, writeLastCompositionRef } from '../lib/cloud-compositions';
-import { PathStreamPanel, type StreamSettings } from './PathStreamPanel';
+import { type StreamSettings } from './PathStreamPanel';
 
 // Lighten a hex colour toward white (used for the trailing density dots).
 function lighten(hex: string, amt = 0.5): string {
@@ -19,31 +19,6 @@ function lighten(hex: string, amt = 0.5): string {
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 
-// Resolve the selected layer to its path + current stream settings. A path
-// resolves to itself; a follower dot resolves to the path its motionScenes
-// reference. Returns null when the selection isn't a path/stream.
-function resolveStreamPath(comp: CompositionData, selId: string | null): { pathId: string; settings: StreamSettings } | null {
-  if (!selId) return null;
-  const sel = comp.layers.find((l) => l.id === selId);
-  if (!sel) return null;
-  const msOf = (l: Layer) => ((l.properties as Record<string, unknown>)?.motionScenes as Array<{ pathLayerId?: string; start?: number; end?: number }>) || [];
-  let pathId: string | null = null;
-  if (sel.type === 'path') pathId = sel.id;
-  else if (sel.type === 'shape') pathId = msOf(sel).map((s) => s?.pathLayerId).find(Boolean) ?? null;
-  if (!pathId) return null;
-  const path = comp.layers.find((l) => l.id === pathId && l.type === 'path');
-  if (!path) return null;
-  const dots = comp.layers.filter((l) => l.type === 'shape' && msOf(l).some((s) => s?.pathLayerId === pathId));
-  const primary = dots[0];
-  const scenes = primary ? msOf(primary) : [];
-  const cycle = scenes[0] ? +(((scenes[0].end ?? 0) - (scenes[0].start ?? 0)).toFixed(2)) : 0.8;
-  const start = +((primary?.startTime ?? path.startTime ?? 0).toFixed(2));
-  const dur = primary?.layerDuration ?? path.layerDuration ?? comp.duration;
-  const end = +((start + dur).toFixed(2));
-  const color = ((path.properties as Record<string, unknown>)?.strokeColor as string)
-    || ((primary?.properties as Record<string, unknown>)?.color as string) || '#38bdf8';
-  return { pathId, settings: { color, cycle: cycle || 0.8, density: Math.max(1, dots.length || 1), start, end } };
-}
 
 const DEFAULT_SIDEBAR_WIDTH = 420;
 const MIN_SIDEBAR_WIDTH = 260;
@@ -568,12 +543,6 @@ export const Dashboard: React.FC = () => {
         >
           <div className="p-4" style={{ width: sidebarWidth }}>
             <CompositionEditor composition={composition} onChange={setComposition} currentFrame={currentFrame} />
-            {(() => {
-              const rs = resolveStreamPath(composition, selectedLayerId);
-              return rs ? (
-                <PathStreamPanel key={rs.pathId} pathId={rs.pathId} settings={rs.settings} onApply={(s) => applyPathStream(rs.pathId, s)} />
-              ) : null;
-            })()}
           </div>
         </aside>
 
@@ -599,6 +568,7 @@ export const Dashboard: React.FC = () => {
               externalSeekFrame={seekFrame}
               selectedLayerId={selectedLayerId}
               onSelectLayer={setSelectedLayerId}
+              onUpdatePathStream={applyPathStream}
               onLayerMove={(layerId, position) => {
                 // Commit the post-drag position into composition state. Flows
                 // through the existing autosave pipeline automatically.

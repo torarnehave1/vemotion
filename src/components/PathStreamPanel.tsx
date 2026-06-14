@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { CompositionData, Layer } from '../lib/api';
 
 /**
  * Path stream controls. Shown in the sidebar when a `path` layer (or one of its
@@ -87,3 +88,29 @@ export const PathStreamPanel: React.FC<Props> = ({ pathId, settings, onApply }) 
     </div>
   );
 };
+
+// Resolve the selected layer to its path + current stream settings. A path
+// resolves to itself; a follower dot resolves to the path its motionScenes
+// reference. Returns null when the selection isn't a path/stream.
+export function resolveStreamPath(comp: CompositionData, selId: string | null): { pathId: string; settings: StreamSettings } | null {
+  if (!selId) return null;
+  const sel = comp.layers.find((l) => l.id === selId);
+  if (!sel) return null;
+  const msOf = (l: Layer) => ((l.properties as Record<string, unknown>)?.motionScenes as Array<{ pathLayerId?: string; start?: number; end?: number }>) || [];
+  let pathId: string | null = null;
+  if (sel.type === 'path') pathId = sel.id;
+  else if (sel.type === 'shape') pathId = msOf(sel).map((s) => s?.pathLayerId).find(Boolean) ?? null;
+  if (!pathId) return null;
+  const path = comp.layers.find((l) => l.id === pathId && l.type === 'path');
+  if (!path) return null;
+  const dots = comp.layers.filter((l) => l.type === 'shape' && msOf(l).some((s) => s?.pathLayerId === pathId));
+  const primary = dots[0];
+  const scenes = primary ? msOf(primary) : [];
+  const cycle = scenes[0] ? +(((scenes[0].end ?? 0) - (scenes[0].start ?? 0)).toFixed(2)) : 0.8;
+  const start = +((primary?.startTime ?? path.startTime ?? 0).toFixed(2));
+  const dur = primary?.layerDuration ?? path.layerDuration ?? comp.duration;
+  const end = +((start + dur).toFixed(2));
+  const color = ((path.properties as Record<string, unknown>)?.strokeColor as string)
+    || ((primary?.properties as Record<string, unknown>)?.color as string) || '#38bdf8';
+  return { pathId, settings: { color, cycle: cycle || 0.8, density: Math.max(1, dots.length || 1), start, end } };
+}

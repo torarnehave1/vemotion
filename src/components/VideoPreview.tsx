@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp } from 'lucide-react';
+import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp, Mic } from 'lucide-react';
+import { uploadAudioBlob } from '../lib/audioPortfolio';
 import { CanvasRenderer, PlaybackController, type ResizeHandle } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
 import type { CompositionData, Layer, PathAnchor, PathMask, ImagePatch, Guide } from '../lib/api';
@@ -479,6 +480,60 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     setIsPlaying(false);
     setCurrentFrame(0);
     audioCtrlRef.current?.stopAll();
+  }, []);
+
+  // ── Narration: mic → upload → audio layer. Music is muted while recording so
+  //    the voice-over comes out clean; the clip is added at 0:00 (drag to retime).
+  const [narrState, setNarrState] = useState<'idle' | 'recording' | 'paused'>('idle');
+  const [narrSaving, setNarrSaving] = useState(false);
+  const narrRecorderRef = useRef<MediaRecorder | null>(null);
+  const narrChunksRef = useRef<Blob[]>([]);
+
+  const probeDuration = (url: string) => new Promise<number>((resolve) => {
+    const a = new Audio(url);
+    a.onloadedmetadata = () => { const d = a.duration; resolve(Number.isFinite(d) && d > 0 ? d : 0); };
+    a.onerror = () => resolve(0);
+  });
+
+  const startNarration = useCallback(async () => {
+    try {
+      controllerRef.current?.pause(); setIsPlaying(false); audioCtrlRef.current?.stopAll(); // mute music
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      narrChunksRef.current = [];
+      const rec = new MediaRecorder(stream);
+      rec.ondataavailable = (e) => { if (e.data.size > 0) narrChunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(narrChunksRef.current, { type: 'audio/webm' });
+        setNarrState('idle');
+        if (blob.size === 0) return;
+        setNarrSaving(true);
+        try {
+          const { audioUrl, r2Key } = await uploadAudioBlob(blob, `narration-${Date.now()}.webm`);
+          const dur = (await probeDuration(audioUrl)) || composition.duration;
+          onAddLayers?.([{
+            id: `narration-${Date.now().toString(36)}`, type: 'audio', visible: true,
+            position: { x: 0, y: 0 }, size: { width: 0, height: 0 },
+            startTime: 0, layerDuration: Math.round(dur * 100) / 100,
+            properties: { r2Url: audioUrl, r2Key, displayName: 'Narration', duration: dur, volume: 1 },
+          }]);
+        } catch (err) { console.error('[narration] upload failed:', err); }
+        finally { setNarrSaving(false); }
+      };
+      rec.start();
+      narrRecorderRef.current = rec;
+      setNarrState('recording');
+    } catch (err) {
+      console.error('[narration] mic error:', err);
+    }
+  }, [composition.duration, onAddLayers]);
+
+  const pauseNarration = useCallback(() => { narrRecorderRef.current?.pause(); setNarrState('paused'); }, []);
+  const resumeNarration = useCallback(() => { narrRecorderRef.current?.resume(); setNarrState('recording'); }, []);
+  const stopNarration = useCallback(() => {
+    const rec = narrRecorderRef.current;
+    if (rec && rec.state !== 'inactive') rec.stop();
+    narrRecorderRef.current = null;
   }, []);
 
   const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -999,6 +1054,35 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         >
           <Square className="w-4 h-4" /> Stop
         </button>
+        {onAddLayers && (narrState === 'idle' ? (
+          <button
+            onClick={startNarration}
+            disabled={narrSaving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-rose-200 border-rose-800 disabled:opacity-50"
+            title="Record narration from your mic (music is muted while recording). On stop it uploads and is added as an audio layer at 0:00."
+          >
+            <Mic className="w-4 h-4" /> {narrSaving ? 'Saving…' : 'Narrate'}
+          </button>
+        ) : (
+          <>
+            <span className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-rose-950/60 text-rose-300 border border-rose-800">
+              <span className={`w-2.5 h-2.5 rounded-full bg-rose-500 ${narrState === 'recording' ? 'animate-pulse' : ''}`} />
+              {narrState === 'recording' ? 'Recording' : 'Paused'}
+            </span>
+            {narrState === 'recording' ? (
+              <button onClick={pauseNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700">
+                <Pause className="w-4 h-4" /> Pause
+              </button>
+            ) : (
+              <button onClick={resumeNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-sky-600 hover:bg-sky-500 text-white">
+                <Mic className="w-4 h-4" /> Resume
+              </button>
+            )}
+            <button onClick={stopNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-rose-700 hover:bg-rose-600 text-white">
+              <Square className="w-4 h-4" /> Stop &amp; add
+            </button>
+          </>
+        ))}
         {!embed && (
           <>
             <button

@@ -65,6 +65,11 @@ export const Dashboard: React.FC = () => {
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [seekFrame, setSeekFrame] = useState<number | undefined>(undefined);
+  // Shared single-layer selection so the canvas (VideoPreview) and the timeline
+  // layer rows (TimelineEditor) highlight the same layer. Canvas click pushes up
+  // via onSelectLayer; a timeline row click pushes the same id, which flows back
+  // down to the canvas — selection stays in sync both ways.
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
@@ -507,6 +512,8 @@ export const Dashboard: React.FC = () => {
               composition={composition}
               onFrameChange={setCurrentFrame}
               externalSeekFrame={seekFrame}
+              selectedLayerId={selectedLayerId}
+              onSelectLayer={setSelectedLayerId}
               onLayerMove={(layerId, position) => {
                 // Commit the post-drag position into composition state. Flows
                 // through the existing autosave pipeline automatically.
@@ -644,6 +651,8 @@ export const Dashboard: React.FC = () => {
             currentFrame={currentFrame}
             onSeek={handleTimelineSeek}
             onChange={setComposition}
+            selectedLayerId={selectedLayerId}
+            onSelectLayer={setSelectedLayerId}
           />
         </div>
 

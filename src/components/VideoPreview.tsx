@@ -13,6 +13,17 @@ interface VideoPreviewProps {
   onFrameChange?: (frame: number) => void;
   externalSeekFrame?: number;
   /**
+   * Shared selected-layer id. When this changes from outside (e.g. a timeline
+   * row was clicked) the canvas selects that layer too — keeps canvas + timeline
+   * selection in sync. Undefined = uncontrolled (canvas manages its own).
+   */
+  selectedLayerId?: string | null;
+  /**
+   * Report the canvas's current layer selection up so the timeline can highlight
+   * the same row. Fired whenever the canvas selection changes.
+   */
+  onSelectLayer?: (id: string | null) => void;
+  /**
    * When true, hide editor-only affordances (zoom selector, Export MP4 button).
    * Play/Pause/Stop, scrub bar, frame counter, and composition info row remain.
    * Used by the iframe-embed flow (see ?embed=1 in App.tsx / EmbedView).
@@ -145,7 +156,7 @@ function computeResizedBox(
   return { x, y, w, h };
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -283,15 +294,25 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composition]);
 
-  // Selection change: sync renderer's selectedLayerId and re-render so the
-  // overlay appears / disappears immediately.
+  // Selection change: sync renderer's selectedLayerId, re-render so the overlay
+  // appears / disappears immediately, AND report up so the timeline rows
+  // highlight the same layer. The equality guard in the pull-down effect below
+  // stops this from looping when the change originated from outside.
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
     renderer.selectedLayerId = selectedLayerId;
     void renderer.renderFrame(composition, currentFrame);
+    onSelectLayer?.(selectedLayerId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayerId]);
+
+  // Pull a selection made elsewhere (a timeline row click) into the canvas, so
+  // clicking a layer in the list selects + outlines it on the canvas too.
+  useEffect(() => {
+    if (externalSelectedLayerId === undefined) return;
+    setSelectedLayerId(prev => (prev === externalSelectedLayerId ? prev : externalSelectedLayerId));
+  }, [externalSelectedLayerId]);
 
   // Entering edit mode pauses playback. Leaving leaves playback wherever it is
   // (the user picks Play themselves to resume).

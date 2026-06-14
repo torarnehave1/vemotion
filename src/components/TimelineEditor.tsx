@@ -9,6 +9,14 @@ interface TimelineEditorProps {
   currentFrame: number;
   onSeek: (frame: number) => void;
   onChange: (c: CompositionData) => void;
+  /**
+   * Shared selected-layer id (from the canvas). The matching layer row is
+   * highlighted even when it isn't part of the timeline's own multi-select Set,
+   * so selecting a layer on the canvas lights up its row here.
+   */
+  selectedLayerId?: string | null;
+  /** Report a row click up so the canvas selects the same layer. */
+  onSelectLayer?: (id: string | null) => void;
 }
 
 type DragState =
@@ -75,6 +83,8 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   currentFrame,
   onSeek,
   onChange,
+  selectedLayerId: sharedSelectedLayerId,
+  onSelectLayer,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -440,6 +450,8 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const selectLayer = (layerId: string, multi: boolean) => {
     setSelectedGroupId(null);
     setSelectedLayerIds((prev) => multi ? toggleIds(prev, layerId) : new Set([layerId]));
+    // Push the clicked layer to the shared selection so the canvas selects it too.
+    onSelectLayer?.(layerId);
   };
 
   const selectGroup = (groupId: string) => {
@@ -717,7 +729,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           'flex items-center px-3 text-xs text-slate-400 truncate gap-1 transition cursor-grab active:cursor-grabbing',
           layer.visible === false && 'opacity-50',
           dragging && 'opacity-40',
-          selectedLayerIds.has(layer.id) && 'ring-1 ring-sky-500/60 bg-slate-800/40',
+          (selectedLayerIds.has(layer.id) || layer.id === sharedSelectedLayerId) && 'ring-1 ring-sky-500/60 bg-slate-800/40',
           ...dropEdgeClass(`L:${layer.id}`),
           layer.groupId && 'pl-8',
         ].join(' ')}
@@ -811,7 +823,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           data-no-marquee="true"
           className={[
             'absolute top-1 rounded cursor-grab active:cursor-grabbing flex items-center group',
-            selectedLayerIds.has(layer.id) && 'ring-1 ring-sky-500/60',
+            (selectedLayerIds.has(layer.id) || layer.id === sharedSelectedLayerId) && 'ring-1 ring-sky-500/60',
           ].join(' ')}
           style={{
             left,

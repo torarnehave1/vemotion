@@ -2,7 +2,7 @@ import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnch
 import { samplePath } from './pathSampling';
 import { sampleAudioTrack } from './audioAnalysis';
 import { renderKnittingChart, type KnittingChart } from './knitting';
-import { layoutTelemetryTrack, type TelemetryTrackProps } from './telemetryTrack';
+import { layoutTelemetryTrack, DEFAULT_TELEMETRY_COLORS, type TelemetryTrackProps, type TelemetrySegType } from './telemetryTrack';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -1025,6 +1025,31 @@ export class CanvasRenderer {
       ctx.moveTo(layout.playheadX, first.trackY - 4);
       ctx.lineTo(layout.playheadX, last.trackY + last.height + 4);
       ctx.stroke();
+    }
+
+    // colour legend — a swatch + label per state, below the last lane
+    if (values.showLegend !== false && layout.lanes.length > 0) {
+      const colors = { ...DEFAULT_TELEMETRY_COLORS, ...((values.colors as Partial<Record<TelemetrySegType, string>>) ?? {}) };
+      const legendNames: Record<TelemetrySegType, string> = {
+        present: 'present', speaking: 'speaking', muted: 'muted', videoOff: 'video off',
+        ...((values.legendLabels as Partial<Record<TelemetrySegType, string>>) ?? {}),
+      };
+      const order: TelemetrySegType[] = ['present', 'speaking', 'muted', 'videoOff'];
+      const last = layout.lanes[layout.lanes.length - 1];
+      const ly = last.trackY + last.height + 18;
+      const sw = 13;
+      ctx.font = `${labelSize}px ${labelFont}`;
+      ctx.textAlign = 'left';
+      let lx = geom.x;
+      for (const t of order) {
+        ctx.fillStyle = colors[t];
+        this.roundedRect(lx, ly - sw / 2, sw, sw, 3);
+        ctx.fill();
+        lx += sw + 6;
+        ctx.fillStyle = labelColor;
+        ctx.fillText(legendNames[t], lx, ly);
+        lx += ctx.measureText(legendNames[t]).width + 18;
+      }
     }
 
     ctx.textAlign = 'left';

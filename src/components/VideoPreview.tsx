@@ -488,6 +488,18 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     audioCtrlRef.current?.stopAll();
   }, []);
 
+  // Seek the playhead to a time WITHOUT playing (used by the teleprompter
+  // Prev/Next to step through narration cues).
+  const seekToTime = useCallback((t: number) => {
+    const fps = composition.fps || 30;
+    const frame = Math.max(0, Math.min(Math.floor(composition.duration * fps) - 1, Math.round(t * fps)));
+    controllerRef.current?.pause();
+    controllerRef.current?.seekToFrame(frame);
+    setIsPlaying(false);
+    setCurrentFrame(frame);
+    audioCtrlRef.current?.syncToTime(frame / fps, false);
+  }, [composition.fps, composition.duration]);
+
   // ── Narration: mic → upload → audio layer. Music is muted while recording so
   //    the voice-over comes out clean; the clip is added at 0:00 (drag to retime).
   const [narrState, setNarrState] = useState<'idle' | 'recording' | 'paused'>('idle');
@@ -1102,16 +1114,13 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         {showTeleprompter && (() => {
           const t = currentFrame / (composition.fps || 30);
           const grp = (composition.groups || []).find((g) => (g.name || '').toLowerCase() === 'narration');
-          let cur: string | null = null, nxt: string | null = null;
-          if (grp) {
-            const lines = composition.layers
-              .filter((l) => l.groupId === grp.id && l.type === 'text')
-              .map((l) => ({ s: l.startTime ?? 0, e: (l.startTime ?? 0) + (l.layerDuration ?? composition.duration), text: String((l.properties as Record<string, unknown>).text || '') }))
-              .sort((a, b) => a.s - b.s);
-            cur = lines.find((l) => t >= l.s && t < l.e)?.text ?? null;
-            nxt = lines.find((l) => l.s > t)?.text ?? null;
-          }
-          return <Teleprompter line={cur} next={nxt} onClose={() => setShowTeleprompter(false)} />;
+          const lines = grp
+            ? composition.layers
+                .filter((l) => l.groupId === grp.id && l.type === 'text')
+                .map((l) => ({ time: l.startTime ?? 0, text: String((l.properties as Record<string, unknown>).text || '') }))
+                .sort((a, b) => a.time - b.time)
+            : [];
+          return <Teleprompter lines={lines} currentTime={t} onSeek={seekToTime} onClose={() => setShowTeleprompter(false)} />;
         })()}
         {onSetNarrationScript && (
           <button

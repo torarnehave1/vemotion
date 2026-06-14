@@ -1550,7 +1550,7 @@ dark background:
         "keyframes": [{ "time": 0, "value": 0 }, { "time": 0.5, "value": 1 }]
       },
       "properties": {
-        "src": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200",
+        "src": "https://vegvisr.imgix.net/1781335066453-1.png",
         "fit": "cover",
         "opacity": 1,
         "borderColor": "#ffffff",
@@ -1562,7 +1562,7 @@ dark background:
       "id": "photo-cutout", "type": "image",
       "position": { "x": 460, "y": 160 }, "size": { "width": 360, "height": 400 },
       "properties": {
-        "src": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200",
+        "src": "https://vegvisr.imgix.net/1781331157886-1.png",
         "fit": "cover",
         "opacity": 1,
         "borderColor": "#38bdf8",
@@ -1584,7 +1584,7 @@ dark background:
       "id": "photo-healed", "type": "image",
       "position": { "x": 860, "y": 160 }, "size": { "width": 360, "height": 400 },
       "properties": {
-        "src": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200",
+        "src": "https://vegvisr.imgix.net/1781339194675-1.jpg",
         "fit": "cover",
         "opacity": 1,
         "borderColor": "#000000",

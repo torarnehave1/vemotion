@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, createContext, useContext } from 'react';
 import { AuthBar, EcosystemNav } from 'vegvisr-ui-kit';
 import { readStoredUser, type AuthUser } from './lib/auth';
+import ImpersonationBar from './components/ImpersonationBar';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { EmbedView } from './components/EmbedView';
@@ -198,6 +199,9 @@ function App() {
           onLogout={handleLogout}
         />
         <EcosystemNav />
+        {/* System Owner "Login as…" control + impersonation banner.
+            Renders nothing for non-owners (403 from /admin/users). */}
+        <ImpersonationBar />
         <main className="flex-1 flex flex-col">
           <Dashboard />
         </main>

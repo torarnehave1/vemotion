@@ -191,8 +191,13 @@ export type Animation = {
    * - 'mask-wipe': renderer applies an animated clip path to the whole layer
    *   before drawing. `direction` controls the wipe geometry; `keyframes`
    *   drive a 0..1 reveal progress. `property` is unused for this kind.
+   * - 'pixel-reveal': only valid on `knitting-chart` layers. `keyframes` drive
+   *   a 0..1 progress; the renderer reveals the first `floor(progress × N)`
+   *   painted cells in the layer's `properties.drawOrder` (the recorded paint
+   *   sequence), drawing the rest as background — a pixel-by-pixel "drawing".
+   *   `property` is unused for this kind.
    */
-  kind?: 'layer' | 'char-stagger' | 'mask-wipe';
+  kind?: 'layer' | 'char-stagger' | 'mask-wipe' | 'pixel-reveal';
   /** Layer property name to animate. Required for kind 'layer' and 'char-stagger'; unused for 'mask-wipe'. */
   property?: string;
   keyframes: Keyframe[];

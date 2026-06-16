@@ -238,9 +238,21 @@ export function renderKnittingChart(
   height: number,
   chart: KnittingChart,
   style: KnittingChartStyle,
+  /**
+   * Optional pixel-by-pixel reveal. `order` is the recorded paint sequence as
+   * flat cell indices (`r * cols + c`); only the first `revealCount` of them
+   * are drawn — later ones are left as paper, so the drawing builds up stitch
+   * by stitch. Cells NOT in `order` (the pre-existing base) always draw.
+   */
+  reveal?: { order: number[]; revealCount: number },
 ): void {
   const { cols, rows, palette, cells } = chart;
   if (cols <= 0 || rows <= 0 || palette.length === 0) return;
+
+  // Cells painted-but-not-yet-revealed: skip them so the paper shows through.
+  const hidden = reveal
+    ? new Set(reveal.order.slice(Math.max(0, Math.min(reveal.revealCount, reveal.order.length))))
+    : null;
 
   // Paper background.
   ctx.fillStyle = style.background || '#ffffff';
@@ -257,6 +269,7 @@ export function renderKnittingChart(
   for (let r = 0; r < rows; r++) {
     const rowStr = cells[r] ?? '';
     for (let c = 0; c < cols; c++) {
+      if (hidden && hidden.has(r * cols + c)) continue; // not yet "drawn"
       const idx = cellIndex(rowStr[c] ?? '0');
       ctx.fillStyle = palette[idx] ?? '#000000';
       // +0.5 overdraw hides hairline seams between adjacent cells.

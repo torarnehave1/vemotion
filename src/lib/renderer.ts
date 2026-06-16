@@ -900,7 +900,7 @@ export class CanvasRenderer {
         this.drawPath(layer, values);
         break;
       case 'knitting-chart':
-        this.drawKnittingChart(layer, values);
+        this.drawKnittingChart(layer, values, time);
         break;
       case 'telemetry-track':
         this.drawTelemetryTrack(layer, values);
@@ -916,7 +916,7 @@ export class CanvasRenderer {
    * source image is touched here (renders offline in the ffmpeg export). The
    * actual drawing is shared with the form's live preview via renderKnittingChart.
    */
-  private drawKnittingChart(layer: Layer, values: Record<string, unknown>): void {
+  private drawKnittingChart(layer: Layer, values: Record<string, unknown>, time: number): void {
     const palette = values.palette as string[] | undefined;
     const cells = values.cells as string[] | undefined;
     const cols = values.cols as number | undefined;
@@ -926,13 +926,27 @@ export class CanvasRenderer {
     const x = layer.position.x + ((values.offsetX as number) ?? 0);
     const y = layer.position.y + ((values.offsetY as number) ?? 0);
     const chart: KnittingChart = { cols, rows, palette, cells };
+
+    // Pixel-by-pixel reveal: a 'pixel-reveal' animation drives a 0..1 progress
+    // over the recorded paint sequence (properties.drawOrder), revealing cells
+    // in the order they were painted. Same keyframe/easing path as mask-wipe.
+    let reveal: { order: number[]; revealCount: number } | undefined;
+    const pr = layer.animation?.kind === 'pixel-reveal'
+      ? layer.animation
+      : layer.animations?.find(a => a.kind === 'pixel-reveal');
+    const order = layer.properties.drawOrder as number[] | undefined;
+    if (pr && Array.isArray(order) && order.length > 0) {
+      const progress = Math.max(0, Math.min(1, interpolate(pr.keyframes, time, pr.easing)));
+      reveal = { order, revealCount: Math.floor(progress * order.length) };
+    }
+
     renderKnittingChart(this.ctx, x, y, layer.size.width, layer.size.height, chart, {
       showGrid: values.showGrid !== false,
       showNumbers: values.showNumbers !== false,
       showLegend: values.showLegend !== false,
       background: (values.background as string) ?? '#ffffff',
       gridColor: (values.gridColor as string) ?? '#999999',
-    });
+    }, reveal);
   }
 
   /**

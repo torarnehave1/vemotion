@@ -69,9 +69,13 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   const existingReveal = (editingLayer.animations ?? []).find((a) => a.kind === 'pixel-reveal')
     ?? (editingLayer.animation?.kind === 'pixel-reveal' ? editingLayer.animation : undefined);
   const [animateDrawing, setAnimateDrawing] = useState<boolean>(!!existingReveal);
-  const [revealDuration, setRevealDuration] = useState<number>(() => {
+  // Per-stitch pacing: each painted cell takes this many seconds (default 1).
+  // Total reveal = secondsPerPixel × number of painted stitches. Initialised by
+  // dividing an existing pixel-reveal's total duration back out by stitch count.
+  const [secondsPerPixel, setSecondsPerPixel] = useState<number>(() => {
     const last = existingReveal?.keyframes?.[existingReveal.keyframes.length - 1]?.time;
-    return typeof last === 'number' && last > 0 ? last : (editingLayer.layerDuration ?? compositionDuration);
+    const n = Array.isArray(props.drawOrder) ? (props.drawOrder as number[]).length : 0;
+    return typeof last === 'number' && last > 0 && n > 0 ? last / n : 1;
   });
 
   const [posX, setPosX] = useState<number>(editingLayer.position.x);
@@ -204,10 +208,11 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     // time: 0 → revealDuration). Replace any prior pixel-reveal; preserve other
     // animations. Drop a legacy pixel-reveal from the single `animation` slot.
     const otherAnims = (editingLayer.animations ?? []).filter((a) => a.kind !== 'pixel-reveal');
+    const totalReveal = Math.max(0.1, secondsPerPixel * drawOrder.length);
     const animations = (animateDrawing && drawOrder.length > 0)
       ? [...otherAnims, {
           kind: 'pixel-reveal' as const,
-          keyframes: [{ time: 0, value: 0 }, { time: Math.max(0.1, revealDuration), value: 1 }],
+          keyframes: [{ time: 0, value: 0 }, { time: totalReveal, value: 1 }],
           easing: 'linear' as const,
         }]
       : otherAnims;
@@ -369,11 +374,14 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
           <>
             <p className="text-[11px] text-slate-500">{drawOrder.length} painted stitches will appear in the order you painted them.</p>
             {animateDrawing && (
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-slate-400">Reveal over (s)</label>
-                <input type="number" min={0.1} step={0.1} value={revealDuration}
-                  onChange={(e) => setRevealDuration(Math.max(0.1, Number(e.target.value) || 0.1))}
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="text-[11px] text-slate-400">Seconds per stitch</label>
+                <input type="number" min={0.1} step={0.1} value={secondsPerPixel}
+                  onChange={(e) => setSecondsPerPixel(Math.max(0.1, Number(e.target.value) || 0.1))}
                   className="w-24 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                <span className="text-[11px] text-slate-500">
+                  ≈ {(secondsPerPixel * drawOrder.length).toFixed(1)}s total for {drawOrder.length} stitches
+                </span>
               </div>
             )}
           </>

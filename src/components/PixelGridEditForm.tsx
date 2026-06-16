@@ -58,6 +58,22 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   const [brushIndex, setBrushIndex] = useState(0);
   const painting = useRef(false);
 
+  // Recorded paint sequence (flat cell indices r*cols+c), first-occurrence
+  // order. Drives the pixel-reveal animation. Cleared when the grid is cleared
+  // or re-pixelated from a source image (the old drawing no longer applies).
+  const [drawOrder, setDrawOrder] = useState<number[]>(
+    Array.isArray(props.drawOrder) ? (props.drawOrder as number[]) : [],
+  );
+
+  // Animate the recorded drawing stitch-by-stitch (a 'pixel-reveal' animation).
+  const existingReveal = (editingLayer.animations ?? []).find((a) => a.kind === 'pixel-reveal')
+    ?? (editingLayer.animation?.kind === 'pixel-reveal' ? editingLayer.animation : undefined);
+  const [animateDrawing, setAnimateDrawing] = useState<boolean>(!!existingReveal);
+  const [revealDuration, setRevealDuration] = useState<number>(() => {
+    const last = existingReveal?.keyframes?.[existingReveal.keyframes.length - 1]?.time;
+    return typeof last === 'number' && last > 0 ? last : (editingLayer.layerDuration ?? compositionDuration);
+  });
+
   const [posX, setPosX] = useState<number>(editingLayer.position.x);
   const [posY, setPosY] = useState<number>(editingLayer.position.y);
   const [boxW, setBoxW] = useState<number>(editingLayer.size.width);
@@ -91,6 +107,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     const next = buildKnittingChart(image, c, k);
     setChart(next);
     setPalette(next.palette.slice());
+    setDrawOrder([]); // re-pixelating replaces the drawing — old order is moot
   };
   useEffect(() => {
     if (sourceImg && touched.current) rebuildFrom(sourceImg, cols, colors);
@@ -127,6 +144,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     setPalette(pal);
     setChart((c) => ({ ...c, palette: pal, cells: Array.from({ length: c.rows }, () => blankRow) }));
     setBrushIndex(0);
+    setDrawOrder([]); // blank canvas — nothing drawn yet
   };
 
   // Append a new yarn colour and select it as the active brush.
@@ -149,14 +167,22 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       { showNumbers, showLegend }, px, py);
     if (!hit) return;
     const ch = safeBrush.toString(36);
+    let painted = false;
     setChart((c) => {
       const cells = c.cells.slice();
       let row = cells[hit.r] ?? '';
       if (row.length < c.cols) row = row.padEnd(c.cols, '0');
       if (row[hit.c] === ch) return c; // no-op: avoids a re-render per mousemove
       cells[hit.r] = row.slice(0, hit.c) + ch + row.slice(hit.c + 1);
+      painted = true;
       return { ...c, cells };
     });
+    // Record the stroke into the draw order (first occurrence wins, so a later
+    // recolor of the same cell doesn't move it in the reveal sequence).
+    if (painted) {
+      const flat = hit.r * chart.cols + hit.c;
+      setDrawOrder((prev) => (prev.includes(flat) ? prev : [...prev, flat]));
+    }
   };
 
   const canPaint = chart.cols > 0 && chart.rows > 0;
@@ -174,12 +200,27 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   }, [chart, effectivePalette, showGrid, showNumbers, showLegend, background, gridColor]);
 
   const handleSave = () => {
+    // Pixel-reveal animation lives in animations[] (keyframes in layer-local
+    // time: 0 → revealDuration). Replace any prior pixel-reveal; preserve other
+    // animations. Drop a legacy pixel-reveal from the single `animation` slot.
+    const otherAnims = (editingLayer.animations ?? []).filter((a) => a.kind !== 'pixel-reveal');
+    const animations = (animateDrawing && drawOrder.length > 0)
+      ? [...otherAnims, {
+          kind: 'pixel-reveal' as const,
+          keyframes: [{ time: 0, value: 0 }, { time: Math.max(0.1, revealDuration), value: 1 }],
+          easing: 'linear' as const,
+        }]
+      : otherAnims;
+    const animation = editingLayer.animation?.kind === 'pixel-reveal' ? undefined : editingLayer.animation;
+
     onAdd({
       ...editingLayer, // preserve everything else (Lesson 21)
       position: { x: posX, y: posY },
       size: { width: Math.max(1, boxW), height: Math.max(1, boxH) },
       startTime,
       layerDuration,
+      animation,
+      animations,
       properties: {
         ...editingLayer.properties,
         cols: chart.cols,
@@ -190,6 +231,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
         showNumbers,
         showLegend,
         opacity,
+        drawOrder,
         ...(sourceUrl ? { sourceImage: sourceUrl } : {}),
       },
     });
@@ -312,6 +354,30 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
         <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid</label>
         <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={showNumbers} onChange={(e) => setShowNumbers(e.target.checked)} /> Numbers</label>
         <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} /> Legend</label>
+      </div>
+
+      {/* Animate the recorded drawing, stitch by stitch */}
+      <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+        <label className="flex items-center gap-2 text-xs text-slate-300">
+          <input type="checkbox" checked={animateDrawing} disabled={drawOrder.length === 0}
+            onChange={(e) => setAnimateDrawing(e.target.checked)} />
+          Animate drawing (pixel by pixel)
+        </label>
+        {drawOrder.length === 0 ? (
+          <p className="text-[11px] text-slate-500">Paint cells on the grid above to record a drawing to animate.</p>
+        ) : (
+          <>
+            <p className="text-[11px] text-slate-500">{drawOrder.length} painted stitches will appear in the order you painted them.</p>
+            {animateDrawing && (
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-slate-400">Reveal over (s)</label>
+                <input type="number" min={0.1} step={0.1} value={revealDuration}
+                  onChange={(e) => setRevealDuration(Math.max(0.1, Number(e.target.value) || 0.1))}
+                  className="w-24 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500" />
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Box / timing / opacity */}

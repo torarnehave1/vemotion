@@ -142,4 +142,13 @@ Can we build a composable, AI-assisted video generation system that is lightweig
 - Video layer: visual playback + MP4 export shipped (canvas-drawn, z-order respected). NOT yet: muxing the video's own audio into the export (use a separate audio layer), trimming a sub-range of the source clip, looping.
 - Spring animations
 - Multiple animations per layer
-- Agent-Builder video subagent wiring
+
+**Agent-Builder integration (DONE — not a gap):** Agent-Builder (`builder.vegvisr.org`,
+repo `/Users/torarnehave/Documents/GitHub/Agent-Builder`) is fully wired to Vemotion via a
+service-bound worker (`VEMOTION_WORKER` → `vemotion-worker`). Its tool suite
+(`worker/tool-definitions.js` / `tool-executors.js`) lets the agent create and
+non-destructively edit compositions: `vemotion_save_composition` (full CompositionData or
+`albumName` slideshow shortcut, create/update by `compositionId`), `vemotion_get_composition`
+(read-before-edit), `vemotion_refit_composition` (server-side aspect-ratio refit), and
+`get_vemotion_reference` (the composition cookbook). The agent can author working videos end
+to end; the user renders to MP4 from the editor.

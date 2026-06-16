@@ -2,7 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Grid3x3, Loader2 } from 'lucide-react';
 import type { Layer } from '../lib/api';
 import { buildKnittingChart, renderKnittingChart, type KnittingChart } from '../lib/knitting';
-import { uploadImageToAlbum } from '../lib/photoAlbum';
+import {
+  uploadImageToAlbum,
+  listAlbums,
+  listAlbumImages,
+  VEMOTION_ALBUM,
+  type AlbumImage,
+} from '../lib/photoAlbum';
 
 interface KnittingChartFormProps {
   onAdd: (layer: Layer) => void;
@@ -47,12 +53,57 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
   const [sourceUrl, setSourceUrl] = useState('');
   const [sourceUploading, setSourceUploading] = useState(false);
 
+  // Album picker — pick an existing image from a photo album (same source as
+  // the Images tab) instead of uploading a new file.
+  const [albumName, setAlbumName] = useState(VEMOTION_ALBUM);
+  const [albums, setAlbums] = useState<string[]>([]);
+  const [albumImages, setAlbumImages] = useState<AlbumImage[]>([]);
+  const [albumLoading, setAlbumLoading] = useState(false);
+  const [albumError, setAlbumError] = useState('');
+  const [pickedKey, setPickedKey] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
+
+  // Load album names + the default album's images on mount (the form only
+  // mounts when the Pixel Grid tab is open).
+  useEffect(() => {
+    listAlbums().then(setAlbums).catch(() => { /* keep default album selectable */ });
+  }, []);
+
+  const loadAlbum = (name: string) => {
+    setAlbumLoading(true);
+    setAlbumError('');
+    listAlbumImages(name)
+      .then(setAlbumImages)
+      .catch(() => setAlbumError('Failed to load album.'))
+      .finally(() => setAlbumLoading(false));
+  };
+
+  useEffect(() => {
+    loadAlbum(albumName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [albumName]);
+
+  // Pick an album image as the pixelation source. It already lives in the
+  // album, so sourceUrl is set directly (no re-upload) and the grid stays
+  // re-pixelatable from the edit form.
+  const handleAlbumPick = (image: AlbumImage) => {
+    setName(image.displayName ?? image.name ?? 'pixel grid');
+    setPickedKey(image.key);
+    setSourceUrl(image.url);
+    setSourceUploading(false);
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () => setImg(el);
+    el.onerror = () => setAlbumError('Could not load that image.');
+    el.src = image.url;
+  };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPickedKey('');
     setName(file.name.replace(/\.[^.]+$/, ''));
     // Local preview source.
     const reader = new FileReader();
@@ -174,6 +225,47 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         The image is pixelated into stitches. The source is saved to your VEmotion album so you can
         re-pixelate (change stitches/colours) later from the layer's edit form.
       </p>
+
+      {/* Or pick an image already in an album (same source as the Images tab). */}
+      <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-slate-400">Or choose from an album</label>
+          <select
+            value={albumName}
+            onChange={(e) => { setAlbumName(e.target.value); setAlbumImages([]); }}
+            className="bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 max-w-[55%]"
+          >
+            {(albums.includes(albumName) ? albums : [albumName, ...albums]).map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+
+        {albumError && <p className="text-[11px] text-red-400">{albumError}</p>}
+        {albumLoading ? (
+          <p className="text-[11px] text-slate-500 flex items-center gap-1 py-3 justify-center">
+            <Loader2 className="w-3 h-3 animate-spin" /> Loading images…
+          </p>
+        ) : albumImages.length === 0 ? (
+          <p className="text-[11px] text-slate-500 py-3 text-center">No images in this album.</p>
+        ) : (
+          <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto">
+            {albumImages.map((image) => (
+              <button
+                key={image.key}
+                type="button"
+                onClick={() => handleAlbumPick(image)}
+                title={image.displayName ?? image.name ?? image.key}
+                className={`relative aspect-square rounded overflow-hidden border-2 transition ${
+                  pickedKey === image.key ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-slate-700 hover:border-slate-400'
+                }`}
+              >
+                <img src={image.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Live preview */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-2">

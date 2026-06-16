@@ -10,7 +10,47 @@
 import { readStoredUser } from './auth';
 
 const PHOTOS_API = 'https://photos-api.vegvisr.org';
+const ALBUMS_API = 'https://albums.vegvisr.org';
 export const VEMOTION_ALBUM = 'VEmotion';
+
+/** One image in a photo album, as returned by `list-r2-images`. */
+export interface AlbumImage {
+  key: string;
+  url: string;
+  name?: string;
+  displayName?: string;
+  tags?: string[];
+}
+
+/**
+ * List the names of the user's photo albums. Mirrors the Images-tab fetch in
+ * AddLayerModal so the Pixel Grid tab can offer the same album picker.
+ * Returns [] when unauthenticated or on error (caller keeps a default album).
+ */
+export async function listAlbums(): Promise<string[]> {
+  const token = readStoredUser()?.emailVerificationToken;
+  if (!token) return [];
+  const res = await fetch(`${ALBUMS_API}/photo-albums`, { headers: { 'X-API-Token': token } });
+  if (!res.ok) return [];
+  const data = await res.json() as { albums?: unknown[] };
+  if (!Array.isArray(data?.albums)) return [];
+  // Schema items can be `string` or `{ name }`; we only need names.
+  return data.albums
+    .map((a) => (typeof a === 'string' ? a : (a as { name?: string })?.name))
+    .filter((n): n is string => typeof n === 'string' && n.length > 0);
+}
+
+/** List the images in one album. Throws on auth failure / network error. */
+export async function listAlbumImages(album: string = VEMOTION_ALBUM): Promise<AlbumImage[]> {
+  const token = readStoredUser()?.emailVerificationToken;
+  if (!token) throw new Error('Not authenticated');
+  const res = await fetch(`${PHOTOS_API}/list-r2-images?album=${encodeURIComponent(album)}`, {
+    headers: { 'X-API-Token': token },
+  });
+  if (!res.ok) throw new Error(`Failed to load album: HTTP ${res.status}`);
+  const data = await res.json() as { images?: AlbumImage[] };
+  return data.images ?? [];
+}
 
 export async function uploadImageToAlbum(file: File | Blob, album: string = VEMOTION_ALBUM): Promise<string> {
   const user = readStoredUser();

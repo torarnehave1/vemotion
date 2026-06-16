@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Upload, Loader2 } from 'lucide-react';
+import { Upload, Loader2, Eraser, Plus } from 'lucide-react';
 import type { Layer } from '../lib/api';
-import { buildKnittingChart, renderKnittingChart, type KnittingChart } from '../lib/knitting';
+import { buildKnittingChart, renderKnittingChart, knittingCellAt, type KnittingChart } from '../lib/knitting';
 import { uploadImageToAlbum } from '../lib/photoAlbum';
 
 interface PixelGridEditFormProps {
@@ -53,6 +53,10 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   const [showGrid, setShowGrid] = useState(props.showGrid !== false);
   const [showNumbers, setShowNumbers] = useState(props.showNumbers !== false);
   const [showLegend, setShowLegend] = useState(props.showLegend !== false);
+
+  // Manual paint: the active palette index ("brush") clicked cells are filled with.
+  const [brushIndex, setBrushIndex] = useState(0);
+  const painting = useRef(false);
 
   const [posX, setPosX] = useState<number>(editingLayer.position.x);
   const [posY, setPosY] = useState<number>(editingLayer.position.y);
@@ -109,6 +113,53 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   };
 
   const effectivePalette = palette.length === chart.palette.length ? palette : chart.palette;
+  const safeBrush = Math.min(brushIndex, Math.max(0, effectivePalette.length - 1));
+
+  // Blank every cell to the background colour so the user can paint from scratch.
+  // The grid dimensions and palette are kept; the background is added to the
+  // palette as a "blank" yarn if it isn't already one of the colours.
+  const clearGrid = () => {
+    if (chart.cols <= 0 || chart.rows <= 0) return;
+    const pal = effectivePalette.slice();
+    let blankIdx = pal.findIndex((h) => h.toLowerCase() === background.toLowerCase());
+    if (blankIdx === -1) { pal.push(background); blankIdx = pal.length - 1; }
+    const blankRow = blankIdx.toString(36).repeat(chart.cols);
+    setPalette(pal);
+    setChart((c) => ({ ...c, palette: pal, cells: Array.from({ length: c.rows }, () => blankRow) }));
+    setBrushIndex(0);
+  };
+
+  // Append a new yarn colour and select it as the active brush.
+  const addColor = () => {
+    if (effectivePalette.length >= 36) return; // base36 single-char index ceiling
+    const next = [...effectivePalette, '#000000'];
+    setPalette(next);
+    setChart((c) => ({ ...c, palette: next }));
+    setBrushIndex(next.length - 1);
+  };
+
+  // Paint the cell under a pointer event with the active brush.
+  const paintAtPointer = (clientX: number, clientY: number) => {
+    const canvas = previewRef.current;
+    if (!canvas || chart.cols <= 0) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = (clientX - rect.left) * (canvas.width / rect.width);
+    const py = (clientY - rect.top) * (canvas.height / rect.height);
+    const hit = knittingCellAt(canvas.width, canvas.height, chart,
+      { showNumbers, showLegend }, px, py);
+    if (!hit) return;
+    const ch = safeBrush.toString(36);
+    setChart((c) => {
+      const cells = c.cells.slice();
+      let row = cells[hit.r] ?? '';
+      if (row.length < c.cols) row = row.padEnd(c.cols, '0');
+      if (row[hit.c] === ch) return c; // no-op: avoids a re-render per mousemove
+      cells[hit.r] = row.slice(0, hit.c) + ch + row.slice(hit.c + 1);
+      return { ...c, cells };
+    });
+  };
+
+  const canPaint = chart.cols > 0 && chart.rows > 0;
 
   // Live preview.
   useEffect(() => {
@@ -152,9 +203,31 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
         Editing a <span className="text-sky-400">pixel grid</span> ({chart.cols}×{chart.rows}, {effectivePalette.length} colors).
       </p>
 
-      {/* Live preview */}
+      {/* Live preview — click/drag a cell to paint it with the selected colour. */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-2">
-        <canvas ref={previewRef} width={480} height={360} className="w-full rounded bg-slate-900" />
+        <canvas
+          ref={previewRef}
+          width={480}
+          height={360}
+          className="w-full rounded bg-slate-900"
+          style={{ cursor: canPaint ? 'crosshair' : 'default', touchAction: 'none' }}
+          onMouseDown={(e) => { if (!canPaint) return; painting.current = true; paintAtPointer(e.clientX, e.clientY); }}
+          onMouseMove={(e) => { if (painting.current) paintAtPointer(e.clientX, e.clientY); }}
+          onMouseUp={() => { painting.current = false; }}
+          onMouseLeave={() => { painting.current = false; }}
+        />
+      </div>
+
+      {/* Clear / paint toolbar */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={clearGrid}
+          disabled={!canPaint}
+          className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition"
+        >
+          <Eraser className="w-4 h-4" /> Clear grid
+        </button>
+        <span className="text-[11px] text-slate-500">blanks every cell — then click a colour below and paint on the grid</span>
       </div>
 
       {/* Stitches / colours — need the source image */}
@@ -188,25 +261,48 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
         </div>
       )}
 
-      {/* Editable palette — small swatches */}
+      {/* Palette — click a swatch to pick the paint brush; edit / add colours below */}
       {effectivePalette.length > 0 && (
         <div className="space-y-2">
-          <label className="text-xs text-slate-400 block">Colors (click to change)</label>
+          <label className="text-xs text-slate-400 block">Colors (click to select the brush)</label>
           <div className="flex flex-wrap gap-1.5">
             {effectivePalette.map((hex, i) => (
-              <input
+              <button
                 key={i}
-                type="color"
-                title={`Color ${i + 1}: ${hex}`}
-                value={/^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#000000'}
-                onChange={(e) => setPalette((prev) => {
-                  const base = prev.length === effectivePalette.length ? prev.slice() : effectivePalette.slice();
-                  base[i] = e.target.value;
-                  return base;
-                })}
-                className="w-6 h-6 rounded border border-slate-600 bg-transparent cursor-pointer p-0"
+                type="button"
+                title={`Color ${i + 1}: ${hex}${i === safeBrush ? ' (brush)' : ''}`}
+                onClick={() => setBrushIndex(i)}
+                style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#000000' }}
+                className={`w-7 h-7 rounded border-2 cursor-pointer transition ${
+                  i === safeBrush ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-slate-600 hover:border-slate-400'
+                }`}
               />
             ))}
+            <button
+              type="button"
+              onClick={addColor}
+              disabled={effectivePalette.length >= 36}
+              title="Add a new yarn colour"
+              className="w-7 h-7 rounded border-2 border-dashed border-slate-600 hover:border-sky-400 disabled:opacity-40 text-slate-400 flex items-center justify-center transition"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-[11px] text-slate-500">Brush color</span>
+            <input
+              type="color"
+              title={`Edit color ${safeBrush + 1}`}
+              value={/^#[0-9a-fA-F]{6}$/.test(effectivePalette[safeBrush] || '') ? effectivePalette[safeBrush] : '#000000'}
+              onChange={(e) => {
+                const next = effectivePalette.slice();
+                next[safeBrush] = e.target.value;
+                setPalette(next);
+                setChart((c) => ({ ...c, palette: next }));
+              }}
+              className="w-7 h-7 rounded border border-slate-600 bg-transparent cursor-pointer p-0"
+            />
+            <span className="text-[11px] text-slate-500">recolors every cell using color {safeBrush + 1}</span>
           </div>
         </div>
       )}

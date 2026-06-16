@@ -169,6 +169,58 @@ export interface KnittingChartStyle {
 }
 
 /**
+ * Grid placement inside the (x, y, width, height) box: origin (gx, gy), square
+ * cell size, and the cell count. Single source of truth for the layout maths so
+ * the renderer and any hit-testing (click-to-paint) stay in lockstep.
+ */
+export interface KnittingChartGeometry {
+  gx: number;
+  gy: number;
+  cell: number;
+  cols: number;
+  rows: number;
+}
+
+export function knittingChartGeometry(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  chart: Pick<KnittingChart, 'cols' | 'rows'>,
+  style: Pick<KnittingChartStyle, 'showNumbers' | 'showLegend'>,
+): KnittingChartGeometry {
+  const { cols, rows } = chart;
+  const cell0 = Math.min(width / cols, height / rows);
+  const rightGutter = style.showNumbers ? Math.max(14, cell0 * 1.8) : 0;
+  const bottomGutter = style.showNumbers ? Math.max(12, cell0 * 1.4) : 0;
+  const legendH = style.showLegend ? Math.max(16, cell0 * 1.6) : 0;
+  const gridW = width - rightGutter;
+  const gridH = height - bottomGutter - legendH;
+  const cell = Math.max(1, Math.min(gridW / cols, gridH / rows));
+  return { gx: x, gy: y, cell, cols, rows };
+}
+
+/**
+ * Map a point (px, py) in the box to a chart cell, or null if outside the grid.
+ * Used by the edit form to turn a click/drag into a (row, col) to paint.
+ */
+export function knittingCellAt(
+  width: number,
+  height: number,
+  chart: Pick<KnittingChart, 'cols' | 'rows'>,
+  style: Pick<KnittingChartStyle, 'showNumbers' | 'showLegend'>,
+  px: number,
+  py: number,
+): { r: number; c: number } | null {
+  if (chart.cols <= 0 || chart.rows <= 0) return null;
+  const { gx, gy, cell, cols, rows } = knittingChartGeometry(0, 0, width, height, chart, style);
+  const c = Math.floor((px - gx) / cell);
+  const r = Math.floor((py - gy) / cell);
+  if (c < 0 || c >= cols || r < 0 || r >= rows) return null;
+  return { r, c };
+}
+
+/**
  * Draw a knitting chart into `ctx` within the box (x, y, width, height).
  * Shared by the renderer (composition + MP4 export) and the form's live
  * preview, so what the user previews is exactly what bakes into the video.
@@ -194,19 +246,12 @@ export function renderKnittingChart(
   ctx.fillStyle = style.background || '#ffffff';
   ctx.fillRect(x, y, width, height);
 
-  // Reserve space (single-pass estimate from an unconstrained cell size).
+  // Grid placement (shared with hit-testing — see knittingChartGeometry).
   const cell0 = Math.min(width / cols, height / rows);
-  const rightGutter = style.showNumbers ? Math.max(14, cell0 * 1.8) : 0;
-  const bottomGutter = style.showNumbers ? Math.max(12, cell0 * 1.4) : 0;
   const legendH = style.showLegend ? Math.max(16, cell0 * 1.6) : 0;
-
-  const gridW = width - rightGutter;
-  const gridH = height - bottomGutter - legendH;
-  const cell = Math.max(1, Math.min(gridW / cols, gridH / rows));
+  const { gx, gy, cell } = knittingChartGeometry(x, y, width, height, chart, style);
   const gw = cell * cols;
   const gh = cell * rows;
-  const gx = x;
-  const gy = y;
 
   // Stitch cells.
   for (let r = 0; r < rows; r++) {
@@ -254,6 +299,7 @@ export function renderKnittingChart(
 
   // Row / column numbers.
   if (style.showNumbers) {
+    const rightGutter = Math.max(14, cell0 * 1.8);
     const fs = Math.max(7, Math.min(rightGutter * 0.6, cell * 0.7));
     ctx.fillStyle = '#333333';
     ctx.font = `${fs}px Inter, system-ui, sans-serif`;

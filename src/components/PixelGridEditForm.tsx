@@ -78,6 +78,16 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     return typeof last === 'number' && last > 0 && n > 0 ? last / n : 1;
   });
 
+  // Synchronous source of truth for painting. A pointer drag fires many events
+  // between React renders; reading/writing state directly would use a stale
+  // closure and the record-into-drawOrder step would mostly miss. The refs are
+  // updated synchronously inside the handlers and mirrored back to state for
+  // the preview + save. (Backstop effects keep them in sync after other paths.)
+  const chartRef = useRef(chart);
+  const drawOrderRef = useRef<number[]>(drawOrder);
+  useEffect(() => { chartRef.current = chart; }, [chart]);
+  useEffect(() => { drawOrderRef.current = drawOrder; }, [drawOrder]);
+
   const [posX, setPosX] = useState<number>(editingLayer.position.x);
   const [posY, setPosY] = useState<number>(editingLayer.position.y);
   const [boxW, setBoxW] = useState<number>(editingLayer.size.width);
@@ -109,6 +119,8 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   // The initial render keeps the stored chart (preserves prior palette edits).
   const rebuildFrom = (image: HTMLImageElement, c: number, k: number) => {
     const next = buildKnittingChart(image, c, k);
+    chartRef.current = next;
+    drawOrderRef.current = [];
     setChart(next);
     setPalette(next.palette.slice());
     setDrawOrder([]); // re-pixelating replaces the drawing — old order is moot
@@ -145,8 +157,11 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     let blankIdx = pal.findIndex((h) => h.toLowerCase() === background.toLowerCase());
     if (blankIdx === -1) { pal.push(background); blankIdx = pal.length - 1; }
     const blankRow = blankIdx.toString(36).repeat(chart.cols);
+    const nextChart = { ...chart, palette: pal, cells: Array.from({ length: chart.rows }, () => blankRow) };
+    chartRef.current = nextChart;
+    drawOrderRef.current = [];
     setPalette(pal);
-    setChart((c) => ({ ...c, palette: pal, cells: Array.from({ length: c.rows }, () => blankRow) }));
+    setChart(nextChart);
     setBrushIndex(0);
     setDrawOrder([]); // blank canvas — nothing drawn yet
   };
@@ -155,37 +170,43 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   const addColor = () => {
     if (effectivePalette.length >= 36) return; // base36 single-char index ceiling
     const next = [...effectivePalette, '#000000'];
+    const nextChart = { ...chartRef.current, palette: next };
+    chartRef.current = nextChart;
     setPalette(next);
-    setChart((c) => ({ ...c, palette: next }));
+    setChart(nextChart);
     setBrushIndex(next.length - 1);
   };
 
-  // Paint the cell under a pointer event with the active brush.
+  // Paint the cell under a pointer event with the active brush. Reads + writes
+  // through the refs so rapid drag events stay consistent and every painted
+  // cell is recorded into the draw order (first occurrence wins, so a later
+  // recolor of the same cell doesn't move it in the reveal sequence).
   const paintAtPointer = (clientX: number, clientY: number) => {
     const canvas = previewRef.current;
-    if (!canvas || chart.cols <= 0) return;
+    const current = chartRef.current;
+    if (!canvas || current.cols <= 0) return;
     const rect = canvas.getBoundingClientRect();
     const px = (clientX - rect.left) * (canvas.width / rect.width);
     const py = (clientY - rect.top) * (canvas.height / rect.height);
-    const hit = knittingCellAt(canvas.width, canvas.height, chart,
+    const hit = knittingCellAt(canvas.width, canvas.height, current,
       { showNumbers, showLegend }, px, py);
     if (!hit) return;
     const ch = safeBrush.toString(36);
-    let painted = false;
-    setChart((c) => {
-      const cells = c.cells.slice();
-      let row = cells[hit.r] ?? '';
-      if (row.length < c.cols) row = row.padEnd(c.cols, '0');
-      if (row[hit.c] === ch) return c; // no-op: avoids a re-render per mousemove
-      cells[hit.r] = row.slice(0, hit.c) + ch + row.slice(hit.c + 1);
-      painted = true;
-      return { ...c, cells };
-    });
-    // Record the stroke into the draw order (first occurrence wins, so a later
-    // recolor of the same cell doesn't move it in the reveal sequence).
-    if (painted) {
-      const flat = hit.r * chart.cols + hit.c;
-      setDrawOrder((prev) => (prev.includes(flat) ? prev : [...prev, flat]));
+    let row = current.cells[hit.r] ?? '';
+    if (row.length < current.cols) row = row.padEnd(current.cols, '0');
+    if (row[hit.c] === ch) return; // genuine no-op — same colour already there
+
+    const cells = current.cells.slice();
+    cells[hit.r] = row.slice(0, hit.c) + ch + row.slice(hit.c + 1);
+    const nextChart = { ...current, cells };
+    chartRef.current = nextChart;
+    setChart(nextChart);
+
+    const flat = hit.r * current.cols + hit.c;
+    if (!drawOrderRef.current.includes(flat)) {
+      const nextOrder = [...drawOrderRef.current, flat];
+      drawOrderRef.current = nextOrder;
+      setDrawOrder(nextOrder);
     }
   };
 
@@ -364,12 +385,12 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       {/* Animate the recorded drawing, stitch by stitch */}
       <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
         <label className="flex items-center gap-2 text-xs text-slate-300">
-          <input type="checkbox" checked={animateDrawing} disabled={drawOrder.length === 0}
+          <input type="checkbox" checked={animateDrawing}
             onChange={(e) => setAnimateDrawing(e.target.checked)} />
           Animate drawing (pixel by pixel)
         </label>
         {drawOrder.length === 0 ? (
-          <p className="text-[11px] text-slate-500">Paint cells on the grid above to record a drawing to animate.</p>
+          <p className="text-[11px] text-slate-500">Every cell you paint is recorded automatically. Paint on the grid above, then this plays the strokes back in order.</p>
         ) : (
           <>
             <p className="text-[11px] text-slate-500">{drawOrder.length} painted stitches will appear in the order you painted them.</p>

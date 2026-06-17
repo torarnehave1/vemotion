@@ -4,6 +4,7 @@ import type { Layer } from '../lib/api';
 import { buildKnittingChart, renderKnittingChart, knittingCellAt, type KnittingChart } from '../lib/knitting';
 import { uploadImageToAlbum, importImageUrlToAlbum, trackUnsplashDownload, type StockImage } from '../lib/photoAlbum';
 import { StockImagePicker } from './StockImagePicker';
+import { AiImagePrompt } from './AiImagePrompt';
 
 interface PixelGridEditFormProps {
   editingLayer: Layer;
@@ -176,6 +177,13 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       setSourceUrl(albumUrl);
     } catch { /* leave current grid intact on failure */ }
     finally { setSourceUploading(false); }
+  };
+
+  // AI-generated image (already in the album) → re-pixelate the grid from it.
+  const handleAiResult = (albumUrl: string) => {
+    setPickedStockUrl(albumUrl);
+    touched.current = true;
+    setSourceUrl(albumUrl);
   };
 
   const effectivePalette = palette.length === chart.palette.length ? palette : chart.palette;
@@ -370,6 +378,9 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
 
       {/* Stock photo search — pick one to re-pixelate the grid from it */}
       <StockImagePicker onPick={handleStockPick} pickedUrl={pickedStockUrl} busy={sourceUploading} />
+
+      {/* AI image generation (gpt-image-2) — re-pixelate from a prompt */}
+      <AiImagePrompt onResult={handleAiResult} busy={sourceUploading} />
 
       {/* Palette — click a swatch to pick the paint brush; edit / add colours below */}
       {effectivePalette.length > 0 && (

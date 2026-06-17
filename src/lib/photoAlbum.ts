@@ -119,6 +119,42 @@ export async function importImageUrlToAlbum(url: string): Promise<string> {
   return uploadImageToAlbum(blob);
 }
 
+const OPENAI_API = 'https://openai.vegvisr.org';
+
+const base64ToBlob = (b64: string, type = 'image/png'): Blob => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type });
+};
+
+/**
+ * Generate an image with OpenAI (via the openai-worker) and store it in the
+ * VEmotion album, returning the album (imgix) URL. Default model gpt-image-2
+ * (the current OpenAI image model — verified against the live docs 2026-06).
+ * gpt-image-* returns base64 (b64_json); dall-e returns a url — both handled.
+ */
+export async function generateAiImageToAlbum(
+  prompt: string,
+  opts: { model?: string; size?: string } = {},
+): Promise<string> {
+  const { model = 'gpt-image-2', size = '1024x1024' } = opts;
+  const res = await fetch(`${OPENAI_API}/images`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: prompt.trim(), model, size }),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`Image generation failed: HTTP ${res.status} ${err.slice(0, 200)}`);
+  }
+  const data = await res.json() as { data?: Array<{ b64_json?: string; url?: string }> };
+  const item = data.data?.[0];
+  if (item?.b64_json) return uploadImageToAlbum(base64ToBlob(item.b64_json));
+  if (item?.url) return importImageUrlToAlbum(item.url);
+  throw new Error('Image generation returned no image');
+}
+
 export async function uploadImageToAlbum(file: File | Blob, album: string = VEMOTION_ALBUM): Promise<string> {
   const user = readStoredUser();
   const token = user?.emailVerificationToken;

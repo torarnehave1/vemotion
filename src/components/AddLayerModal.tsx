@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AudioLayerForm } from './AudioLayerForm';
 import { VideoLayerForm } from './VideoLayerForm';
 import { PixelGridEditForm } from './PixelGridEditForm';
+import { AiImagePrompt } from './AiImagePrompt';
 import { KnittingChartForm } from './KnittingChartForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off, Check } from 'lucide-react';
@@ -1060,6 +1061,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   // `replacingImage` to decide whether to add a new layer or swap the source.
   const imagePicker = (
     <>
+      {/* Generate an image with AI (gpt-image-2) and add it as an image layer */}
+      <AiImagePrompt onResult={(albumUrl) => handleImagePick({ url: albumUrl, key: albumUrl, displayName: 'AI image' })} />
+
       <div className="flex gap-2">
         <div className="relative flex-1">
           <select

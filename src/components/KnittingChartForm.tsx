@@ -13,6 +13,7 @@ import {
   type StockImage,
 } from '../lib/photoAlbum';
 import { StockImagePicker } from './StockImagePicker';
+import { AiImagePrompt } from './AiImagePrompt';
 
 interface KnittingChartFormProps {
   onAdd: (layer: Layer) => void;
@@ -128,6 +129,19 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
     } finally {
       setStockBusy(false);
     }
+  };
+
+  // AI-generated image (already stored in the album) → load + pixelate.
+  const handleAiResult = (albumUrl: string) => {
+    setPickedKey('');
+    setPickedStockUrl('');
+    setName('ai image');
+    setSourceUrl(albumUrl);
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () => setImg(el);
+    el.onerror = () => setAlbumError('Could not load the generated image.');
+    el.src = albumUrl;
   };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -299,6 +313,9 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
 
       {/* Stock photo search (Unsplash / Pexels) */}
       <StockImagePicker onPick={handleStockPick} pickedUrl={pickedStockUrl} busy={stockBusy} />
+
+      {/* AI image generation (gpt-image-2) */}
+      <AiImagePrompt onResult={handleAiResult} busy={stockBusy} />
 
       {/* Live preview */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-2">

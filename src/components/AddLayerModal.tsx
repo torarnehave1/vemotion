@@ -126,6 +126,12 @@ interface AddLayerModalProps {
   compositionWidth: number;
   compositionHeight: number;
   editingLayer?: Layer;
+  /**
+   * Optional — grow the composition's total duration to fit a layer that needs
+   * more time than the composition currently has (e.g. a long pixel-reveal).
+   * Forwarded to PixelGridEditForm. Parent clamps with Math.max (never shrinks).
+   */
+  onSetCompositionDuration?: (seconds: number) => void;
 }
 
 type AnimationPreset =
@@ -350,6 +356,7 @@ function parseMotionScenes(json: string): MotionScene[] | undefined {
 
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   onAdd, onAddLayers, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
+  onSetCompositionDuration,
 }) => {
   const isEditing  = !!editingLayer;
   const isKgShape  = editingLayer?.type === 'kg-shape';
@@ -1572,6 +1579,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               editingLayer={editingLayer!}
               compositionDuration={compositionDuration}
               onAdd={(layer) => { onAdd(layer); onClose(); }}
+              onSetCompositionDuration={onSetCompositionDuration}
             />
           ) : isGenericEdit ? (
             <>

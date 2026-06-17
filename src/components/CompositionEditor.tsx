@@ -366,6 +366,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           <AddLayerModal
             onAdd={addLayer}
             onAddLayers={addLayers}
+            onSetCompositionDuration={(seconds) => onChange({ ...composition, duration: Math.max(composition.duration, seconds) })}
             onUpdateMeta={(patch) => {
               // Merge the audio amp track into composition.meta. Used by
               // AudioLayerForm after Web-Audio analysis completes — drives

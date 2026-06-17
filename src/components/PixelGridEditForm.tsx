@@ -8,6 +8,13 @@ interface PixelGridEditFormProps {
   editingLayer: Layer;
   compositionDuration: number;
   onAdd: (layer: Layer) => void;
+  /**
+   * Grow the composition's total duration to at least this many seconds.
+   * Called on save when a pixel-reveal animation needs more time than the
+   * composition currently has (so the whole drawing actually plays). The parent
+   * clamps with Math.max — this never shrinks the composition.
+   */
+  onSetCompositionDuration?: (seconds: number) => void;
 }
 
 /**
@@ -28,6 +35,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   editingLayer,
   compositionDuration,
   onAdd,
+  onSetCompositionDuration,
 }) => {
   const props = editingLayer.properties;
   const background = (props.background as string) || '#ffffff';
@@ -99,6 +107,15 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     const n = typeof raw === 'number' ? raw : Number(raw);
     return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1;
   });
+
+  // When animating, the layer's own duration IS the reveal length
+  // (stitches × seconds-per-stitch), so the Duration field tracks the pacing
+  // live. The composition duration is grown to fit on save (handleSave).
+  useEffect(() => {
+    if (animateDrawing && drawOrder.length > 0) {
+      setLayerDuration(Math.max(0.1, secondsPerPixel * drawOrder.length));
+    }
+  }, [animateDrawing, secondsPerPixel, drawOrder.length]);
 
   const previewRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,12 +256,18 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       : otherAnims;
     const animation = editingLayer.animation?.kind === 'pixel-reveal' ? undefined : editingLayer.animation;
 
+    // The layer must stay alive for the whole reveal, and the composition must
+    // be long enough to actually play it. Grow both to fit (never shrink).
+    const animating = animateDrawing && drawOrder.length > 0;
+    const effLayerDuration = animating ? Math.max(layerDuration, totalReveal) : layerDuration;
+    if (animating) onSetCompositionDuration?.(startTime + totalReveal);
+
     onAdd({
       ...editingLayer, // preserve everything else (Lesson 21)
       position: { x: posX, y: posY },
       size: { width: Math.max(1, boxW), height: Math.max(1, boxH) },
       startTime,
-      layerDuration,
+      layerDuration: effLayerDuration,
       animation,
       animations,
       properties: {

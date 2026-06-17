@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Loader2, Eraser, Plus } from 'lucide-react';
 import type { Layer } from '../lib/api';
 import { buildKnittingChart, renderKnittingChart, knittingCellAt, type KnittingChart } from '../lib/knitting';
-import { uploadImageToAlbum } from '../lib/photoAlbum';
+import { uploadImageToAlbum, importImageUrlToAlbum, trackUnsplashDownload, type StockImage } from '../lib/photoAlbum';
+import { StockImagePicker } from './StockImagePicker';
 
 interface PixelGridEditFormProps {
   editingLayer: Layer;
@@ -160,6 +161,21 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       setSourceUrl(url);
     } catch { /* ignore; layer still editable for colours */ }
     finally { setSourceUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
+  };
+
+  // Pick a stock photo as a NEW source: import into the album, then re-pixelate
+  // from it at the current stitch/colour count (touched → rebuild effect).
+  const [pickedStockUrl, setPickedStockUrl] = useState('');
+  const handleStockPick = async (image: StockImage) => {
+    setSourceUploading(true);
+    setPickedStockUrl(image.url);
+    try {
+      void trackUnsplashDownload(image.download_location);
+      const albumUrl = await importImageUrlToAlbum(image.url);
+      touched.current = true;
+      setSourceUrl(albumUrl);
+    } catch { /* leave current grid intact on failure */ }
+    finally { setSourceUploading(false); }
   };
 
   const effectivePalette = palette.length === chart.palette.length ? palette : chart.palette;
@@ -351,6 +367,9 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
           <span className="text-[11px] text-slate-500">enables changing stitches/colours</span>
         </div>
       )}
+
+      {/* Stock photo search — pick one to re-pixelate the grid from it */}
+      <StockImagePicker onPick={handleStockPick} pickedUrl={pickedStockUrl} busy={sourceUploading} />
 
       {/* Palette — click a swatch to pick the paint brush; edit / add colours below */}
       {effectivePalette.length > 0 && (

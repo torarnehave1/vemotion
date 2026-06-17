@@ -52,6 +52,73 @@ export async function listAlbumImages(album: string = VEMOTION_ALBUM): Promise<A
   return data.images ?? [];
 }
 
+// ── Stock image search (Unsplash + Pexels) ──────────────────────────────────
+// Reuses the exact endpoints the production ImageSelector.vue calls, so the
+// Pixel Grid tab can pull a stock photo as a pixelation source.
+
+const API_BASE = 'https://api.vegvisr.org';
+
+export type StockProvider = 'unsplash' | 'pexels';
+
+/** One stock-search result. `download_location` (Unsplash only) is needed for
+ *  download-tracking compliance when the image is actually used. */
+export interface StockImage {
+  url: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  photographer?: string;
+  download_location?: string;
+}
+
+/**
+ * Search Unsplash or Pexels. Mirrors ImageSelector.vue: POST { query, count }
+ * to /unsplash-search or /pexels-search (no auth), response `{ images: [...] }`.
+ */
+export async function searchStockImages(
+  provider: StockProvider,
+  query: string,
+  count = 20,
+): Promise<StockImage[]> {
+  const endpoint = provider === 'unsplash' ? `${API_BASE}/unsplash-search` : `${API_BASE}/pexels-search`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: query.trim(), count }),
+  });
+  if (!res.ok) throw new Error(`Image search failed: HTTP ${res.status}`);
+  const data = await res.json() as { images?: StockImage[] };
+  return data.images ?? [];
+}
+
+/**
+ * Unsplash download-tracking (compliance) — best-effort, fire-and-forget.
+ * Matches ImageSelector.vue / GNewViewer.vue: POST { download_location }.
+ */
+export async function trackUnsplashDownload(downloadLocation?: string): Promise<void> {
+  if (!downloadLocation) return;
+  try {
+    await fetch(`${API_BASE}/unsplash-download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ download_location: downloadLocation }),
+    });
+  } catch { /* tracking is best-effort; ignore failures */ }
+}
+
+/**
+ * Copy an external image URL (stock photo, AI-generated image) into the
+ * VEmotion album and return the album (imgix) URL. This sidesteps cross-origin
+ * canvas tainting at pixelation time and makes the source re-pixelatable from
+ * the edit form — same contract as an uploaded source image.
+ */
+export async function importImageUrlToAlbum(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not fetch image: HTTP ${res.status}`);
+  const blob = await res.blob();
+  return uploadImageToAlbum(blob);
+}
+
 export async function uploadImageToAlbum(file: File | Blob, album: string = VEMOTION_ALBUM): Promise<string> {
   const user = readStoredUser();
   const token = user?.emailVerificationToken;

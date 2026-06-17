@@ -6,9 +6,13 @@ import {
   uploadImageToAlbum,
   listAlbums,
   listAlbumImages,
+  importImageUrlToAlbum,
+  trackUnsplashDownload,
   VEMOTION_ALBUM,
   type AlbumImage,
+  type StockImage,
 } from '../lib/photoAlbum';
+import { StockImagePicker } from './StockImagePicker';
 
 interface KnittingChartFormProps {
   onAdd: (layer: Layer) => void;
@@ -98,6 +102,32 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
     el.onload = () => setImg(el);
     el.onerror = () => setAlbumError('Could not load that image.');
     el.src = image.url;
+  };
+
+  // Pick a stock photo (Unsplash/Pexels): copy it into the VEmotion album
+  // (CORS-safe + re-pixelatable), then load the album URL as the source.
+  const [stockBusy, setStockBusy] = useState(false);
+  const [pickedStockUrl, setPickedStockUrl] = useState('');
+  const handleStockPick = async (image: StockImage) => {
+    setStockBusy(true);
+    setAlbumError('');
+    setPickedStockUrl(image.url);
+    setPickedKey('');
+    try {
+      void trackUnsplashDownload(image.download_location); // best-effort compliance
+      const albumUrl = await importImageUrlToAlbum(image.url);
+      setName(image.photographer ? `stock — ${image.photographer}` : 'pixel grid');
+      setSourceUrl(albumUrl);
+      const el = new Image();
+      el.crossOrigin = 'anonymous';
+      el.onload = () => setImg(el);
+      el.onerror = () => setAlbumError('Could not load that image.');
+      el.src = albumUrl;
+    } catch {
+      setAlbumError('Could not import that photo. Try another.');
+    } finally {
+      setStockBusy(false);
+    }
   };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -266,6 +296,9 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
           </div>
         )}
       </div>
+
+      {/* Stock photo search (Unsplash / Pexels) */}
+      <StockImagePicker onPick={handleStockPick} pickedUrl={pickedStockUrl} busy={stockBusy} />
 
       {/* Live preview */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-2">

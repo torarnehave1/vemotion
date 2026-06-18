@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FilePlus, FileJson, Save, Upload, FolderOpen, Loader2 } from 'lucide-react';
-import type { CompositionData } from '../lib/api';
+import { ChevronDown, FilePlus, FileJson, Save, Upload, FolderOpen, Loader2, Wand2 } from 'lucide-react';
+import type { CompositionData, Layer } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { saveCompositionToCloud, writeLastCompositionRef } from '../lib/cloud-compositions';
 import { movementOverTimeExample, neyLessonExample } from '../lib/examples';
 import { CompositionJsonModal } from './CompositionJsonModal';
 import { PortfolioModal } from './PortfolioModal';
+import { AiImageStudioModal } from './AiImageStudioModal';
 
 interface FileMenuProps {
   composition: CompositionData;
@@ -16,6 +17,8 @@ interface FileMenuProps {
   onNew: () => void;
   onCloudMetaChange?: (payload: { id: string | null; name: string }) => void;
   onCloudSaved?: (payload: { id: string; name: string; version?: number }) => void;
+  /** Append a layer to the current composition (used by AI Image Studio). */
+  onAddLayer?: (layer: Layer) => void;
 }
 
 
@@ -28,6 +31,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   onNew,
   onCloudMetaChange,
   onCloudSaved,
+  onAddLayer,
 }) => {
   const [open, setOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -36,6 +40,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
+  const [showAiStudio, setShowAiStudio] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -166,6 +171,8 @@ export const FileMenu: React.FC<FileMenuProps> = ({
             <MenuItem icon={<FileJson className="w-4 h-4" />} label="View JSON" onClick={() => { setShowJson(true); close(); }} />
             <MenuItem icon={<Upload className="w-4 h-4" />} label="Load from computer" onClick={loadFromComputer} />
             <div className="h-px bg-slate-800 mx-3" />
+            <MenuItem icon={<Wand2 className="w-4 h-4" />} label="AI Image Studio…" onClick={() => { setShowAiStudio(true); close(); }} />
+            <div className="h-px bg-slate-800 mx-3" />
             <MenuItem icon={<FolderOpen className="w-4 h-4" />} label="Open Portfolio…" onClick={() => { setShowPortfolio(true); close(); }} />
             <div className="p-3 border-t border-slate-800 space-y-2">
               <input
@@ -217,6 +224,15 @@ export const FileMenu: React.FC<FileMenuProps> = ({
             writeLastCompositionRef({ id, name });
             onCloudMetaChange?.({ id, name });
           }}
+        />
+      )}
+
+      {showAiStudio && (
+        <AiImageStudioModal
+          composition={composition}
+          userEmail={userEmail}
+          onAddLayer={(layer) => onAddLayer?.(layer)}
+          onClose={() => setShowAiStudio(false)}
         />
       )}
     </div>

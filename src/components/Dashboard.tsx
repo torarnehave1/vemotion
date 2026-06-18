@@ -519,6 +519,10 @@ export const Dashboard: React.FC = () => {
             setAutosaveVersion(version ?? autosaveVersion);
             setAutosaveState('saved');
           }}
+          onAddLayer={(layer) => {
+            // Append the AI-generated image as a new top layer (rides autosave).
+            setComposition(prev => ({ ...prev, layers: [...prev.layers, layer] }));
+          }}
         />
 
         {/* Build-up replay: rebuilds the live composition one layer per interval

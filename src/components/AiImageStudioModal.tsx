@@ -144,7 +144,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl h-[88vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -161,21 +161,32 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
           </button>
         </div>
 
-        {/* Body: two columns — controls (left) + preview (right) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 overflow-y-auto">
-          {/* Controls */}
-          <div className="space-y-4">
-            <div>
+        {/* Body: three columns — Prompt | Settings | Preview (Lesson: long
+            prompts need their own tall pane; settings and preview no longer
+            fight for the same column). Stacks vertically below lg. */}
+        <div className="flex flex-col lg:flex-row flex-1 min-h-0 gap-5 p-5 overflow-y-auto lg:overflow-hidden">
+
+          {/* Column 1 — Prompt (fills height) + the compiled final prompt */}
+          <div className="flex flex-col gap-3 lg:w-[34%] lg:min-h-0">
+            <div className="flex flex-col flex-1 min-h-0">
               <label className="text-xs text-slate-400 mb-1 block">What do you want to see?</label>
               <textarea
                 value={subject}
                 onChange={e => setSubject(e.target.value)}
-                placeholder="e.g. a red fox curled up asleep in autumn leaves"
-                rows={3}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                placeholder="Describe the image in as much detail as you like — subject, setting, mood, colors, composition. Longer, specific prompts give better results."
+                className="w-full flex-1 min-h-[160px] bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
+            <div className="flex-shrink-0">
+              <label className="text-[11px] text-slate-500 block mb-1">Final prompt sent to the model</label>
+              <div className="text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                {finalPrompt || <span className="text-slate-600">Describe what you want to see…</span>}
+              </div>
+            </div>
+          </div>
 
+          {/* Column 2 — Settings */}
+          <div className="space-y-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Style</label>
               <div className="flex flex-wrap gap-1.5">
@@ -272,10 +283,10 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             </div>
           </div>
 
-          {/* Preview */}
-          <div className="space-y-3">
-            <label className="text-xs text-slate-400 block">Preview</label>
-            <div className="aspect-square w-full rounded-lg border border-slate-700 bg-slate-950/60 flex items-center justify-center overflow-hidden">
+          {/* Column 3 — Preview */}
+          <div className="flex flex-col gap-3 lg:w-[32%] lg:min-h-0">
+            <label className="text-xs text-slate-400 block flex-shrink-0">Preview</label>
+            <div className="aspect-square w-full rounded-lg border border-slate-700 bg-slate-950/60 flex items-center justify-center overflow-hidden flex-shrink-0">
               {generating ? (
                 <div className="flex flex-col items-center gap-2 text-slate-500 text-xs">
                   <Loader2 className="w-6 h-6 animate-spin" />
@@ -289,15 +300,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                 </div>
               )}
             </div>
-
-            <div>
-              <label className="text-[11px] text-slate-500 block mb-1">Final prompt sent to the model</label>
-              <div className="text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 max-h-24 overflow-y-auto whitespace-pre-wrap">
-                {finalPrompt || <span className="text-slate-600">Describe what you want to see…</span>}
-              </div>
-            </div>
-
-            {error && <p className="text-xs text-red-400">{error}</p>}
+            {error && <p className="text-xs text-red-400 flex-shrink-0">{error}</p>}
           </div>
         </div>
 

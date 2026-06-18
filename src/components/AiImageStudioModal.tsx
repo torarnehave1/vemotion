@@ -63,6 +63,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   const [highDetail, setHighDetail] = useState(false);
   const [minimal, setMinimal] = useState(false);
   const [transparent, setTransparent] = useState(false);
+  const [spaceForText, setSpaceForText] = useState(false);
 
   const [generating, setGenerating] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -80,6 +81,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     if (highDetail) descriptors.push('highly detailed, intricate');
     if (minimal) descriptors.push('minimal, simple composition, generous negative space');
     if (transparent) descriptors.push('isolated subject on a plain transparent background');
+    if (spaceForText) descriptors.push('leave generous clean negative space and uncluttered margins so captions can be added on top later, no baked-in text labels');
     if (descriptors.length) p += `. Style: ${descriptors.join(', ')}`;
     if (avoid.trim()) p += `. Avoid: ${avoid.trim()}`;
     return p;
@@ -237,6 +239,10 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input type="checkbox" checked={transparent} onChange={e => setTransparent(e.target.checked)} className="accent-sky-500" />
                   Transparent background
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={spaceForText} onChange={e => setSpaceForText(e.target.checked)} className="accent-sky-500" />
+                  Leave space for captions
                 </label>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Wand2, Loader2, ImagePlus, RotateCcw } from 'lucide-react';
 import type { CompositionData, Layer } from '../lib/api';
@@ -25,6 +25,22 @@ const ASPECTS = [
   { key: 'portrait', label: 'Portrait', sub: '2:3', size: '1024x1536' },
 ] as const;
 type AspectKey = (typeof ASPECTS)[number]['key'];
+
+// Render quality (gpt-image enum) — the main speed lever. Draft (low) is much
+// faster + cheaper for iterating on a prompt; High for the final render.
+const QUALITIES = [
+  { key: 'low', label: 'Draft', sub: 'fastest' },
+  { key: 'medium', label: 'Standard', sub: 'balanced' },
+  { key: 'high', label: 'High', sub: 'best' },
+] as const;
+type QualityKey = (typeof QUALITIES)[number]['key'];
+
+// gpt-image-1-mini is a smaller, faster model — useful for rough prompt tests.
+const MODELS = [
+  { key: 'gpt-image-2', label: 'Best', sub: 'gpt-image-2' },
+  { key: 'gpt-image-1-mini', label: 'Fast', sub: 'mini' },
+] as const;
+type ModelKey = (typeof MODELS)[number]['key'];
 
 // Style presets append proven phrasing to the prompt so the user doesn't have
 // to know the vocabulary the model responds to.
@@ -66,10 +82,18 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   const [spaceForText, setSpaceForText] = useState(false);
   const [noText, setNoText] = useState(false);
 
+  const [quality, setQuality] = useState<QualityKey>('low');
+  const [model, setModel] = useState<ModelKey>('gpt-image-2');
+
   const [generating, setGenerating] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
   const [resultUrl, setResultUrl] = useState('');
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<number | null>(null);
+
+  // Clear the elapsed-time ticker if the modal unmounts mid-generation.
+  useEffect(() => () => { if (timerRef.current) window.clearInterval(timerRef.current); }, []);
 
   const buildPrompt = (): string => {
     let p = subject.trim();
@@ -100,10 +124,20 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     setGenerating(true);
     setError('');
     setResultUrl('');
-    generateAiImageToAlbum(finalPrompt, { size: aspectDef.size })
+    setElapsed(0);
+    // Non-blocking: the modal stays open and the prompt/settings remain
+    // editable while this runs; a ticker shows elapsed seconds so a slow
+    // render doesn't look frozen.
+    const start = Date.now();
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = window.setInterval(() => setElapsed((Date.now() - start) / 1000), 100);
+    const stopTimer = () => {
+      if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
+    };
+    generateAiImageToAlbum(finalPrompt, { size: aspectDef.size, model, quality })
       .then(setResultUrl)
       .catch((e) => setError(e instanceof Error ? e.message : 'Generation failed. Try a different prompt.'))
-      .finally(() => setGenerating(false));
+      .finally(() => { setGenerating(false); stopTimer(); });
   };
 
   // Measure the generated image, clamp to the canvas (aspect preserved),
@@ -231,6 +265,51 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             </div>
 
             <div>
+              <label className="text-xs text-slate-400 mb-1 block">Speed vs quality</label>
+              <div className="grid grid-cols-3 gap-2">
+                {QUALITIES.map(q => (
+                  <button
+                    key={q.key}
+                    type="button"
+                    onClick={() => setQuality(q.key)}
+                    className={[
+                      'px-2 py-1.5 rounded-lg text-xs border transition flex flex-col items-center',
+                      quality === q.key
+                        ? 'bg-sky-600 border-sky-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                    ].join(' ')}
+                  >
+                    <span>{q.label}</span>
+                    <span className="text-[10px] opacity-70">{q.sub}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">Draft is fastest — iterate your prompt on Draft, then switch to High for the final.</p>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Model</label>
+              <div className="grid grid-cols-2 gap-2">
+                {MODELS.map(m => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setModel(m.key)}
+                    className={[
+                      'px-2 py-1.5 rounded-lg text-xs border transition flex flex-col items-center',
+                      model === m.key
+                        ? 'bg-sky-600 border-sky-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                    ].join(' ')}
+                  >
+                    <span>{m.label}</span>
+                    <span className="text-[10px] opacity-70">{m.sub}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
               <label className="text-xs text-slate-400 mb-1 block">Text to render in the image (optional)</label>
               <input
                 value={textInImage}
@@ -290,7 +369,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
               {generating ? (
                 <div className="flex flex-col items-center gap-2 text-slate-500 text-xs">
                   <Loader2 className="w-6 h-6 animate-spin" />
-                  Generating…
+                  Generating… {elapsed.toFixed(1)}s
                 </div>
               ) : resultUrl ? (
                 <img src={resultUrl} alt="Generated" className="max-w-full max-h-full object-contain" />

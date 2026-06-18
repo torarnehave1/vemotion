@@ -136,13 +136,15 @@ const base64ToBlob = (b64: string, type = 'image/png'): Blob => {
  */
 export async function generateAiImageToAlbum(
   prompt: string,
-  opts: { model?: string; size?: string } = {},
+  // `quality` (gpt-image: low|medium|high|auto) is the biggest speed lever —
+  // a low/draft render is markedly faster than high. Omitted = worker default.
+  opts: { model?: string; size?: string; quality?: string } = {},
 ): Promise<string> {
-  const { model = 'gpt-image-2', size = '1024x1024' } = opts;
+  const { model = 'gpt-image-2', size = '1024x1024', quality } = opts;
   const res = await fetch(`${OPENAI_API}/images`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt.trim(), model, size }),
+    body: JSON.stringify({ prompt: prompt.trim(), model, size, ...(quality ? { quality } : {}) }),
   });
   if (!res.ok) {
     const err = await res.text().catch(() => '');

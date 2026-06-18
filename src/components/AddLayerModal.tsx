@@ -3,6 +3,8 @@ import { AudioLayerForm } from './AudioLayerForm';
 import { VideoLayerForm } from './VideoLayerForm';
 import { PixelGridEditForm } from './PixelGridEditForm';
 import { AiImagePrompt } from './AiImagePrompt';
+import { StockImagePicker } from './StockImagePicker';
+import { importImageUrlToAlbum, trackUnsplashDownload, type StockImage } from '../lib/photoAlbum';
 import { KnittingChartForm } from './KnittingChartForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off, Check } from 'lucide-react';
@@ -1056,6 +1058,28 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const toggleSelectAll = () =>
     setSelectedKeys(allImagesSelected ? new Set() : new Set(albumImages.map(img => img.key)));
 
+  // Pick a stock photo (Unsplash/Pexels) → copy it into the VEmotion album
+  // (CORS-safe for MP4/PNG export, re-usable) → add as an image layer.
+  const [stockInserting, setStockInserting] = useState(false);
+  const [pickedStockUrl, setPickedStockUrl] = useState('');
+  const handleStockImagePick = async (image: StockImage) => {
+    setStockInserting(true);
+    setPickedStockUrl(image.url);
+    try {
+      void trackUnsplashDownload(image.download_location); // best-effort compliance
+      const albumUrl = await importImageUrlToAlbum(image.url);
+      handleImagePick({
+        url: albumUrl,
+        key: albumUrl,
+        displayName: image.photographer ? `stock — ${image.photographer}` : 'stock image',
+      });
+    } catch {
+      /* leave the picker open on failure */
+    } finally {
+      setStockInserting(false);
+    }
+  };
+
   // Album picker + upload + image grid. Shared by the Add-layer Images tab and
   // the edit-mode "Replace image" flow. `handleImagePick` branches on
   // `replacingImage` to decide whether to add a new layer or swap the source.
@@ -1063,6 +1087,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     <>
       {/* Generate an image with AI (gpt-image-2) and add it as an image layer */}
       <AiImagePrompt onResult={(albumUrl) => handleImagePick({ url: albumUrl, key: albumUrl, displayName: 'AI image' })} />
+
+      {/* Search stock photos (Unsplash / Pexels) and add one as an image layer */}
+      <StockImagePicker onPick={handleStockImagePick} pickedUrl={pickedStockUrl} busy={stockInserting} />
 
       <div className="flex gap-2">
         <div className="relative flex-1">

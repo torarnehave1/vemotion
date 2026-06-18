@@ -36,6 +36,38 @@ async function loadFFmpeg(onProgress?: (p: ExportProgress) => void) {
   loaded = true;
 }
 
+/**
+ * Transcode a recorded audio blob (MediaRecorder gives us WebM/Opus) to an
+ * M4A/AAC container. Reuses the same module-level ffmpeg.wasm instance the MP4
+ * export loads, so there is no second core download.
+ *
+ * Why this exists: Safari cannot decode WebM/Opus in an `<audio>` element at
+ * all, and some Chromium-based browsers (e.g. Comet/Perplexity) refuse the
+ * recorded WebM on preview playback. AAC-in-MP4 is the one container every
+ * browser plays. The MP4 *export* path is unaffected — it transcodes audio
+ * itself in buildFfmpegCommand; this only fixes the editor's `<audio>` preview.
+ *
+ * Fail-soft contract: throws on failure so the caller can fall back to
+ * uploading the original WebM.
+ */
+export async function transcodeAudioToM4a(input: Blob): Promise<Blob> {
+  await loadFFmpeg();
+  const inName = 'narration_in';
+  const outName = 'narration_out.m4a';
+  await ffmpeg.writeFile(inName, await fetchFile(input));
+  try {
+    // -vn drops any stray video track; AAC @160k is plenty for voice-over and
+    // keeps the file small. +faststart moves the moov atom up so a streamed
+    // <audio> element can start before the whole file arrives.
+    await ffmpeg.exec(['-i', inName, '-vn', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', outName]);
+    const data = await ffmpeg.readFile(outName);
+    return new Blob([data as Uint8Array<ArrayBuffer>], { type: 'audio/mp4' });
+  } finally {
+    try { await ffmpeg.deleteFile(inName); } catch { /* ignore */ }
+    try { await ffmpeg.deleteFile(outName); } catch { /* ignore */ }
+  }
+}
+
 export async function exportToMp4(
   composition: CompositionData,
   onProgress?: (p: ExportProgress) => void

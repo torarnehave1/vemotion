@@ -6,6 +6,7 @@ import { Teleprompter } from './Teleprompter';
 import { NarrationScriptModal } from './NarrationScriptModal';
 import { CanvasRenderer, PlaybackController, type ResizeHandle } from '../lib/renderer';
 import { AudioPlaybackController } from '../lib/audioPlayback';
+import { transcodeAudioToM4a } from '../lib/exporter';
 import type { CompositionData, Layer, PathAnchor, PathMask, ImagePatch, Guide } from '../lib/api';
 import { layerLabel } from '../lib/api';
 import { PenToolOverlay } from './PenToolOverlay';
@@ -530,8 +531,21 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         if (blob.size === 0) return;
         setNarrSaving(true);
         try {
-          const fileName = `narration-${Date.now()}.webm`;
-          const { audioUrl, r2Key } = await uploadAudioBlob(blob, fileName);
+          // Transcode WebM/Opus → M4A/AAC before upload so the <audio> preview
+          // plays in every browser. Safari can't decode WebM at all; Comet
+          // (Perplexity) refuses it on playback. The MP4 export is unaffected.
+          // Fail-soft: if the transcode throws, upload the original WebM.
+          let uploadBlob = blob;
+          let ext = 'm4a';
+          let fmt: 'm4a' | 'webm' = 'm4a';
+          try {
+            uploadBlob = await transcodeAudioToM4a(blob);
+          } catch (e) {
+            console.warn('[narration] transcode failed, uploading original WebM:', e);
+            ext = 'webm'; fmt = 'webm';
+          }
+          const fileName = `narration-${Date.now()}.${ext}`;
+          const { audioUrl, r2Key } = await uploadAudioBlob(uploadBlob, fileName);
           const dur = (await probeDuration(audioUrl)) || composition.duration;
           // Register in the audio portfolio too (Lesson 22 two-worker pattern):
           // /upload writes the binary, /save-recording writes the metadata that
@@ -545,11 +559,11 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               displayName: `Narration — ${new Date().toLocaleString()}`,
               r2Key,
               r2Url: audioUrl,
-              fileSize: blob.size,
+              fileSize: uploadBlob.size,
               duration: dur,
               tags: [VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG],
               category: VEMOTION_AUDIO_CATEGORY,
-              audioFormat: 'webm',
+              audioFormat: fmt,
               publicationState: 'published',
             });
           }

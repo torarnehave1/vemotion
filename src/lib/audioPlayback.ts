@@ -124,7 +124,16 @@ export class AudioPlaybackController {
       }
 
       if (isPlaying && audio.paused) {
-        audio.play().catch(() => { /* autoplay blocked etc. */ });
+        audio.play().catch((err) => {
+          // Don't swallow it — a silenced failure here is exactly what hid the
+          // Comet/Safari narration silence. NotAllowedError = autoplay policy;
+          // NotSupportedError = a codec the browser can't decode (e.g. WebM in
+          // Safari). The element's own error code is logged too when present.
+          console.warn(
+            `[audio] play() rejected for layer ${layer.id} (${err?.name ?? 'Error'}): ${err?.message ?? err}`,
+            audio.error ? `mediaError=${audio.error.code}` : '',
+          );
+        });
       } else if (!isPlaying && !audio.paused) {
         audio.pause();
       }

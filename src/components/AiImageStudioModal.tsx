@@ -1,8 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Wand2, Loader2, ImagePlus, RotateCcw, Upload, Sparkles } from 'lucide-react';
+import { X, Wand2, Loader2, ImagePlus, RotateCcw, Upload, Sparkles, Images, Search } from 'lucide-react';
 import type { CompositionData, Layer } from '../lib/api';
-import { generateAiImageToAlbum, describeImageAsPrompt } from '../lib/photoAlbum';
+import {
+  generateAiImageToAlbum,
+  describeImageAsPrompt,
+  listAlbums,
+  listAlbumImages,
+  trackUnsplashDownload,
+  type AlbumImage,
+  type StockImage,
+} from '../lib/photoAlbum';
+import { StockImagePicker } from './StockImagePicker';
 
 interface AiImageStudioModalProps {
   composition: CompositionData;
@@ -92,13 +101,61 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<number | null>(null);
 
-  // "Start from an image" — upload a reference, analyze it into prompt text.
+  // "Start from an image" — pick a reference (upload / album / stock / paste),
+  // analyze it into prompt text. refImage holds a data URL or a public URL;
+  // both work as the vision model's image_url.
   const [refImage, setRefImage] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [refSource, setRefSource] = useState<'album' | 'stock' | null>(null);
+  const [albums, setAlbums] = useState<string[]>([]);
+  const [album, setAlbum] = useState('VEmotion');
+  const [albumImages, setAlbumImages] = useState<AlbumImage[]>([]);
+  const [albumLoading, setAlbumLoading] = useState(false);
 
   // Clear the elapsed-time ticker if the modal unmounts mid-generation.
   useEffect(() => () => { if (timerRef.current) window.clearInterval(timerRef.current); }, []);
+
+  // Load albums + images when the album panel opens (or the album changes).
+  useEffect(() => {
+    if (refSource !== 'album') return;
+    let cancelled = false;
+    if (albums.length === 0) {
+      listAlbums().then(a => { if (!cancelled && a.length) setAlbums(a); }).catch(() => {});
+    }
+    setAlbumLoading(true);
+    listAlbumImages(album)
+      .then(imgs => { if (!cancelled) setAlbumImages(imgs); })
+      .catch(() => { if (!cancelled) setAlbumImages([]); })
+      .finally(() => { if (!cancelled) setAlbumLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refSource, album]);
+
+  // Paste an image from the clipboard anywhere in the modal → reference image.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              setRefImage(typeof reader.result === 'string' ? reader.result : '');
+              setRefSource(null);
+            };
+            reader.readAsDataURL(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
 
   const buildPrompt = (): string => {
     let p = subject.trim();
@@ -187,6 +244,12 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const pickStockRef = (image: StockImage) => {
+    trackUnsplashDownload(image.download_location);
+    setRefImage(image.url);
+    setRefSource(null);
+  };
+
   // Analyze the reference image into prompt text and drop it into the prompt box.
   const analyzeRefImage = () => {
     if (!refImage || analyzing) return;
@@ -229,30 +292,98 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
 
           {/* Column 1 — Prompt (fills height) + the compiled final prompt */}
           <div className="flex flex-col gap-3 lg:w-[34%] lg:min-h-0">
-            {/* Start from an image: upload a reference → analyze into prompt text */}
-            <div className="flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800/40 p-2.5">
-              <label className="text-xs text-slate-400 mb-1.5 block">Start from an image (optional)</label>
-              <div className="flex items-center gap-2">
-                {refImage && (
+            {/* Start from an image: pick a reference from upload / album /
+                stock / clipboard, then analyze it into prompt text. */}
+            <div className="flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800/40 p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-400">Start from an image (optional)</label>
+                <span className="text-[10px] text-slate-500">or paste ⌘V / Ctrl+V</span>
+              </div>
+
+              {/* Source switcher */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setRefSource(null); fileRef.current?.click(); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs border bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 transition"
+                >
+                  <Upload className="w-3.5 h-3.5" /> Upload
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRefSource(s => (s === 'album' ? null : 'album'))}
+                  className={[
+                    'flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition',
+                    refSource === 'album' ? 'bg-sky-600 border-sky-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                  ].join(' ')}
+                >
+                  <Images className="w-3.5 h-3.5" /> Album
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRefSource(s => (s === 'stock' ? null : 'stock'))}
+                  className={[
+                    'flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition',
+                    refSource === 'stock' ? 'bg-sky-600 border-sky-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                  ].join(' ')}
+                >
+                  <Search className="w-3.5 h-3.5" /> Stock
+                </button>
+              </div>
+
+              {/* Album panel */}
+              {refSource === 'album' && (
+                <div className="space-y-1.5">
+                  <select
+                    value={album}
+                    onChange={e => setAlbum(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  >
+                    {(albums.length ? albums : ['VEmotion']).map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  {albumLoading ? (
+                    <div className="flex items-center gap-2 text-slate-500 text-xs py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</div>
+                  ) : albumImages.length > 0 ? (
+                    <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto">
+                      {albumImages.map(img => (
+                        <button
+                          key={img.key}
+                          type="button"
+                          onClick={() => { setRefImage(img.url); setRefSource(null); }}
+                          className={[
+                            'aspect-square rounded overflow-hidden border-2 transition',
+                            refImage === img.url ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-slate-700 hover:border-slate-400',
+                          ].join(' ')}
+                          title={img.displayName ?? img.name ?? img.key}
+                        >
+                          <img src={img.url} alt={img.displayName ?? ''} className="w-full h-full object-cover" loading="lazy" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">{userEmail ? 'No images in this album.' : 'Sign in to load albums.'}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Stock panel — reuses the Images-tab Unsplash/Pexels picker */}
+              {refSource === 'stock' && (
+                <StockImagePicker onPick={pickStockRef} pickedUrl={refImage} />
+              )}
+
+              {/* Selected reference + analyze */}
+              {refImage && (
+                <div className="flex items-center gap-2">
                   <img src={refImage} alt="Reference" className="w-12 h-12 rounded object-cover border border-slate-700 flex-shrink-0" />
-                )}
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg text-xs transition"
-                >
-                  <Upload className="w-3.5 h-3.5" /> {refImage ? 'Replace' : 'Upload'}
-                </button>
-                <button
-                  type="button"
-                  onClick={analyzeRefImage}
-                  disabled={!refImage || analyzing}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-xs font-medium transition"
-                >
-                  {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  {analyzing ? 'Analyzing…' : 'Describe → prompt'}
-                </button>
-                {refImage && (
+                  <button
+                    type="button"
+                    onClick={analyzeRefImage}
+                    disabled={analyzing}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-xs font-medium transition"
+                  >
+                    {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    {analyzing ? 'Analyzing…' : 'Describe → prompt'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setRefImage('')}
@@ -261,10 +392,11 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
-                )}
-              </div>
+                </div>
+              )}
+
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickRefImage} />
-              <p className="text-[10px] text-slate-500 mt-1.5">Analyzes the image with AI and writes a prompt into the box below — edit it, then Generate.</p>
+              <p className="text-[10px] text-slate-500">Analyzes the image and writes a prompt into the box below — edit it, then Generate.</p>
             </div>
             <div className="flex flex-col flex-1 min-h-0">
               <label className="text-xs text-slate-400 mb-1 block">What do you want to see?</label>

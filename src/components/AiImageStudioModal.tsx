@@ -38,6 +38,7 @@ const STYLES: { key: string; label: string; phrase: string }[] = [
   { key: 'pixel', label: 'Pixel art', phrase: 'pixel art, limited palette, crisp pixels' },
   { key: 'cinematic', label: 'Cinematic', phrase: 'cinematic, dramatic lighting, shallow depth of field' },
   { key: 'anime', label: 'Anime', phrase: 'anime style, cel shading, expressive' },
+  { key: 'isometric', label: 'Isometric infographic', phrase: 'isometric vector infographic illustration, flat colors with soft gradients and long shadows, clean thin line work, technical explainer diagram style, white background' },
 ];
 
 /**

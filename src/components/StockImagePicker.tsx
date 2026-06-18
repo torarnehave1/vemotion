@@ -19,7 +19,9 @@ interface StockImagePickerProps {
  * Lives inside a form (not a modal), so no portal.
  */
 export const StockImagePicker: React.FC<StockImagePickerProps> = ({ onPick, pickedUrl, busy }) => {
-  const [provider, setProvider] = useState<StockProvider>('unsplash');
+  // Pexels is the default — the Unsplash search endpoint is currently
+  // unavailable (404) on the backend; keep it selectable for when it returns.
+  const [provider, setProvider] = useState<StockProvider>('pexels');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<StockImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,12 +31,17 @@ export const StockImagePicker: React.FC<StockImagePickerProps> = ({ onPick, pick
     if (!query.trim() || loading) return;
     setLoading(true);
     setError('');
+    setResults([]);
     searchStockImages(provider, query)
       .then((imgs) => {
         setResults(imgs);
         if (imgs.length === 0) setError('No images found. Try different keywords.');
       })
-      .catch(() => setError('Search failed.'))
+      .catch(() => setError(
+        provider === 'unsplash'
+          ? 'Unsplash search is currently unavailable — use Pexels.'
+          : 'Search failed.',
+      ))
       .finally(() => setLoading(false));
   };
 

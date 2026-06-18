@@ -157,6 +157,46 @@ export async function generateAiImageToAlbum(
   throw new Error('Image generation returned no image');
 }
 
+/**
+ * Analyze an image (as a data URL) with gpt-4o vision via the openai-worker and
+ * return a ready-to-use image-generation PROMPT describing it. Used by the AI
+ * Image Studio's "start from an image" flow — the user uploads a reference, this
+ * turns it into editable prompt text. The worker passes array content-parts
+ * (text + image_url) straight through to OpenAI (verified live 2026-06).
+ */
+export async function describeImageAsPrompt(dataUrl: string): Promise<string> {
+  const res = await fetch(`${OPENAI_API}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      max_tokens: 400,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Look at this image and write a single vivid image-generation prompt (2–4 sentences) that could be used to recreate a similar image. Describe the subject, composition, style, colours, lighting and mood. Output ONLY the prompt text — no preamble, no quotes, no labels.',
+          },
+          { type: 'image_url', image_url: { url: dataUrl } },
+        ],
+      }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`Image analysis failed: HTTP ${res.status} ${err.slice(0, 200)}`);
+  }
+  const data = await res.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+    error?: { message?: string };
+  };
+  if (data.error?.message) throw new Error(data.error.message);
+  const text = data.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error('Image analysis returned no text');
+  return text;
+}
+
 export async function uploadImageToAlbum(file: File | Blob, album: string = VEMOTION_ALBUM): Promise<string> {
   const user = readStoredUser();
   const token = user?.emailVerificationToken;

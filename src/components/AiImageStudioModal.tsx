@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Wand2, Loader2, ImagePlus, RotateCcw } from 'lucide-react';
+import { X, Wand2, Loader2, ImagePlus, RotateCcw, Upload, Sparkles } from 'lucide-react';
 import type { CompositionData, Layer } from '../lib/api';
-import { generateAiImageToAlbum } from '../lib/photoAlbum';
+import { generateAiImageToAlbum, describeImageAsPrompt } from '../lib/photoAlbum';
 
 interface AiImageStudioModalProps {
   composition: CompositionData;
@@ -92,6 +92,11 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<number | null>(null);
 
+  // "Start from an image" — upload a reference, analyze it into prompt text.
+  const [refImage, setRefImage] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   // Clear the elapsed-time ticker if the modal unmounts mid-generation.
   useEffect(() => () => { if (timerRef.current) window.clearInterval(timerRef.current); }, []);
 
@@ -171,6 +176,28 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
 
   const reset = () => { setResultUrl(''); setError(''); };
 
+  // Read an uploaded reference image as a data URL (kept client-side; only sent
+  // to the vision model, not stored in the album).
+  const onPickRefImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setRefImage(typeof reader.result === 'string' ? reader.result : '');
+    reader.readAsDataURL(file);
+  };
+
+  // Analyze the reference image into prompt text and drop it into the prompt box.
+  const analyzeRefImage = () => {
+    if (!refImage || analyzing) return;
+    setAnalyzing(true);
+    setError('');
+    describeImageAsPrompt(refImage)
+      .then(text => setSubject(text))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Image analysis failed.'))
+      .finally(() => setAnalyzing(false));
+  };
+
   // createPortal escapes the sidebar transform ancestor (Lesson 19).
   return createPortal(
     <div
@@ -202,6 +229,43 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
 
           {/* Column 1 — Prompt (fills height) + the compiled final prompt */}
           <div className="flex flex-col gap-3 lg:w-[34%] lg:min-h-0">
+            {/* Start from an image: upload a reference → analyze into prompt text */}
+            <div className="flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800/40 p-2.5">
+              <label className="text-xs text-slate-400 mb-1.5 block">Start from an image (optional)</label>
+              <div className="flex items-center gap-2">
+                {refImage && (
+                  <img src={refImage} alt="Reference" className="w-12 h-12 rounded object-cover border border-slate-700 flex-shrink-0" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg text-xs transition"
+                >
+                  <Upload className="w-3.5 h-3.5" /> {refImage ? 'Replace' : 'Upload'}
+                </button>
+                <button
+                  type="button"
+                  onClick={analyzeRefImage}
+                  disabled={!refImage || analyzing}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-xs font-medium transition"
+                >
+                  {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {analyzing ? 'Analyzing…' : 'Describe → prompt'}
+                </button>
+                {refImage && (
+                  <button
+                    type="button"
+                    onClick={() => setRefImage('')}
+                    className="p-1 text-slate-500 hover:text-slate-200 transition"
+                    title="Remove reference image"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickRefImage} />
+              <p className="text-[10px] text-slate-500 mt-1.5">Analyzes the image with AI and writes a prompt into the box below — edit it, then Generate.</p>
+            </div>
             <div className="flex flex-col flex-1 min-h-0">
               <label className="text-xs text-slate-400 mb-1 block">What do you want to see?</label>
               <textarea

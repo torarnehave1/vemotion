@@ -64,6 +64,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   const [minimal, setMinimal] = useState(false);
   const [transparent, setTransparent] = useState(false);
   const [spaceForText, setSpaceForText] = useState(false);
+  const [noText, setNoText] = useState(false);
 
   const [generating, setGenerating] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -84,6 +85,9 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     if (spaceForText) descriptors.push('leave generous clean negative space and uncluttered margins so captions can be added on top later, no baked-in text labels');
     if (descriptors.length) p += `. Style: ${descriptors.join(', ')}`;
     if (avoid.trim()) p += `. Avoid: ${avoid.trim()}`;
+    // Emphatic, standalone no-text clause — image models honour negation more
+    // reliably when it is explicit and forceful than when buried in style text.
+    if (noText) p += '. IMPORTANT: render absolutely NO text — no letters, words, numbers, captions, labels, signage, watermarks, or signatures anywhere in the image. A purely visual image with zero typography.';
     return p;
   };
 
@@ -244,7 +248,17 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   <input type="checkbox" checked={spaceForText} onChange={e => setSpaceForText(e.target.checked)} className="accent-sky-500" />
                   Leave space for captions
                 </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={noText} onChange={e => setNoText(e.target.checked)} className="accent-sky-500" />
+                  No text in image
+                </label>
               </div>
+              {noText && (
+                <p className="text-[10px] text-slate-500 mt-1.5">
+                  Best effort — the image model has no hard "no text" switch, so it can still
+                  occasionally render stray text. Add real labels as text layers for guaranteed clean type.
+                </p>
+              )}
             </div>
 
             <div>

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, GraduationCap, ChevronUp, ChevronDown } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
+import { saveAsTrainingVideo } from '../lib/trainingVideo';
 import { exportFramePng, captureFramePngBlob } from '../lib/screenshot';
 import { uploadImageToAlbum, VEMOTION_ALBUM } from '../lib/photoAlbum';
 
@@ -57,6 +58,34 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       setExportProgress({ stage: 'done', percent: 0, message: 'Export failed. See console for details.' });
     } finally {
       setExporting(false);
+    }
+  };
+
+  // Save as training video: render to MP4 (no download), then publish to the Academy
+  // (recordings/academy/) so it shows in the MyPage Learn tab. Superadmin only (the upload
+  // endpoint is Superadmin-gated).
+  const [savingTraining, setSavingTraining] = useState(false);
+  const [trainingUrl, setTrainingUrl] = useState<string | null>(null);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [trainingProgress, setTrainingProgress] = useState('');
+  const handleSaveAsTraining = async () => {
+    if (savingTraining || exporting) return;
+    const title = window.prompt('Title for this training video:', 'Vemotion training video');
+    if (!title || !title.trim()) return;
+    setSavingTraining(true);
+    setTrainingUrl(null);
+    setTrainingError(null);
+    setTrainingProgress('Rendering…');
+    try {
+      const blob = await exportToMp4(composition, (p) => setTrainingProgress(p.message), { download: false });
+      const result = await saveAsTrainingVideo(blob, title.trim(), (p) => setTrainingProgress(p.message));
+      setTrainingUrl(result.playUrl);
+    } catch (err) {
+      console.error('Save as training video failed:', err);
+      setTrainingError(err instanceof Error ? err.message : 'Failed to save training video.');
+    } finally {
+      setSavingTraining(false);
+      setTrainingProgress('');
     }
   };
 
@@ -423,6 +452,25 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           : <><Download className="w-4 h-4" /> Export MP4</>
         }
       </button>
+
+      <button
+        onClick={handleSaveAsTraining}
+        disabled={savingTraining || exporting}
+        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        title="Render this composition and publish it as a training video in the Academy (MyPage Learn tab). Superadmin only."
+      >
+        {savingTraining
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> {trainingProgress || 'Saving…'}</>
+          : <><GraduationCap className="w-4 h-4" /> Save as training video</>
+        }
+      </button>
+      {trainingUrl && (
+        <p className="text-xs text-emerald-400">
+          Published to Academy.{' '}
+          <a href={trainingUrl} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">View video</a>
+        </p>
+      )}
+      {trainingError && <p className="text-xs text-red-400">{trainingError}</p>}
 
       <button
         onClick={handleExportPng}

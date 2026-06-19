@@ -70,8 +70,9 @@ export async function transcodeAudioToM4a(input: Blob): Promise<Blob> {
 
 export async function exportToMp4(
   composition: CompositionData,
-  onProgress?: (p: ExportProgress) => void
-): Promise<void> {
+  onProgress?: (p: ExportProgress) => void,
+  opts?: { download?: boolean }
+): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = composition.width;
   canvas.height = composition.height;
@@ -181,13 +182,17 @@ export async function exportToMp4(
 
   const data = await ffmpeg.readFile('output.mp4');
   const blob = new Blob([data as Uint8Array<ArrayBuffer>], { type: 'video/mp4' });
-  const url = URL.createObjectURL(blob);
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'vemotion-export.mp4';
-  a.click();
-  URL.revokeObjectURL(url);
+  // Default behaviour downloads the file; pass { download: false } to just get the Blob back
+  // (e.g. to upload it as a training video).
+  if (opts?.download !== false) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vemotion-export.mp4';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // Clean up virtual filesystem
   for (let frame = 0; frame < totalFrames; frame++) {
@@ -199,6 +204,7 @@ export async function exportToMp4(
   await ffmpeg.deleteFile('output.mp4');
 
   onProgress?.({ stage: 'done', percent: 100, message: 'Export complete!' });
+  return blob;
 }
 
 // ── Audio mux helpers ──────────────────────────────────────────────────────────

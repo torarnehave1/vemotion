@@ -27,6 +27,36 @@ export interface TrainingUploadResult {
   name: string;
 }
 
+/** Who may see a training video. */
+export type Audience =
+  | { mode: 'all' }
+  | { mode: 'founders' }
+  | { mode: 'emails'; list: string[] };
+
+/** One academy video as returned by the admin list (full lifecycle metadata). */
+export interface AcademyVideo {
+  key: string;
+  name: string;
+  title: string;
+  labels: string[];
+  playUrl: string;
+  uploaded: string;
+  size: number;
+  status: 'draft' | 'published';
+  audience: Audience;
+  releaseAt: string;
+  endAt: string;
+  uploadedBy: string;
+}
+
+/** Lifecycle fields the manager can patch on a video. */
+export interface TrainingMetaPatch {
+  status?: 'draft' | 'published';
+  audience?: Audience;
+  releaseAt?: string;
+  endAt?: string;
+}
+
 function slugFilename(title: string): string {
   const base =
     (title || 'vemotion-training')
@@ -41,7 +71,12 @@ export async function saveAsTrainingVideo(
   blob: Blob,
   title: string,
   onProgress?: (p: TrainingUploadProgress) => void,
+  opts?: { status?: 'draft' | 'published' },
 ): Promise<TrainingUploadResult> {
+  // New training videos default to DRAFT so they do NOT broadcast to every World
+  // Founder the moment they're saved. The Superadmin publishes them from the
+  // Training Videos manager. (Older videos with no status are treated as published.)
+  const status = opts?.status ?? 'draft';
   const token = readStoredUser()?.emailVerificationToken;
   if (!token) throw new Error('Not authenticated');
   const auth = { 'X-API-Token': token };
@@ -116,7 +151,23 @@ export async function saveAsTrainingVideo(
     if (!compRes.ok || !compData.playUrl) {
       throw new Error(compData.error || `Upload complete failed (HTTP ${compRes.status})`);
     }
-    onProgress?.({ stage: 'done', percent: 100, message: 'Saved to Academy.' });
+
+    // Stamp the lifecycle status (draft by default). The upload/init endpoint
+    // doesn't take a status, so set it via the academy/meta endpoint after the
+    // object exists. Best-effort: a failure here leaves the video as
+    // absent-status (treated as published) — surface it rather than silently drop.
+    onProgress?.({ stage: 'finalising', percent: 98, message: 'Marking as draft…' });
+    const metaRes = await fetch(`${REALTIME_API}/recordings/academy/meta`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, status }),
+    });
+    if (!metaRes.ok) {
+      const metaErr = (await metaRes.json().catch(() => ({}))) as { error?: string };
+      throw new Error(metaErr.error || `Could not set status (HTTP ${metaRes.status})`);
+    }
+
+    onProgress?.({ stage: 'done', percent: 100, message: 'Saved to Academy (draft).' });
     return { key, playUrl: compData.playUrl, name: compData.name || filename };
   } catch (err) {
     // Best-effort cleanup of the interrupted multipart upload.
@@ -130,5 +181,50 @@ export async function saveAsTrainingVideo(
       /* ignore */
     }
     throw err;
+  }
+}
+
+function authHeader(): Record<string, string> {
+  const token = readStoredUser()?.emailVerificationToken;
+  if (!token) throw new Error('Not authenticated');
+  return { 'X-API-Token': token };
+}
+
+/**
+ * List academy/training videos.
+ * - `admin: true` → all videos with full lifecycle metadata (Admin/Superadmin only).
+ * - `admin: false` (default) → only the videos visible to the current viewer.
+ */
+export async function listAcademyVideos(admin = false): Promise<AcademyVideo[]> {
+  const url = `${REALTIME_API}/recordings/academy${admin ? '?admin=1' : ''}`;
+  const res = await fetch(url, { headers: authHeader() });
+  const data = (await res.json().catch(() => ({}))) as { recordings?: AcademyVideo[]; error?: string };
+  if (!res.ok) throw new Error(data.error || `Failed to list training videos (HTTP ${res.status})`);
+  return data.recordings || [];
+}
+
+/** Patch lifecycle fields (status / audience / releaseAt / endAt) on one video. */
+export async function updateTrainingMeta(key: string, fields: TrainingMetaPatch): Promise<void> {
+  const res = await fetch(`${REALTIME_API}/recordings/academy/meta`, {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, ...fields }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || `Failed to update video (HTTP ${res.status})`);
+  }
+}
+
+/** Delete one academy video. */
+export async function deleteTrainingVideo(key: string): Promise<void> {
+  const res = await fetch(`${REALTIME_API}/recordings/academy/delete`, {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || `Failed to delete video (HTTP ${res.status})`);
   }
 }

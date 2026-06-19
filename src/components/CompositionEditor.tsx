@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, GraduationCap, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, GraduationCap, ChevronUp, ChevronDown, ListVideo } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
+import TrainingVideosModal from './TrainingVideosModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 import { saveAsTrainingVideo } from '../lib/trainingVideo';
 import { exportFramePng, captureFramePngBlob } from '../lib/screenshot';
@@ -68,6 +69,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
   const [trainingUrl, setTrainingUrl] = useState<string | null>(null);
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [trainingProgress, setTrainingProgress] = useState('');
+  const [showTrainingManager, setShowTrainingManager] = useState(false);
   const handleSaveAsTraining = async () => {
     if (savingTraining || exporting) return;
     const title = window.prompt('Title for this training video:', 'Vemotion training video');
@@ -457,7 +459,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         onClick={handleSaveAsTraining}
         disabled={savingTraining || exporting}
         className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-        title="Render this composition and publish it as a training video in the Academy (MyPage Learn tab). Superadmin only."
+        title="Render this composition and save it to the Academy as a DRAFT training video. Publish + set its audience from Manage training videos. Superadmin only."
       >
         {savingTraining
           ? <><Loader2 className="w-4 h-4 animate-spin" /> {trainingProgress || 'Saving…'}</>
@@ -466,11 +468,20 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       </button>
       {trainingUrl && (
         <p className="text-xs text-emerald-400">
-          Published to Academy.{' '}
+          Saved to Academy as a draft. Publish it from Manage training videos.{' '}
           <a href={trainingUrl} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">View video</a>
         </p>
       )}
       {trainingError && <p className="text-xs text-red-400">{trainingError}</p>}
+
+      <button
+        onClick={() => setShowTrainingManager(true)}
+        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        title="Filter by draft/published, set who can see each training video, schedule release/end dates, unpublish, or delete."
+      >
+        <ListVideo className="w-4 h-4" /> Manage training videos
+      </button>
+      {showTrainingManager && <TrainingVideosModal onClose={() => setShowTrainingManager(false)} />}
 
       <button
         onClick={handleExportPng}

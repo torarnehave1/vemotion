@@ -1231,7 +1231,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                   ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
               ].join(' ')}
-              title={penMode ? 'Exit pen mode' : 'Pen tool — click on canvas to drop anchors, Enter to finish (auto-adds a follower dot)'}
             >
               <PenTool className="w-4 h-4" />
               {penMode ? 'Drawing' : 'Pen'}
@@ -1248,7 +1247,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                   <button
                     onClick={() => { setMaskTargetId(selectedLayerId); setPenMode(true); }}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
-                    title={hasMask ? 'Redraw this image’s clip mask' : 'Draw a clip mask to cut this image into a shape'}
                   >
                     <Scissors className="w-4 h-4" />
                     {hasMask ? 'Redraw mask' : 'Mask'}
@@ -1257,7 +1255,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                     <button
                       onClick={() => onRemoveLayerMask(selectedLayerId)}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-slate-200 border-slate-700 hover:border-rose-700"
-                      title="Remove the clip mask — the full image returns"
                     >
                       <Eraser className="w-4 h-4" />
                       Remove mask
@@ -1296,7 +1293,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                             ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500'
                             : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
                         ].join(' ')}
-                        title={inverted ? 'Mask is inverted — clipping OUTSIDE the outline (a hole). Click to keep inside.' : 'Invert the mask — clip OUTSIDE the outline (cut a hole) instead of keeping inside'}
                       >
                         <Scissors className="w-4 h-4" />
                         {inverted ? 'Inverted' : 'Invert'}
@@ -1324,7 +1320,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                       setPatchTargetId(selectedLayerId);
                     }}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
-                    title="Patch tool — cover a blemish/tag by cloning a clean part of the same image over it"
                   >
                     <Stamp className="w-4 h-4" />
                     {count > 0 ? 'Add patch' : 'Patch'}
@@ -1333,7 +1328,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                     <button
                       onClick={() => onClearPatches(selectedLayerId)}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-slate-200 border-slate-700 hover:border-rose-700"
-                      title={`Remove all ${count} clone patch${count === 1 ? '' : 'es'} from this image`}
                     >
                       <Eraser className="w-4 h-4" />
                       Clear patches ({count})

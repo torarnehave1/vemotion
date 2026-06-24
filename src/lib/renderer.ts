@@ -1118,6 +1118,45 @@ export class CanvasRenderer {
     }
     this.ctx.stroke();
     this.ctx.restore();
+
+    // Measurement annotations: anchor letter labels (A, B, C…) and, when a
+    // scale has been calibrated, segment lengths in mm.
+    const measurements = values.measurements as { mmPerPx?: number } | undefined;
+    const labelFontSize = Math.max(14, Math.min(28, this.canvas.width / 60));
+    const segFontSize = Math.max(11, labelFontSize * 0.78);
+    this.ctx.save();
+    this.ctx.textBaseline = 'alphabetic';
+
+    for (let i = 0; i < anchors.length; i++) {
+      const a = anchors[i];
+      const label = String.fromCharCode(65 + i);
+      this.ctx.font = `bold ${labelFontSize}px sans-serif`;
+      this.ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      this.ctx.lineWidth = labelFontSize * 0.15;
+      this.ctx.strokeText(label, a.x + labelFontSize * 0.8, a.y - labelFontSize * 0.5);
+      this.ctx.fillStyle = '#f8fafc';
+      this.ctx.fillText(label, a.x + labelFontSize * 0.8, a.y - labelFontSize * 0.5);
+    }
+
+    if (measurements?.mmPerPx && measurements.mmPerPx > 0) {
+      this.ctx.font = `${segFontSize}px sans-serif`;
+      for (let i = 0; i + 1 < anchors.length; i++) {
+        const a = anchors[i];
+        const b = anchors[i + 1];
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        const pxLen = Math.hypot(b.x - a.x, b.y - a.y);
+        const mm = Math.round(pxLen * measurements.mmPerPx);
+        const text = `${mm} mm`;
+        this.ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        this.ctx.lineWidth = segFontSize * 0.18;
+        this.ctx.strokeText(text, mx + segFontSize * 0.5, my - segFontSize * 0.3);
+        this.ctx.fillStyle = '#94a3b8';
+        this.ctx.fillText(text, mx + segFontSize * 0.5, my - segFontSize * 0.3);
+      }
+    }
+
+    this.ctx.restore();
   }
 
   private drawText(layer: Layer, values: Record<string, unknown>, time: number): void {

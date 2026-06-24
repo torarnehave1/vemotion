@@ -8,7 +8,7 @@ import { importImageUrlToAlbum, trackUnsplashDownload, type StockImage } from '.
 import { KnittingChartForm } from './KnittingChartForm';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off, Check } from 'lucide-react';
-import type { AudioTrack, Layer, MotionScene, PathMask } from '../lib/api';
+import type { AudioTrack, Layer, MotionScene, PathMask, PathAnchor, PathMeasurements } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
@@ -455,6 +455,27 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const isGenericEdit = isEditing && !isImgLayer && !isVideoLayer && !isKgShape && !isKgCard && !isPixelGrid
     && !(editingLayer && ['text', 'shape', 'math-shape'].includes(editingLayer.type));
 
+  // Path layer measurements calibration state (only active when editingLayer.type === 'path').
+  const pathAnchors: PathAnchor[] = editingLayer?.type === 'path'
+    ? ((editingLayer.properties.anchors as PathAnchor[] | undefined) ?? [])
+    : [];
+  const [refSegIdx, setRefSegIdx] = useState(0);
+  const [refLengthMmStr, setRefLengthMmStr] = useState(
+    (editingLayer?.properties.measurements as PathMeasurements | undefined)?.refLengthMm?.toString() ?? ''
+  );
+  const [pathMeasurements, setPathMeasurements] = useState<PathMeasurements | undefined>(
+    editingLayer?.properties.measurements as PathMeasurements | undefined
+  );
+  const applyCalibration = () => {
+    const refMm = parseFloat(refLengthMmStr);
+    if (!isFinite(refMm) || refMm <= 0 || refSegIdx >= pathAnchors.length - 1) return;
+    const a = pathAnchors[refSegIdx];
+    const b = pathAnchors[refSegIdx + 1];
+    const pxLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (pxLen <= 0) return;
+    setPathMeasurements({ mmPerPx: refMm / pxLen, refSegment: refSegIdx, refLengthMm: refMm });
+  };
+
   const handleSaveGeneric = () => {
     if (!editingLayer) return;
     onAdd({
@@ -463,7 +484,11 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       size: { width, height },
       startTime: genStart,
       layerDuration: genDuration,
-      properties: { ...editingLayer.properties, opacity: opacityValue },
+      properties: {
+        ...editingLayer.properties,
+        opacity: opacityValue,
+        ...(editingLayer.type === 'path' ? { measurements: pathMeasurements } : {}),
+      },
     });
     onClose();
   };
@@ -1655,6 +1680,69 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 <input type="range" min={0} max={1} step={0.01} value={opacityValue}
                   onChange={e => setOpacityValue(Number(e.target.value))} className="w-full" />
               </div>
+
+              {/* Measurements calibration — path layers only */}
+              {editingLayer?.type === 'path' && (
+                <div className="space-y-2 border-t border-slate-700 pt-3">
+                  <p className="text-xs text-slate-300 font-medium">Measurements</p>
+                  {pathAnchors.length >= 2 ? (
+                    <>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {pathAnchors.slice(0, -1).map((_a, i) => {
+                          const a = pathAnchors[i];
+                          const b = pathAnchors[i + 1];
+                          const pxLen = Math.round(Math.hypot(b.x - a.x, b.y - a.y));
+                          const mmLen = pathMeasurements ? Math.round(pxLen * pathMeasurements.mmPerPx) : null;
+                          return (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                              <span className="text-amber-400 font-bold w-10 flex-shrink-0">
+                                {String.fromCharCode(65 + i)}→{String.fromCharCode(66 + i)}
+                              </span>
+                              <span className="text-slate-300">{pxLen} px</span>
+                              {mmLen !== null && (
+                                <span className="text-emerald-400 ml-1">= {mmLen} mm</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs text-slate-400 mb-1 block">Ref segment</label>
+                          <select value={refSegIdx} onChange={e => setRefSegIdx(Number(e.target.value))}
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            {pathAnchors.slice(0, -1).map((_, i) => (
+                              <option key={i} value={i}>
+                                {String.fromCharCode(65 + i)}→{String.fromCharCode(66 + i)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-slate-400 mb-1 block">Real length (mm)</label>
+                          <input type="number" value={refLengthMmStr}
+                            onChange={e => setRefLengthMmStr(e.target.value)}
+                            placeholder="e.g. 1400"
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                        </div>
+                        <button onClick={applyCalibration}
+                          className="px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-lg flex-shrink-0">
+                          Set scale
+                        </button>
+                      </div>
+                      {pathMeasurements && (
+                        <p className="text-xs text-emerald-400">
+                          Scale: 1 px = {pathMeasurements.mmPerPx.toFixed(3)} mm
+                          {' · '}1 cm = {Math.round(10 / pathMeasurements.mmPerPx)} px
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-500">Draw at least 2 anchors to calibrate.</p>
+                  )}
+                </div>
+              )}
+
               <button onClick={handleSaveGeneric}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
                 Save Changes

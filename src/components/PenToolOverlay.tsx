@@ -472,6 +472,56 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
             />
           );
         })}
+
+        {/* Anchor letter labels (A, B, C, D…) — scaled to stay readable. */}
+        {anchors.map((a, i) => {
+          const fs = hitRadiusSvg() * 1.6;
+          const label = String.fromCharCode(65 + i);
+          return (
+            <text
+              key={`lbl-${i}`}
+              x={a.x + hitRadiusSvg() * 1.2}
+              y={a.y - hitRadiusSvg() * 0.8}
+              fontSize={fs}
+              fontWeight="bold"
+              fill="#f8fafc"
+              stroke="#0f172a"
+              strokeWidth={fs * 0.12}
+              paintOrder="stroke"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+              style={{ userSelect: 'none' }}
+            >
+              {label}
+            </text>
+          );
+        })}
+
+        {/* Segment straight-line length labels at midpoints. */}
+        {anchors.slice(0, -1).map((a, i) => {
+          const b = anchors[i + 1];
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          const dist = Math.round(Math.hypot(b.x - a.x, b.y - a.y));
+          const fs = hitRadiusSvg() * 1.2;
+          return (
+            <text
+              key={`seg-${i}`}
+              x={mx + hitRadiusSvg() * 0.8}
+              y={my - hitRadiusSvg() * 0.4}
+              fontSize={fs}
+              fill="#94a3b8"
+              stroke="#0f172a"
+              strokeWidth={fs * 0.15}
+              paintOrder="stroke"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+              style={{ userSelect: 'none' }}
+            >
+              {dist}px
+            </text>
+          );
+        })}
       </svg>
 
     </>

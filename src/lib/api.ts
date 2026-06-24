@@ -263,6 +263,21 @@ export type PathAnchor = {
 };
 
 /**
+ * Scale calibration for a `type: 'path'` layer's anchor labels and segment
+ * lengths. Stored in `properties.measurements`. One reference segment's
+ * real-world length is typed by the user; all other segment lengths derive
+ * from the computed `mmPerPx` scale factor.
+ */
+export type PathMeasurements = {
+  /** Canvas pixels → millimetres scale factor. */
+  mmPerPx: number;
+  /** 0-based index of the calibration segment (0 = A→B, 1 = B→C, …). */
+  refSegment: number;
+  /** Real-world length of the reference segment in mm. */
+  refLengthMm: number;
+};
+
+/**
  * Optional clip mask on an `image` layer (`properties.mask`). When present the
  * image is clipped to this closed outline — everything outside the outline is
  * transparent. Lets a single image read as a cut-out shape in a collage.

@@ -23,6 +23,8 @@ interface PenToolOverlayProps {
   guides?: Array<{ axis: 'x' | 'y'; position: number }>;
   /** When false, anchor letter labels (A/B/C…) and segment lengths are hidden. Defaults to true. */
   showLabels?: boolean;
+  /** Global composition scale (mm per canvas px). When set, distance labels show in mm instead of px. */
+  compositionScale?: number;
 }
 
 const generateId = () => `path-${Date.now().toString(36)}`;
@@ -103,7 +105,10 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   onAnchorCountChange,
   guides = [],
   showLabels = true,
+  compositionScale,
 }) => {
+  const fmtDist = (px: number) =>
+    compositionScale ? `${Math.round(px * compositionScale)} mm` : `${Math.round(px)} px`;
   const [anchors, setAnchors] = useState<PathAnchor[]>([]);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   const [gesture, setGesture] = useState<Gesture>({ kind: 'idle' });
@@ -464,7 +469,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
 
         {/* Live distance from last anchor to cursor — shown while drawing */}
         {cursorPreview && lastA && hoverTarget && (() => {
-          const dist = Math.round(Math.hypot(hoverTarget.x - lastA.x, hoverTarget.y - lastA.y));
+          const dist = Math.hypot(hoverTarget.x - lastA.x, hoverTarget.y - lastA.y);
           const mx = (lastA.x + hoverTarget.x) / 2;
           const my = (lastA.y + hoverTarget.y) / 2;
           const fs = hitRadiusSvg() * 1.5;
@@ -482,7 +487,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
               pointerEvents="none"
               style={{ userSelect: 'none' }}
             >
-              {dist}px
+              {fmtDist(dist)}
             </text>
           );
         })()}
@@ -589,7 +594,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
           const b = anchors[i + 1];
           const mx = (a.x + b.x) / 2;
           const my = (a.y + b.y) / 2;
-          const dist = Math.round(Math.hypot(b.x - a.x, b.y - a.y));
+          const dist = Math.hypot(b.x - a.x, b.y - a.y);
           const fs = hitRadiusSvg() * 1.5;
           return (
             <text
@@ -606,7 +611,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
               pointerEvents="none"
               style={{ userSelect: 'none' }}
             >
-              {dist}px
+              {fmtDist(dist)}
             </text>
           );
         })}

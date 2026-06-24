@@ -1116,6 +1116,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 onCancel={() => setPenMode(false)}
                 onAnchorCountChange={setPenAnchorCount}
                 guides={composition.meta?.guides}
+                compositionScale={composition.meta?.scale?.mmPerPx}
               />
             )}
             {editMode && !penMode && !patchTargetId && onUpdatePathAnchors && (

@@ -1221,9 +1221,20 @@ export class CanvasRenderer {
           offCtx.globalCompositeOperation = 'source-in';
           const fit = (values.fillFit as string) ?? 'cover';
           drawImageFitted(offCtx, img, 0, 0, off.width, off.height, fit);
-          // Composite onto main canvas at layer position. globalAlpha (from
-          // drawLayer) and any mask-wipe clip both still apply here.
-          this.ctx.drawImage(off, layerLeft, layerTop);
+          // Composite onto main canvas at layer position, with optional rotation.
+          // globalAlpha (from drawLayer) and any mask-wipe clip both still apply.
+          const rot = (values.rotation as number | undefined) ?? 0;
+          if (rot !== 0) {
+            this.ctx.save();
+            const cx = layerLeft + lw / 2;
+            const cy = layerTop + lh / 2;
+            this.ctx.translate(cx, cy);
+            this.ctx.rotate(rot * Math.PI / 180);
+            this.ctx.drawImage(off, -lw / 2, -lh / 2);
+            this.ctx.restore();
+          } else {
+            this.ctx.drawImage(off, layerLeft, layerTop);
+          }
           return;
         }
       }
@@ -1232,6 +1243,14 @@ export class CanvasRenderer {
 
     // ── Solid path (existing behaviour) ─────────────────────────────────────
     this.ctx.save();
+    const rotation = (values.rotation as number | undefined) ?? 0;
+    if (rotation !== 0) {
+      const cx = layerLeft + maxWidth / 2;
+      const cy = layerTop + layer.size.height / 2;
+      this.ctx.translate(cx, cy);
+      this.ctx.rotate(rotation * Math.PI / 180);
+      this.ctx.translate(-cx, -cy);
+    }
     this.ctx.beginPath();
     this.ctx.rect(layerLeft, layerTop, maxWidth, layer.size.height);
     this.ctx.clip();

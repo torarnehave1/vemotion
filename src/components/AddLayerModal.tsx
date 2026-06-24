@@ -436,6 +436,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [drawStartTime, setDrawStartTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[0]?.time ?? 0 : 0);
   const [drawEndTime, setDrawEndTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[editingLayer.animation.keyframes.length - 1]?.time ?? Math.min(3, compositionDuration) : Math.min(3, compositionDuration));
   const [fontSize, setFontSize] = useState((editingLayer?.properties.fontSize as number) ?? 48);
+  const [textRotation, setTextRotation] = useState((editingLayer?.properties.rotation as number) ?? 0);
   const [width, setWidth] = useState(editingLayer?.size.width ?? 600);
   const [height, setHeight] = useState(editingLayer?.size.height ?? 80);
   const [posX, setPosX] = useState(editingLayer?.position.x ?? Math.floor((compositionWidth - 600) / 2));
@@ -497,6 +498,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         ...editingLayer.properties,
         opacity: opacityValue,
         ...(editingLayer.type === 'path' ? { measurements: pathMeasurements, showLabels: pathShowLabels } : {}),
+        ...(editingLayer.type === 'text' ? { rotation: textRotation } : {}),
       },
     });
     onClose();
@@ -982,6 +984,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             align,
             fontWeight: '600',
             opacity: opacityValue,
+            rotation: textRotation,
             ...(fontFamily ? { fontFamily } : {}),
             ...(motionScenes ? { motionScenes } : {}),
             ...(fillMode === 'image' && fillSource.trim()
@@ -1899,7 +1902,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                       className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-xs text-slate-400 mb-1 block">Font Size</label>
                       <input type="number" value={fontSize} onChange={e => setFontSize(parseInt(e.target.value))}
@@ -1913,6 +1916,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                         <option value="center">Center</option>
                         <option value="right">Right</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                      <input type="number" value={textRotation} step={1}
+                        onChange={e => setTextRotation(Number(e.target.value))}
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                   </div>
                   <div>

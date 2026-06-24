@@ -19,6 +19,8 @@ interface PenToolOverlayProps {
   onCancel: () => void;
   /** Fires whenever the anchor count changes — lets the parent render the action bar outside the canvas. */
   onAnchorCountChange?: (count: number) => void;
+  /** Ruler guides to snap anchors to while drawing / dragging. */
+  guides?: Array<{ axis: 'x' | 'y'; position: number }>;
 }
 
 const generateId = () => `path-${Date.now().toString(36)}`;
@@ -31,7 +33,7 @@ const SMOOTH_DRAG_THRESHOLD = 4;
 type Gesture =
   | { kind: 'idle' }
   | { kind: 'placing-new'; anchorIdx: number; anchorX: number; anchorY: number }
-  | { kind: 'dragging-anchor'; anchorIdx: number; dx: number; dy: number }
+  | { kind: 'dragging-anchor'; anchorIdx: number; dx: number; dy: number; origX: number; origY: number }
   | { kind: 'dragging-handle'; anchorIdx: number; which: 'in' | 'out'; mirror: boolean };
 
 /**
@@ -60,6 +62,36 @@ type Gesture =
  * Hit-test radius is screen-pixel-sized (converted on each gesture so it
  * stays clickable regardless of the canvas's display size).
  */
+// Snap pt to the nearest guide within snapRadius SVG units.
+function snapToGuides(
+  pt: { x: number; y: number },
+  guides: Array<{ axis: 'x' | 'y'; position: number }>,
+  snapRadius: number,
+): { x: number; y: number } {
+  let { x, y } = pt;
+  for (const g of guides) {
+    if (g.axis === 'x' && Math.abs(pt.x - g.position) < snapRadius) x = g.position;
+    if (g.axis === 'y' && Math.abs(pt.y - g.position) < snapRadius) y = g.position;
+  }
+  return { x, y };
+}
+
+// Constrain `to` to the nearest 45° increment from `from` (Illustrator Shift behaviour).
+function constrain45(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const angle = Math.atan2(dy, dx);
+  const snapped = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+  const dist = Math.hypot(dx, dy);
+  return {
+    x: Math.round(from.x + dist * Math.cos(snapped)),
+    y: Math.round(from.y + dist * Math.sin(snapped)),
+  };
+}
+
 export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   compositionWidth,
   compositionHeight,
@@ -67,6 +99,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   onFinish,
   onCancel,
   onAnchorCountChange,
+  guides = [],
 }) => {
   const [anchors, setAnchors] = useState<PathAnchor[]>([]);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
@@ -74,6 +107,8 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   // Live "alt-held" so the dragging-handle gesture knows whether to mirror.
   const altRef = useRef(false);
+  // Live "shift-held" for cursor-preview 45° constraint feedback.
+  const shiftRef = useRef(false);
   // A mask must ENCLOSE area → needs >= 3 anchors and a closed outline; an
   // open path is usable with 2.
   const isMask = mode === 'mask';
@@ -148,13 +183,17 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     if (!pt) return;
     const hit = hitTest(pt);
     altRef.current = e.altKey;
+    shiftRef.current = e.shiftKey;
 
     if (hit.kind === 'anchor') {
+      const a = anchors[hit.anchorIdx];
       setGesture({
         kind: 'dragging-anchor',
         anchorIdx: hit.anchorIdx,
-        dx: pt.x - anchors[hit.anchorIdx].x,
-        dy: pt.y - anchors[hit.anchorIdx].y,
+        dx: pt.x - a.x,
+        dy: pt.y - a.y,
+        origX: a.x,
+        origY: a.y,
       });
       return;
     }
@@ -167,25 +206,31 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
       });
       return;
     }
-    // Empty → place a NEW anchor. Starts as a corner; if the user drags
-    // before mouseup, it upgrades to smooth (out + mirrored in).
+    // Empty → place a NEW anchor. Snap to guides then apply Shift 45° constraint.
+    const snappedPt = snapToGuides(pt, guides, hitRadiusSvg());
+    const finalPt = (e.shiftKey && anchors.length > 0)
+      ? constrain45(anchors[anchors.length - 1], snappedPt)
+      : snappedPt;
     setAnchors(prev => {
-      const next = [...prev, { x: Math.round(pt.x), y: Math.round(pt.y) }];
+      const next = [...prev, { x: Math.round(finalPt.x), y: Math.round(finalPt.y) }];
       setGesture({
         kind: 'placing-new',
         anchorIdx: next.length - 1,
-        anchorX: pt.x,
-        anchorY: pt.y,
+        anchorX: finalPt.x,
+        anchorY: finalPt.y,
       });
       return next;
     });
   }, [anchors, clientToUserspace, hitTest]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const pt = clientToUserspace(e.clientX, e.clientY);
-    if (pt) setHover(pt);
+    const rawPt = clientToUserspace(e.clientX, e.clientY);
+    if (!rawPt) { return; }
+    shiftRef.current = e.shiftKey;
+    // Apply guide snap to the hover position so the cursor preview also snaps.
+    const pt = snapToGuides(rawPt, guides, hitRadiusSvg());
+    setHover(pt);
     if (gesture.kind === 'idle') return;
-    if (!pt) return;
 
     if (gesture.kind === 'placing-new') {
       const dx = pt.x - gesture.anchorX;
@@ -210,8 +255,18 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     }
 
     if (gesture.kind === 'dragging-anchor') {
-      const newX = pt.x - gesture.dx;
-      const newY = pt.y - gesture.dy;
+      let newX = pt.x - gesture.dx;
+      let newY = pt.y - gesture.dy;
+      // Shift: lock to H or V axis from the drag-start position.
+      if (e.shiftKey) {
+        const dxFromOrig = newX - gesture.origX;
+        const dyFromOrig = newY - gesture.origY;
+        if (Math.abs(dxFromOrig) >= Math.abs(dyFromOrig)) {
+          newY = gesture.origY;
+        } else {
+          newX = gesture.origX;
+        }
+      }
       setAnchors(prev => prev.map((a, i) => i === gesture.anchorIdx ? { ...a, x: newX, y: newY } : a));
       return;
     }
@@ -351,9 +406,14 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   })();
 
   // Cursor-preview segment from last anchor to mouse position.
+  // When Shift is held (tracked via altRef proxy — we use a shiftRef instead),
+  // show the constrained target so the user gets live feedback.
   const lastA = anchors[anchors.length - 1];
-  const cursorPreview = (gesture.kind === 'idle' && lastA && hover)
-    ? `M ${lastA.x},${lastA.y} L ${hover.x},${hover.y}`
+  const hoverTarget = (hover && lastA && shiftRef.current)
+    ? constrain45(lastA, hover)
+    : hover;
+  const cursorPreview = (gesture.kind === 'idle' && lastA && hoverTarget)
+    ? `M ${lastA.x},${lastA.y} L ${hoverTarget.x},${hoverTarget.y}`
     : '';
 
   const cursor =

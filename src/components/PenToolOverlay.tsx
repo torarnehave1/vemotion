@@ -462,6 +462,31 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
           />
         )}
 
+        {/* Live distance from last anchor to cursor — shown while drawing */}
+        {cursorPreview && lastA && hoverTarget && (() => {
+          const dist = Math.round(Math.hypot(hoverTarget.x - lastA.x, hoverTarget.y - lastA.y));
+          const mx = (lastA.x + hoverTarget.x) / 2;
+          const my = (lastA.y + hoverTarget.y) / 2;
+          const fs = hitRadiusSvg() * 1.5;
+          return (
+            <text
+              x={mx + hitRadiusSvg() * 0.6}
+              y={my - hitRadiusSvg() * 0.5}
+              fontSize={fs}
+              fontWeight="600"
+              fill="#fbbf24"
+              stroke="#000000"
+              strokeWidth={fs * 0.22}
+              paintOrder="stroke"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+              style={{ userSelect: 'none' }}
+            >
+              {dist}px
+            </text>
+          );
+        })()}
+
         {/* Handle lines (anchor centre → handle endpoint) */}
         {anchors.map((a, i) => (
           <React.Fragment key={`h-${i}`}>

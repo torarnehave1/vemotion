@@ -109,9 +109,6 @@ interface VideoPreviewProps {
    * off-canvas). When omitted, the rulers + guide interactions are disabled.
    */
   onUpdateGuides?: (guides: Guide[]) => void;
-  /** Set the global composition scale (mm per canvas pixel). Called when the
-   * user clicks "Set scale" in the resize label overlay. */
-  onSetCompositionScale?: (mmPerPx: number) => void;
 }
 
 const MIN_SIZE = 8; // smallest layer box a resize can produce (canvas px)
@@ -174,7 +171,7 @@ function computeResizedBox(
   return { x, y, w, h };
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onLayerRotate, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onSetLayerVolume, onSetNarrationScript, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides, onSetCompositionScale }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onLayerRotate, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onSetLayerVolume, onSetNarrationScript, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -232,8 +229,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   // Live size label shown near the cursor while a resize drag is in progress.
   // Always populated during resize (px fallback when no scale is set).
   const [resizeLabel, setResizeLabel] = useState<{ w: number; h: number; cx: number; cy: number } | null>(null);
-  // "Set scale" inline input that appears in the resize label when no scale is set.
-  const [scaleInput, setScaleInput] = useState<{ mmStr: string; axis: 'w' | 'h' } | null>(null);
   // Rotation drag state.
   const rotatingRef = useRef<{
     layerId: string;
@@ -875,7 +870,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           const rs = resizingRef.current;
           resizingRef.current = null;
           setResizeLabel(null);
-          setScaleInput(null);
           document.removeEventListener('mousemove', onResizeMove);
           document.removeEventListener('mouseup', onResizeUp);
           if (!rs) return;
@@ -1499,75 +1493,13 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       {/* Live resize label — portalled to body so position:fixed works outside any transform ancestor */}
       {resizeLabel && createPortal(
         <div
-          style={{ position: 'fixed', left: resizeLabel.cx, top: resizeLabel.cy, zIndex: 9999 }}
+          style={{ position: 'fixed', left: resizeLabel.cx, top: resizeLabel.cy, pointerEvents: 'none', zIndex: 9999 }}
           className="bg-slate-900/90 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono shadow-lg"
         >
-          {composition.meta?.scale?.mmPerPx ? (
-            // Scale is set — show mm dimensions.
-            <span style={{ pointerEvents: 'none' }}>
-              W: {Math.round(resizeLabel.w * composition.meta.scale.mmPerPx)} mm
-              {' · '}
-              H: {Math.round(resizeLabel.h * composition.meta.scale.mmPerPx)} mm
-            </span>
-          ) : (
-            // No scale — show px + inline "Set scale" tool.
-            <div className="space-y-1">
-              <span style={{ pointerEvents: 'none' }}>
-                W: {Math.round(resizeLabel.w)} px · H: {Math.round(resizeLabel.h)} px
-              </span>
-              {scaleInput ? (
-                <div className="flex items-center gap-1 mt-1">
-                  <span className="text-slate-400">
-                    {scaleInput.axis === 'w' ? `${Math.round(resizeLabel.w)} px =` : `${Math.round(resizeLabel.h)} px =`}
-                  </span>
-                  <input
-                    autoFocus
-                    type="number"
-                    value={scaleInput.mmStr}
-                    onChange={e => setScaleInput(s => s ? { ...s, mmStr: e.target.value } : s)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        const mm = parseFloat(scaleInput.mmStr);
-                        const px = scaleInput.axis === 'w' ? resizeLabel.w : resizeLabel.h;
-                        if (mm > 0 && px > 0) onSetCompositionScale?.(mm / px);
-                        setScaleInput(null);
-                      }
-                      if (e.key === 'Escape') setScaleInput(null);
-                    }}
-                    className="w-16 bg-slate-700 border border-sky-500 text-white rounded px-1 py-0.5 text-xs font-mono focus:outline-none"
-                    placeholder="mm"
-                  />
-                  <span className="text-slate-400">mm</span>
-                  <button
-                    onClick={() => {
-                      const mm = parseFloat(scaleInput.mmStr);
-                      const px = scaleInput.axis === 'w' ? resizeLabel.w : resizeLabel.h;
-                      if (mm > 0 && px > 0) onSetCompositionScale?.(mm / px);
-                      setScaleInput(null);
-                    }}
-                    className="px-1.5 py-0.5 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs"
-                  >
-                    Set
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2 mt-0.5">
-                  <button
-                    onClick={() => setScaleInput({ mmStr: '', axis: 'w' })}
-                    className="text-sky-400 hover:text-sky-300 underline text-[10px]"
-                  >
-                    Set scale (W)
-                  </button>
-                  <button
-                    onClick={() => setScaleInput({ mmStr: '', axis: 'h' })}
-                    className="text-sky-400 hover:text-sky-300 underline text-[10px]"
-                  >
-                    Set scale (H)
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          {composition.meta?.scale?.mmPerPx
+            ? <>W: {Math.round(resizeLabel.w * composition.meta.scale.mmPerPx)} mm · H: {Math.round(resizeLabel.h * composition.meta.scale.mmPerPx)} mm</>
+            : <>W: {Math.round(resizeLabel.w)} px · H: {Math.round(resizeLabel.h)} px</>
+          }
         </div>,
         document.body,
       )}

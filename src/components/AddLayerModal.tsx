@@ -437,6 +437,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [drawEndTime, setDrawEndTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[editingLayer.animation.keyframes.length - 1]?.time ?? Math.min(3, compositionDuration) : Math.min(3, compositionDuration));
   const [fontSize, setFontSize] = useState((editingLayer?.properties.fontSize as number) ?? 48);
   const [layerRotation, setLayerRotation] = useState((editingLayer?.properties.rotation as number) ?? 0);
+  // "Set scale" from layer size — shared across image/kg-shape/generic edit forms.
+  const [scaleRefMm, setScaleRefMm] = useState('');
   const [width, setWidth] = useState(editingLayer?.size.width ?? 600);
   const [height, setHeight] = useState(editingLayer?.size.height ?? 80);
   const [posX, setPosX] = useState(editingLayer?.position.x ?? Math.floor((compositionWidth - 600) / 2));
@@ -1044,6 +1046,40 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     }
   };
 
+  // Inline "Set scale" block — rendered after W/H in image/kg-shape/generic edit forms.
+  // `refPx` is the layer's current width in canvas pixels.
+  const makeSetScaleBlock = (refPx: number) => (
+    <div className="border border-slate-700 rounded-lg p-3 space-y-2 bg-slate-800/50">
+      <div className="text-xs text-slate-400 font-medium">Set composition scale</div>
+      <div className="text-xs text-slate-500">
+        Layer width: <span className="text-slate-300 font-mono">{Math.round(refPx)} px</span>
+        {compositionScale ? <span className="text-emerald-400 ml-2">= {Math.round(refPx * compositionScale)} mm</span> : null}
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-400 whitespace-nowrap">{Math.round(refPx)} px =</span>
+        <input
+          type="number"
+          value={scaleRefMm}
+          onChange={e => setScaleRefMm(e.target.value)}
+          placeholder="real mm"
+          className="w-24 bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
+        />
+        <span className="text-xs text-slate-400">mm</span>
+        <button
+          type="button"
+          onClick={() => {
+            const mm = parseFloat(scaleRefMm);
+            if (mm > 0 && refPx > 0) { onSetCompositionScale?.(mm / refPx); setScaleRefMm(''); }
+          }}
+          className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs font-medium disabled:opacity-40"
+          disabled={!(parseFloat(scaleRefMm) > 0)}
+        >
+          Set scale
+        </button>
+      </div>
+    </div>
+  );
+
   const motionScenesField = (
     <div className="space-y-2">
       <label className="text-xs text-slate-400 block">Advanced motion scenes (JSON)</label>
@@ -1495,6 +1531,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
 
+              {makeSetScaleBlock(imgWidth)}
+
               {/* Animation */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -1638,6 +1676,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   <input type="number" value={kgHeight} onChange={e => setKgHeight(parseInt(e.target.value))}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
+
+              {makeSetScaleBlock(kgWidth)}
+
               <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
                 <select value={kgPreset} onChange={e => setKgPreset(e.target.value as AnimationPreset)}
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
@@ -1695,6 +1736,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   <input type="number" value={height} onChange={e => setHeight(Number(e.target.value) || 0)}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
+
+                {makeSetScaleBlock(width)}
+
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">Start (s)</label>
                   <input type="number" min={0} step={0.1} value={genStart} onChange={e => setGenStart(Math.max(0, Number(e.target.value) || 0))}

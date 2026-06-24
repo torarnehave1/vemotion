@@ -447,6 +447,13 @@ export class CanvasRenderer {
    */
   showGuides = false;
 
+  /** Editor-only mm grid overlay. Only drawn when composition.meta.scale is set. */
+  showGrid = false;
+  /** Editor-only mm ruler along top + left edges. Only drawn when composition.meta.scale is set. */
+  showRuler = false;
+  /** Real-world size of each grid square in mm (default 100 mm = 10 cm). */
+  gridSizeMm = 100;
+
   /**
    * A guide being dragged out of a ruler but not yet committed. Drawn dashed
    * so it reads as a preview distinct from committed guides. Set by
@@ -678,6 +685,13 @@ export class CanvasRenderer {
       this.drawSelectionOverlay(composition, time);
     }
 
+    // Editor-only mm grid and ruler — drawn before guides so guide lines sit on top.
+    const mmPerPx = composition.meta?.scale?.mmPerPx;
+    if (mmPerPx && mmPerPx > 0) {
+      if (this.showGrid)  this.drawMmGrid(composition, mmPerPx);
+      if (this.showRuler) this.drawMmRuler(composition, mmPerPx);
+    }
+
     // Editor-only persisted ruler guides (composition.meta.guides) + any
     // in-progress draft guide. Drawn under the magenta smart guides so the
     // active snap indicator stays most prominent.
@@ -727,6 +741,121 @@ export class CanvasRenderer {
       }
       this.ctx.stroke();
     }
+    this.ctx.restore();
+  }
+
+  /**
+   * Editor-only mm grid overlay. Draws faint grid lines at `gridSizeMm`
+   * intervals (minor) and 5× that interval (major). Adapts automatically —
+   * if the mm→px scale makes minor lines too dense (< 4px apart) it steps up
+   * to the next larger interval until lines are comfortably spaced.
+   */
+  private drawMmGrid(composition: CompositionData, mmPerPx: number): void {
+    // pxPerMm = 1 / mmPerPx
+    const pxPerMm = 1 / mmPerPx;
+    // Choose a step size (in mm) that keeps lines at least 6px apart on screen.
+    let stepMm = this.gridSizeMm;
+    const minSpacingPx = 6;
+    while (stepMm * pxPerMm < minSpacingPx) stepMm *= 2;
+    const majorStepMm = stepMm * 5;
+    const stepPx = stepMm * pxPerMm;
+    const majorStepPx = majorStepMm * pxPerMm;
+    const W = composition.width;
+    const H = composition.height;
+
+    this.ctx.save();
+    // Minor grid lines.
+    this.ctx.strokeStyle = 'rgba(148,163,184,0.15)'; // slate-400 very faint
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([]);
+    for (let x = 0; x <= W; x += stepPx) {
+      this.ctx.beginPath(); this.ctx.moveTo(x, 0); this.ctx.lineTo(x, H); this.ctx.stroke();
+    }
+    for (let y = 0; y <= H; y += stepPx) {
+      this.ctx.beginPath(); this.ctx.moveTo(0, y); this.ctx.lineTo(W, y); this.ctx.stroke();
+    }
+    // Major grid lines.
+    this.ctx.strokeStyle = 'rgba(148,163,184,0.35)';
+    this.ctx.lineWidth = 1;
+    for (let x = 0; x <= W; x += majorStepPx) {
+      this.ctx.beginPath(); this.ctx.moveTo(x, 0); this.ctx.lineTo(x, H); this.ctx.stroke();
+    }
+    for (let y = 0; y <= H; y += majorStepPx) {
+      this.ctx.beginPath(); this.ctx.moveTo(0, y); this.ctx.lineTo(W, y); this.ctx.stroke();
+    }
+    this.ctx.restore();
+  }
+
+  /**
+   * Editor-only mm ruler along the top and left edges of the canvas.
+   * Tick marks and labels are in real-world mm derived from the composition scale.
+   * The ruler band is 20px tall/wide; drawn above/left of the canvas content
+   * but INSIDE the canvas rectangle (the ruler covers the outermost 20 px of the
+   * composition — acceptable in edit mode where the outer margin is normally empty).
+   */
+  private drawMmRuler(composition: CompositionData, mmPerPx: number): void {
+    const pxPerMm = 1 / mmPerPx;
+    const W = composition.width;
+    const H = composition.height;
+    const BAND = 20; // ruler thickness in canvas px
+    const FONT_SIZE = 9;
+
+    // Choose label interval: at least 40px between labels.
+    let labelStepMm = 10;
+    const steps = [10, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
+    for (const s of steps) { if (s * pxPerMm >= 40) { labelStepMm = s; break; } }
+    // Minor ticks at half the label step if ≥ 8px apart.
+    const minorStepMm = (labelStepMm / 2) * pxPerMm >= 8 ? labelStepMm / 2 : labelStepMm;
+    const minorStepPx = minorStepMm * pxPerMm;
+    const labelStepPx = labelStepMm * pxPerMm;
+
+    this.ctx.save();
+    this.ctx.font = `${FONT_SIZE}px system-ui, sans-serif`;
+    this.ctx.textBaseline = 'top';
+    this.ctx.fillStyle = 'rgba(15,23,42,0.72)'; // near-black bg
+
+    // ── Top ruler ────────────────────────────────────────────────────────────
+    this.ctx.fillRect(0, 0, W, BAND);
+    this.ctx.strokeStyle = 'rgba(148,163,184,0.6)';
+    this.ctx.lineWidth = 1;
+    // bottom border line
+    this.ctx.beginPath(); this.ctx.moveTo(0, BAND); this.ctx.lineTo(W, BAND); this.ctx.stroke();
+    this.ctx.fillStyle = '#94a3b8';
+    for (let x = 0; x <= W; x += minorStepPx) {
+      const isLabel = Math.round(x / labelStepPx) * labelStepPx === Math.round(x);
+      const tickH = isLabel ? BAND * 0.55 : BAND * 0.3;
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, BAND); this.ctx.lineTo(x, BAND - tickH);
+      this.ctx.stroke();
+      if (isLabel) {
+        const mmVal = Math.round(x * mmPerPx);
+        this.ctx.fillText(`${mmVal}`, x + 2, 2);
+      }
+    }
+
+    // ── Left ruler ───────────────────────────────────────────────────────────
+    this.ctx.fillStyle = 'rgba(15,23,42,0.72)';
+    this.ctx.fillRect(0, 0, BAND, H);
+    this.ctx.strokeStyle = 'rgba(148,163,184,0.6)';
+    // right border line
+    this.ctx.beginPath(); this.ctx.moveTo(BAND, 0); this.ctx.lineTo(BAND, H); this.ctx.stroke();
+    this.ctx.fillStyle = '#94a3b8';
+    for (let y = 0; y <= H; y += minorStepPx) {
+      const isLabel = Math.round(y / labelStepPx) * labelStepPx === Math.round(y);
+      const tickW = isLabel ? BAND * 0.55 : BAND * 0.3;
+      this.ctx.beginPath();
+      this.ctx.moveTo(BAND, y); this.ctx.lineTo(BAND - tickW, y);
+      this.ctx.stroke();
+      if (isLabel) {
+        const mmVal = Math.round(y * mmPerPx);
+        this.ctx.save();
+        this.ctx.translate(2, y - 2);
+        this.ctx.rotate(-Math.PI / 2);
+        this.ctx.fillText(`${mmVal}`, 0, 0);
+        this.ctx.restore();
+      }
+    }
+
     this.ctx.restore();
   }
 

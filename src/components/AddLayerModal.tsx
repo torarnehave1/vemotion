@@ -1477,7 +1477,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-slate-400">Width</label>
+                    <label className="text-xs text-slate-400">Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(imgWidth * compositionScale)} mm)</span> : ''}</label>
                     <button
                       type="button"
                       onClick={() => setLockAspect(v => !v)}
@@ -1490,7 +1490,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   </div>
                   <input type="number" value={imgWidth} onChange={e => setWidthLinked(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Height</label>
+                <div><label className="text-xs text-slate-400 mb-1 block">Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(imgHeight * compositionScale)} mm)</span> : ''}</label>
                   <input type="number" value={imgHeight} onChange={e => setHeightLinked(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
@@ -1631,10 +1631,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
                   <input type="number" value={kgPosY} onChange={e => setKgPosY(parseInt(e.target.value))}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Width</label>
+                <div><label className="text-xs text-slate-400 mb-1 block">Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(kgWidth * compositionScale)} mm)</span> : ''}</label>
                   <input type="number" value={kgWidth} onChange={e => setKgWidth(parseInt(e.target.value))}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Height</label>
+                <div><label className="text-xs text-slate-400 mb-1 block">Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(kgHeight * compositionScale)} mm)</span> : ''}</label>
                   <input type="number" value={kgHeight} onChange={e => setKgHeight(parseInt(e.target.value))}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
@@ -1682,12 +1682,16 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Width</label>
+                  <label className="text-xs text-slate-400 mb-1 block">
+                    Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(width * compositionScale)} mm)</span> : ''}
+                  </label>
                   <input type="number" value={width} onChange={e => setWidth(Number(e.target.value) || 0)}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Height</label>
+                  <label className="text-xs text-slate-400 mb-1 block">
+                    Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(height * compositionScale)} mm)</span> : ''}
+                  </label>
                   <input type="number" value={height} onChange={e => setHeight(Number(e.target.value) || 0)}
                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>

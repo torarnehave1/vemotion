@@ -238,6 +238,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   } | null>(null);
 
   const totalFrames = Math.floor(composition.duration * composition.fps);
+  const [showGrid, setShowGrid] = useState(false);
+  const [showRuler, setShowRuler] = useState(false);
 
   useEffect(() => {
     setPan({ x: 0, y: 0 });
@@ -333,6 +335,16 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     onSelectLayer?.(selectedLayerId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayerId]);
+
+  // Sync grid/ruler toggle state to the renderer and re-render.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.showGrid = showGrid;
+    renderer.showRuler = showRuler;
+    void renderer.renderFrame(composition, currentFrame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showGrid, showRuler]);
 
   // Pull a selection made elsewhere (a timeline row click) into the canvas, so
   // clicking a layer in the list selects + outlines it on the canvas too.
@@ -1312,6 +1324,42 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               <PenTool className="w-4 h-4" />
               {penMode ? 'Drawing' : 'Pen'}
             </button>
+            {/* Grid / Ruler toggles — only when a composition scale is set. */}
+            {composition.meta?.scale?.mmPerPx && (
+              <>
+                <button
+                  onClick={() => setShowGrid(v => !v)}
+                  className={[
+                    'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition border',
+                    showGrid
+                      ? 'bg-emerald-700 hover:bg-emerald-600 text-white border-emerald-500'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                  ].join(' ')}
+                  title="Toggle mm grid overlay"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M0 5h16M0 11h16M5 0v16M11 0v16" />
+                  </svg>
+                  Grid
+                </button>
+                <button
+                  onClick={() => setShowRuler(v => !v)}
+                  className={[
+                    'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition border',
+                    showRuler
+                      ? 'bg-emerald-700 hover:bg-emerald-600 text-white border-emerald-500'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                  ].join(' ')}
+                  title="Toggle mm ruler overlay"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="1" y="5" width="14" height="6" rx="1"/>
+                    <path d="M4 5v3M7 5v4M10 5v3M13 5v2" strokeWidth="1.2"/>
+                  </svg>
+                  Ruler
+                </button>
+              </>
+            )}
             {/* Mask button — only for a selected IMAGE layer. Enters the pen
                 tool in mask mode bound to that image; the committed outline
                 becomes the image's clip mask (collage cut-out). */}

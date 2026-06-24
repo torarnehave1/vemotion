@@ -465,6 +465,14 @@ export const Dashboard: React.FC = () => {
             : <ChevronRight className="w-5 h-5" />}
         </button>
         <h1 className="text-lg font-semibold text-slate-200 flex-shrink-0">Vemotion</h1>
+        {/* Build marker — visual confirmation of latest deploy. Bump the label on each push. */}
+        <span
+          aria-label="Build marker VA"
+          title="Build marker VA — visual confirmation of latest deploy"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-white text-[10px] font-bold tracking-wider flex-shrink-0"
+        >
+          VA
+        </span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview
         </span>

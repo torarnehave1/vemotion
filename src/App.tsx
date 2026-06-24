@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, createContext, useContext } from 'react';
-import { AuthBar, EcosystemNav } from 'vegvisr-ui-kit';
+import { AuthBar } from 'vegvisr-ui-kit';
 import { readStoredUser, type AuthUser } from './lib/auth';
 import ImpersonationBar from './components/ImpersonationBar';
 import { Login } from './components/Login';
@@ -198,7 +198,6 @@ function App() {
           logoutLabel="Log out"
           onLogout={handleLogout}
         />
-        <EcosystemNav />
         {/* System Owner "Login as…" control + impersonation banner.
             Renders nothing for non-owners (403 from /admin/users). */}
         <ImpersonationBar />

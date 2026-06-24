@@ -436,7 +436,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [drawStartTime, setDrawStartTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[0]?.time ?? 0 : 0);
   const [drawEndTime, setDrawEndTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[editingLayer.animation.keyframes.length - 1]?.time ?? Math.min(3, compositionDuration) : Math.min(3, compositionDuration));
   const [fontSize, setFontSize] = useState((editingLayer?.properties.fontSize as number) ?? 48);
-  const [textRotation, setTextRotation] = useState((editingLayer?.properties.rotation as number) ?? 0);
+  const [layerRotation, setLayerRotation] = useState((editingLayer?.properties.rotation as number) ?? 0);
   const [width, setWidth] = useState(editingLayer?.size.width ?? 600);
   const [height, setHeight] = useState(editingLayer?.size.height ?? 80);
   const [posX, setPosX] = useState(editingLayer?.position.x ?? Math.floor((compositionWidth - 600) / 2));
@@ -498,7 +498,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         ...editingLayer.properties,
         opacity: opacityValue,
         ...(editingLayer.type === 'path' ? { measurements: pathMeasurements, showLabels: pathShowLabels } : {}),
-        ...(editingLayer.type === 'text' ? { rotation: textRotation } : {}),
+        rotation: layerRotation,
       },
     });
     onClose();
@@ -640,6 +640,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         name: imgName,
         fit: imgFit,
         opacity: opacityValue,
+        rotation: layerRotation,
         // Border: width 0 → drop both keys (no border). Spread above preserves
         // any other props (Lesson 21).
         borderColor: imgBorderWidth > 0 ? imgBorderColor : undefined,
@@ -913,6 +914,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         ...editingLayer.properties,
         color: kgColor,
         opacity: opacityValue,
+        rotation: layerRotation,
         ...(motionScenes ? { motionScenes } : { motionScenes: undefined }),
       },
     });
@@ -984,7 +986,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             align,
             fontWeight: '600',
             opacity: opacityValue,
-            rotation: textRotation,
+            rotation: layerRotation,
             ...(fontFamily ? { fontFamily } : {}),
             ...(motionScenes ? { motionScenes } : {}),
             ...(fillMode === 'image' && fillSource.trim()
@@ -992,7 +994,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               : {}),
           }
         : layerType === 'shape'
-          ? { shape, color, opacity: opacityValue, ...(motionScenes ? { motionScenes } : {}) }
+          ? { shape, color, opacity: opacityValue, rotation: layerRotation, ...(motionScenes ? { motionScenes } : {}) }
           : {
               mathKind,
               stroke: color,
@@ -1433,6 +1435,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
               {opacityField}
 
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                <input type="number" value={layerRotation} step={1}
+                  onChange={e => setLayerRotation(Number(e.target.value))}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+              </div>
+
               {/* Mask feather (Slice 5, control C — number field). Only shown
                   when this image already has a clip mask. 0 = hard edge. */}
               {editMask && (
@@ -1636,6 +1645,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 </select>
               </div>
               {opacityField}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                <input type="number" value={layerRotation} step={1}
+                  onChange={e => setLayerRotation(Number(e.target.value))}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+              </div>
               {motionScenesField}
               <button onClick={handleSaveKgShape}
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
@@ -1691,6 +1706,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 <label className="text-xs text-slate-400 mb-1 block">Opacity ({opacityValue.toFixed(2)})</label>
                 <input type="range" min={0} max={1} step={0.01} value={opacityValue}
                   onChange={e => setOpacityValue(Number(e.target.value))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                <input type="number" value={layerRotation} step={1}
+                  onChange={e => setLayerRotation(Number(e.target.value))}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
               </div>
 
               {/* Measurements calibration — path layers only */}
@@ -1919,8 +1940,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     </div>
                     <div>
                       <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
-                      <input type="number" value={textRotation} step={1}
-                        onChange={e => setTextRotation(Number(e.target.value))}
+                      <input type="number" value={layerRotation} step={1}
+                        onChange={e => setLayerRotation(Number(e.target.value))}
                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                   </div>
@@ -1962,15 +1983,23 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   )}
                 </>
               ) : layerType === 'shape' ? (
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Shape</label>
-                  <div className="flex gap-2">
-                    {(['rect', 'circle'] as const).map(s => (
-                      <button key={s} onClick={() => setShape(s)}
-                        className={`flex-1 py-2 rounded-lg text-sm capitalize transition ${shape === s ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
-                        {s}
-                      </button>
-                    ))}
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Shape</label>
+                    <div className="flex gap-2">
+                      {(['rect', 'circle'] as const).map(s => (
+                        <button key={s} onClick={() => setShape(s)}
+                          className={`flex-1 py-2 rounded-lg text-sm capitalize transition ${shape === s ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                    <input type="number" value={layerRotation} step={1}
+                      onChange={e => setLayerRotation(Number(e.target.value))}
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                   </div>
                 </div>
               ) : (

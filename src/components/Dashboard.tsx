@@ -467,11 +467,11 @@ export const Dashboard: React.FC = () => {
         <h1 className="text-lg font-semibold text-slate-200 flex-shrink-0">Vemotion</h1>
         {/* Build marker — visual confirmation of latest deploy. Bump the label on each push. */}
         <span
-          aria-label="Build marker VG"
-          title="Build marker VG — visual confirmation of latest deploy"
+          aria-label="Build marker VH"
+          title="Build marker VH — visual confirmation of latest deploy"
           className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-white text-[10px] font-bold tracking-wider flex-shrink-0"
         >
-          VG
+          VH
         </span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview
@@ -656,6 +656,14 @@ export const Dashboard: React.FC = () => {
                   ...prev,
                   layers: prev.layers.map(l => l.id === layerId
                     ? { ...l, position, size }
+                    : l),
+                }));
+              }}
+              onLayerRotate={(layerId, rotation) => {
+                setComposition(prev => ({
+                  ...prev,
+                  layers: prev.layers.map(l => l.id === layerId
+                    ? { ...l, properties: { ...l.properties, rotation } }
                     : l),
                 }));
               }}

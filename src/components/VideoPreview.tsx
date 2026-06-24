@@ -48,6 +48,8 @@ interface VideoPreviewProps {
    * without going through React state (same pattern as onLayerMove).
    */
   onLayerResize?: (layerId: string, position: { x: number; y: number }, size: { width: number; height: number }) => void;
+  /** Commit a rotation (degrees) after a rotation-handle drag. */
+  onLayerRotate?: (layerId: string, rotation: number) => void;
   /**
    * Append one or more new layers (in render order — last is drawn on top).
    * Used by the Pen Tool when finishing a path: it emits two layers
@@ -169,7 +171,7 @@ function computeResizedBox(
   return { x, y, w, h };
 }
 
-export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onSetLayerVolume, onSetNarrationScript, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
+export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrameChange, externalSeekFrame, selectedLayerId: externalSelectedLayerId, onSelectLayer, embed, onLayerMove, onLayerResize, onLayerRotate, onAddLayers, onUpdatePathAnchors, onUpdatePathStream, onSetLayerVolume, onSetNarrationScript, onUpdateLayerMask, onRemoveLayerMask, onSetMaskFeather, onSetMaskInvert, onAddPatch, onClearPatches, onUpdateGuides }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -226,6 +228,14 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   const [hoverHandle, setHoverHandle] = useState<ResizeHandle | null>(null);
   // Live mm-size label shown near the cursor while a resize drag is in progress.
   const [resizeLabel, setResizeLabel] = useState<{ w: number; h: number; cx: number; cy: number } | null>(null);
+  // Rotation drag state.
+  const rotatingRef = useRef<{
+    layerId: string;
+    cx: number; cy: number;        // layer bounding-box centre in canvas px
+    startAngle: number;            // angle at mousedown (radians)
+    startRotation: number;         // layer's rotation at mousedown (degrees)
+    finalRotation: number;
+  } | null>(null);
 
   const totalFrames = Math.floor(composition.duration * composition.fps);
 
@@ -757,6 +767,55 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
     }
 
     const time = currentFrame / composition.fps;
+
+    // Rotation-handle grab — checked BEFORE resize so the small circle above
+    // the top-centre handle takes priority over the 'n' resize square behind it.
+    const rotHit = rendererRef.current.rotationHandleAt(coords.x, coords.y, composition, time);
+    if (rotHit && selectedLayerId) {
+      const layer = composition.layers.find(l => l.id === selectedLayerId);
+      if (layer) {
+        e.preventDefault();
+        const startRotation = (layer.properties.rotation as number | undefined) ?? 0;
+        const startAngle = Math.atan2(coords.y - rotHit.cy, coords.x - rotHit.cx);
+        rotatingRef.current = {
+          layerId: selectedLayerId,
+          cx: rotHit.cx, cy: rotHit.cy,
+          startAngle, startRotation,
+          finalRotation: startRotation,
+        };
+        const onRotateMove = (ev: MouseEvent) => {
+          const rs = rotatingRef.current;
+          if (!rs) return;
+          const now = toCanvasCoords(ev.clientX, ev.clientY);
+          if (!now) return;
+          const angle = Math.atan2(now.y - rs.cy, now.x - rs.cx);
+          const delta = (angle - rs.startAngle) * (180 / Math.PI);
+          rs.finalRotation = rs.startRotation + delta;
+          // Optimistic render.
+          const renderer = rendererRef.current;
+          if (!renderer) return;
+          const tempComp: CompositionData = {
+            ...composition,
+            layers: composition.layers.map(l => l.id === rs.layerId
+              ? { ...l, properties: { ...l.properties, rotation: rs.finalRotation } }
+              : l),
+          };
+          renderer.selectedLayerId = rs.layerId;
+          void renderer.renderFrame(tempComp, currentFrame);
+        };
+        const onRotateUp = () => {
+          const rs = rotatingRef.current;
+          rotatingRef.current = null;
+          document.removeEventListener('mousemove', onRotateMove);
+          document.removeEventListener('mouseup', onRotateUp);
+          if (!rs) return;
+          onLayerRotate?.(rs.layerId, rs.finalRotation);
+        };
+        document.addEventListener('mousemove', onRotateMove);
+        document.addEventListener('mouseup', onRotateUp);
+        return;
+      }
+    }
 
     // Resize-handle grab takes priority over move/deselect. Only the selected
     // layer draws handles, so resizeHandleAt returns null unless one is under

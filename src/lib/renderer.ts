@@ -363,6 +363,14 @@ function selectionHandlePoints(b: { x: number; y: number; w: number; h: number }
   };
 }
 
+/** Distance above the north-centre handle where the rotation circle is drawn. */
+const ROTATION_HANDLE_OFFSET = 28;
+
+/** Canvas-space centre of the rotation handle (above the top-centre of the bounds). */
+function rotationHandlePoint(b: { x: number; y: number; w: number; h: number }): [number, number] {
+  return [b.x + b.w / 2, b.y - ROTATION_HANDLE_OFFSET];
+}
+
 /**
  * Draw an image into a target rectangle with one of three fit modes.
  * Shared between the image layer renderer and the text image-fill path.
@@ -789,6 +797,29 @@ export class CanvasRenderer {
       this.ctx.strokeStyle = '#38bdf8';
       this.ctx.strokeRect(dx - dot / 2, dy - dot / 2, dot, dot);
     }
+    // Rotation handle — circle above the top-centre handle, connected by a stem.
+    const [rx, ry] = rotationHandlePoint(bounds);
+    const [, ny] = pts['n'];
+    this.ctx.strokeStyle = '#38bdf8';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.setLineDash([]);
+    this.ctx.beginPath();
+    this.ctx.moveTo(rx, ny);
+    this.ctx.lineTo(rx, ry + 7);
+    this.ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.arc(rx, ry, 7, 0, Math.PI * 2);
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fill();
+    this.ctx.strokeStyle = '#38bdf8';
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
+    // Small arc arrow hint on the circle.
+    this.ctx.beginPath();
+    this.ctx.arc(rx, ry, 5, -Math.PI * 0.8, Math.PI * 0.2);
+    this.ctx.strokeStyle = '#38bdf8';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.stroke();
     this.ctx.restore();
   }
 
@@ -821,6 +852,30 @@ export class CanvasRenderer {
       if (d <= TOL && d < bestD) { bestD = d; best = key; }
     }
     return best;
+  }
+
+  /**
+   * Hit-test the rotation handle of the currently selected layer. Returns true
+   * if (canvasX, canvasY) is within the grab radius of the handle, false otherwise.
+   * Also returns the layer's centre point so the caller can compute angle deltas.
+   */
+  rotationHandleAt(
+    canvasX: number, canvasY: number,
+    composition: CompositionData, time: number,
+  ): { cx: number; cy: number } | null {
+    if (!this.selectedLayerId) return null;
+    const layer = composition.layers.find(l => l.id === this.selectedLayerId);
+    if (!layer || layer.visible === false) return null;
+    const startTime = layer.startTime ?? 0;
+    const layerDuration = layer.layerDuration ?? (composition.duration - startTime);
+    if (time < startTime || time > startTime + layerDuration) return null;
+    const bounds = computeLayerBounds(layer, time - startTime, composition);
+    if (bounds === null) return null;
+    const [rx, ry] = rotationHandlePoint(bounds);
+    const dist = Math.hypot(canvasX - rx, canvasY - ry);
+    if (dist > 14) return null; // generous grab radius
+    // Centre of the layer bounding box — angle is measured from here.
+    return { cx: bounds.x + bounds.w / 2, cy: bounds.y + bounds.h / 2 };
   }
 
   /**
@@ -1088,8 +1143,22 @@ export class CanvasRenderer {
     const stroke = (values.strokeColor as string) ?? '#94a3b8';
     const strokeWidth = (values.strokeWidth as number) ?? 2;
     const closed = (values.closed as boolean) ?? false;
+    const pathRotation = (values.rotation as number | undefined) ?? 0;
 
     this.ctx.save();
+    if (pathRotation !== 0) {
+      // Rotate around the path's own bounding-box centre.
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const a of anchors) {
+        if (a.x < minX) minX = a.x; if (a.x > maxX) maxX = a.x;
+        if (a.y < minY) minY = a.y; if (a.y > maxY) maxY = a.y;
+      }
+      const pcx = (minX + maxX) / 2;
+      const pcy = (minY + maxY) / 2;
+      this.ctx.translate(pcx, pcy);
+      this.ctx.rotate(pathRotation * Math.PI / 180);
+      this.ctx.translate(-pcx, -pcy);
+    }
     this.ctx.strokeStyle = stroke;
     this.ctx.lineWidth = strokeWidth;
     this.ctx.beginPath();
@@ -1391,7 +1460,15 @@ export class CanvasRenderer {
     const offsetX = layer.position.x + ((values.offsetX as number) ?? 0);
     const offsetY = layer.position.y + ((values.offsetY as number) ?? 0);
 
+    const kgRotation = (values.rotation as number | undefined) ?? 0;
     this.ctx.save();
+    if (kgRotation !== 0) {
+      const cx = offsetX + layer.size.width / 2;
+      const cy = offsetY + layer.size.height / 2;
+      this.ctx.translate(cx, cy);
+      this.ctx.rotate(kgRotation * Math.PI / 180);
+      this.ctx.translate(-cx, -cy);
+    }
     this.ctx.translate(offsetX, offsetY);
     this.ctx.scale(scaleX, scaleY);
 
@@ -1421,6 +1498,13 @@ export class CanvasRenderer {
     const h = layer.size.height;
     const x = layer.position.x + ((values.offsetX as number) ?? 0);
     const y = layer.position.y + ((values.offsetY as number) ?? 0);
+    const rotation = (values.rotation as number | undefined) ?? 0;
+    if (rotation !== 0) {
+      this.ctx.save();
+      this.ctx.translate(x + w / 2, y + h / 2);
+      this.ctx.rotate(rotation * Math.PI / 180);
+      this.ctx.translate(-(x + w / 2), -(y + h / 2));
+    }
     const borderRadius = (values.borderRadius as number) ?? 0;
     // Stroke is optional — requires BOTH strokeColor (truthy string) and
     // strokeWidth > 0, matching the math-shape / kg-shape convention.
@@ -1458,6 +1542,7 @@ export class CanvasRenderer {
         this.ctx.strokeRect(x, y, w, h);
       }
     }
+    if (rotation !== 0) this.ctx.restore();
   }
 
   private drawMathShape(layer: Layer, values: Record<string, unknown>): void {
@@ -1646,6 +1731,14 @@ export class CanvasRenderer {
 
     if (!img.complete || img.naturalWidth === 0) return;
 
+    const imgRotation = (values.rotation as number | undefined) ?? 0;
+    if (imgRotation !== 0) {
+      this.ctx.save();
+      this.ctx.translate(x + w / 2, y + h / 2);
+      this.ctx.rotate(imgRotation * Math.PI / 180);
+      this.ctx.translate(-(x + w / 2), -(y + h / 2));
+    }
+
     // Optional clip mask (collage cut-out). Applied within drawLayer's
     // save/restore, so the clip is scoped to this layer only. The mask is
     // mapped from the SAME draw rect as the image (x,y,w,h) — which already
@@ -1690,6 +1783,7 @@ export class CanvasRenderer {
       this.ctx.lineWidth = borderWidth;
       this.ctx.strokeRect(x, y, w, h);
     }
+    if (imgRotation !== 0) this.ctx.restore();
   }
 
   /**

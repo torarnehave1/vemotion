@@ -86,6 +86,12 @@ states that explicitly: `Pushed: nothing — <reason>`.
 Always run `npm run build` from `/Volumes/T7/video-generator` before every `git push`.
 Fix all TypeScript and build errors before pushing. Never push a broken build.
 
+## Build marker — bump on EVERY push — MANDATORY
+The green badge in `src/components/Dashboard.tsx` (`VA`, `VB`, `VC`…) is the user's
+visual proof the latest deploy is live. **Bump it on every push without exception** —
+no "the change was too small." Sequence: VA → VB → VC → … → VZ → WA → WB …
+Do this as part of the commit step, before `git push`. Never push without bumping.
+
 ## Commit, push, and report — MANDATORY
 After every completed code change, immediately:
 1. `git add` the changed files

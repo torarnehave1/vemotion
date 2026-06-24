@@ -191,6 +191,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   // Pen Mode — mutually exclusive with Edit Mode. Switching one on turns
   // the other off (see the toggle effects below).
   const [penMode, setPenMode] = useState(false);
+  // Anchor count reported by PenToolOverlay — used to render the action bar above the canvas.
+  const [penAnchorCount, setPenAnchorCount] = useState(0);
   // When non-null, the pen tool is in MASK mode authoring a clip outline for
   // this image layer (instead of creating a new path layer). Set by the Mask
   // button; cleared whenever pen mode exits.
@@ -970,6 +972,19 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
             Drag from the rulers to add snap guides. Drag a guide off the canvas to remove it.
           </p>
         )}
+
+        {/* Pen / mask tool action bar — rendered ABOVE the canvas so it never covers the image */}
+        {penMode && (
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-1 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200">
+            <span className="font-medium">{maskTargetId ? 'Mask tool' : 'Pen tool'}</span>
+            <span className="text-slate-400 flex-1">
+              {penAnchorCount === 0
+                ? (maskTargetId ? 'Click around the part of the image to keep (drag to set curve)' : 'Click to start path (drag to set curve)')
+                : `${penAnchorCount} anchor${penAnchorCount === 1 ? '' : 's'}`}
+              {' · drag handles to reshape · right-click anchor to toggle smooth/corner · Enter to finish · Esc to cancel · Backspace to undo'}
+            </span>
+          </div>
+        )}
         <div
           className={!embed && onUpdateGuides ? 'grid' : undefined}
           style={!embed && onUpdateGuides ? { gridTemplateColumns: '16px minmax(0,1fr)', gridTemplateRows: '16px auto' } : undefined}
@@ -1021,6 +1036,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 mode={maskTargetId ? 'mask' : 'path'}
                 onFinish={handlePenFinish}
                 onCancel={() => setPenMode(false)}
+                onAnchorCountChange={setPenAnchorCount}
               />
             )}
             {editMode && !penMode && !patchTargetId && onUpdatePathAnchors && (

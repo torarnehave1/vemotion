@@ -17,6 +17,8 @@ interface PenToolOverlayProps {
   onFinish: (layer: Layer) => void;
   /** Called when the user cancels without committing (no anchors yet, or explicit Cancel). */
   onCancel: () => void;
+  /** Fires whenever the anchor count changes — lets the parent render the action bar outside the canvas. */
+  onAnchorCountChange?: (count: number) => void;
 }
 
 const generateId = () => `path-${Date.now().toString(36)}`;
@@ -64,6 +66,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   mode = 'path',
   onFinish,
   onCancel,
+  onAnchorCountChange,
 }) => {
   const [anchors, setAnchors] = useState<PathAnchor[]>([]);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
@@ -75,6 +78,9 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   // open path is usable with 2.
   const isMask = mode === 'mask';
   const minAnchors = isMask ? 3 : 2;
+
+  // Notify parent of anchor count changes so it can render the action bar outside the canvas.
+  useEffect(() => { onAnchorCountChange?.(anchors.length); }, [anchors.length, onAnchorCountChange]);
 
   // ── client ↔ SVG userspace coords + screen-px → SVG-units factor ───────────
   const clientToUserspace = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -468,31 +474,6 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
         })}
       </svg>
 
-      {/* Floating instruction + action bar */}
-      <div className="absolute left-3 top-3 z-10 flex items-center gap-2 pointer-events-none">
-        <div className="pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 shadow-2xl flex items-center gap-3">
-          <span className="font-medium">{isMask ? 'Mask tool' : 'Pen tool'}</span>
-          <span className="text-slate-400">
-            {anchors.length === 0 ? (isMask ? 'Click around the part of the image to keep (drag to set curve)' : 'Click to start path (drag to set curve)')
-              : `${anchors.length} anchor${anchors.length === 1 ? '' : 's'}`}
-            {' · drag handles to reshape · right-click anchor to toggle smooth/corner'}
-            {' · Enter to finish · Esc to cancel · Backspace to undo'}
-          </span>
-        </div>
-        <button
-          onClick={finish}
-          disabled={anchors.length < minAnchors}
-          className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white shadow-2xl"
-        >
-          {isMask ? 'Apply mask' : 'Finish'} ({anchors.length})
-        </button>
-        <button
-          onClick={() => { setAnchors([]); onCancel(); }}
-          className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-2xl"
-        >
-          Cancel
-        </button>
-      </div>
     </>
   );
 };

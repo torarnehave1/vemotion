@@ -1048,24 +1048,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 onUpdatePath={onUpdatePathAnchors}
               />
             )}
-            {editMode && onUpdatePathStream && (() => {
-              const rs = resolveStreamPath(composition, selectedLayerId);
-              if (!rs) return null;
-              return (
-                <div
-                  className="absolute top-2 right-2 z-20 w-72 max-h-[92%] overflow-y-auto"
-                  style={{ pointerEvents: 'auto' }}
-                  // Keep clicks inside the panel from reaching the canvas's
-                  // edit-mode selection handler (which would select the layer
-                  // behind and close the panel).
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <PathStreamPanel key={rs.pathId} pathId={rs.pathId} settings={rs.settings} onApply={(s) => onUpdatePathStream(rs.pathId, s)} />
-                </div>
-              );
-            })()}
             {onSetLayerVolume && (() => {
               const sel = composition.layers.find((l) => l.id === selectedLayerId);
               if (!sel || sel.type !== 'audio') return null;
@@ -1105,6 +1087,17 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         </div>
         </div>
       </div>
+
+      {/* Path stream panel — outside the canvas so it never covers the drawing area */}
+      {editMode && onUpdatePathStream && (() => {
+        const rs = resolveStreamPath(composition, selectedLayerId);
+        if (!rs) return null;
+        return (
+          <div className="mt-2">
+            <PathStreamPanel key={rs.pathId} pathId={rs.pathId} settings={rs.settings} onApply={(s) => onUpdatePathStream(rs.pathId, s)} />
+          </div>
+        );
+      })()}
 
       {/* Scrubber */}
       <div className="space-y-2">

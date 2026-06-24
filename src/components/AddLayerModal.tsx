@@ -470,6 +470,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [pathMeasurements, setPathMeasurements] = useState<PathMeasurements | undefined>(
     editingLayer?.properties.measurements as PathMeasurements | undefined
   );
+  const [pathShowLabels, setPathShowLabels] = useState<boolean>(
+    editingLayer?.properties.showLabels !== false
+  );
   const applyCalibration = () => {
     const refMm = parseFloat(refLengthMmStr);
     if (!isFinite(refMm) || refMm <= 0 || refSegIdx >= pathAnchors.length - 1) return;
@@ -493,7 +496,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       properties: {
         ...editingLayer.properties,
         opacity: opacityValue,
-        ...(editingLayer.type === 'path' ? { measurements: pathMeasurements } : {}),
+        ...(editingLayer.type === 'path' ? { measurements: pathMeasurements, showLabels: pathShowLabels } : {}),
       },
     });
     onClose();
@@ -1690,7 +1693,18 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {/* Measurements calibration — path layers only */}
               {editingLayer?.type === 'path' && (
                 <div className="space-y-2 border-t border-slate-700 pt-3">
-                  <p className="text-xs text-slate-300 font-medium">Measurements</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-300 font-medium">Measurements</p>
+                    <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={pathShowLabels}
+                        onChange={e => setPathShowLabels(e.target.checked)}
+                        className="accent-sky-500"
+                      />
+                      Show A/B/C labels
+                    </label>
+                  </div>
                   {pathAnchors.length >= 2 ? (
                     <>
                       <div className="space-y-1 max-h-40 overflow-y-auto">

@@ -21,6 +21,8 @@ interface PenToolOverlayProps {
   onAnchorCountChange?: (count: number) => void;
   /** Ruler guides to snap anchors to while drawing / dragging. */
   guides?: Array<{ axis: 'x' | 'y'; position: number }>;
+  /** When false, anchor letter labels (A/B/C…) and segment lengths are hidden. Defaults to true. */
+  showLabels?: boolean;
 }
 
 const generateId = () => `path-${Date.now().toString(36)}`;
@@ -100,6 +102,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
   onCancel,
   onAnchorCountChange,
   guides = [],
+  showLabels = true,
 }) => {
   const [anchors, setAnchors] = useState<PathAnchor[]>([]);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
@@ -533,8 +536,8 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
           );
         })}
 
-        {/* Anchor letter labels (A, B, C, D…) — scaled to stay readable. */}
-        {anchors.map((a, i) => {
+        {/* Anchor letter labels (A, B, C, D…) and segment lengths — hidden when showLabels is false. */}
+        {showLabels && anchors.map((a, i) => {
           const fs = hitRadiusSvg() * 1.6;
           const label = String.fromCharCode(65 + i);
           return (
@@ -557,8 +560,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
           );
         })}
 
-        {/* Segment straight-line length labels at midpoints. */}
-        {anchors.slice(0, -1).map((a, i) => {
+        {showLabels && anchors.slice(0, -1).map((a, i) => {
           const b = anchors[i + 1];
           const mx = (a.x + b.x) / 2;
           const my = (a.y + b.y) / 2;

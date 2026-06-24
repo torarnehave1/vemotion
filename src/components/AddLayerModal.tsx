@@ -135,6 +135,10 @@ interface AddLayerModalProps {
    * Forwarded to PixelGridEditForm. Parent clamps with Math.max (never shrinks).
    */
   onSetCompositionDuration?: (seconds: number) => void;
+  /** Promote path calibration to the global composition scale. */
+  onSetCompositionScale?: (mmPerPx: number) => void;
+  /** Current global mmPerPx from composition.meta.scale — shown in the measurements panel. */
+  compositionScale?: number;
 }
 
 type AnimationPreset =
@@ -359,7 +363,7 @@ function parseMotionScenes(json: string): MotionScene[] | undefined {
 
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   onAdd, onAddLayers, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
-  onSetCompositionDuration,
+  onSetCompositionDuration, onSetCompositionScale, compositionScale,
 }) => {
   const isEditing  = !!editingLayer;
   const isKgShape  = editingLayer?.type === 'kg-shape';
@@ -473,7 +477,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     const b = pathAnchors[refSegIdx + 1];
     const pxLen = Math.hypot(b.x - a.x, b.y - a.y);
     if (pxLen <= 0) return;
-    setPathMeasurements({ mmPerPx: refMm / pxLen, refSegment: refSegIdx, refLengthMm: refMm });
+    const mmPerPx = refMm / pxLen;
+    setPathMeasurements({ mmPerPx, refSegment: refSegIdx, refLengthMm: refMm });
+    onSetCompositionScale?.(mmPerPx);
   };
 
   const handleSaveGeneric = () => {
@@ -1732,8 +1738,14 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                       </div>
                       {pathMeasurements && (
                         <p className="text-xs text-emerald-400">
-                          Scale: 1 px = {pathMeasurements.mmPerPx.toFixed(3)} mm
+                          Layer scale: 1 px = {pathMeasurements.mmPerPx.toFixed(3)} mm
                           {' · '}1 cm = {Math.round(10 / pathMeasurements.mmPerPx)} px
+                        </p>
+                      )}
+                      {compositionScale && compositionScale > 0 && (
+                        <p className="text-xs text-sky-400">
+                          Composition scale: 1 px = {compositionScale.toFixed(3)} mm
+                          {pathMeasurements ? '' : ' (set from another layer)'}
                         </p>
                       )}
                     </>

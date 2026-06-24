@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Play, Pause, Square, Download, MousePointer2, PenTool, Scissors, Eraser, Stamp, Mic, Type, FileText } from 'lucide-react';
 import { uploadAudioBlob, saveRecordingMetadata, VEMOTION_AUDIO_CATEGORY, VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG } from '../lib/audioPortfolio';
 import { readStoredUser } from '../lib/auth';
@@ -223,6 +224,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   } | null>(null);
   // Which handle the cursor is hovering (for the resize cursor), null otherwise.
   const [hoverHandle, setHoverHandle] = useState<ResizeHandle | null>(null);
+  // Live mm-size label shown near the cursor while a resize drag is in progress.
+  const [resizeLabel, setResizeLabel] = useState<{ w: number; h: number; cx: number; cy: number } | null>(null);
 
   const totalFrames = Math.floor(composition.duration * composition.fps);
 
@@ -788,10 +791,15 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           };
           renderer.selectedLayerId = rs.layerId;
           void renderer.renderFrame(tempComp, currentFrame);
+          // Show live mm label near cursor if composition has a scale set.
+          if (composition.meta?.scale?.mmPerPx) {
+            setResizeLabel({ w: box.w, h: box.h, cx: ev.clientX + 16, cy: ev.clientY + 16 });
+          }
         };
         const onResizeUp = () => {
           const rs = resizingRef.current;
           resizingRef.current = null;
+          setResizeLabel(null);
           document.removeEventListener('mousemove', onResizeMove);
           document.removeEventListener('mouseup', onResizeUp);
           if (!rs) return;
@@ -1369,7 +1377,25 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         <span>{composition.fps} fps</span>
         <span>{composition.duration}s</span>
         <span>{composition.layers.length} layer{composition.layers.length !== 1 ? 's' : ''}</span>
+        {composition.meta?.scale?.mmPerPx && (
+          <span className="text-emerald-500">
+            1 px = {composition.meta.scale.mmPerPx.toFixed(3)} mm
+          </span>
+        )}
       </div>
+
+      {/* Live resize mm label — portalled to body so position:fixed works outside any transform ancestor */}
+      {resizeLabel && composition.meta?.scale?.mmPerPx && createPortal(
+        <div
+          style={{ position: 'fixed', left: resizeLabel.cx, top: resizeLabel.cy, pointerEvents: 'none', zIndex: 9999 }}
+          className="bg-slate-900/90 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono shadow-lg"
+        >
+          W: {Math.round(resizeLabel.w * composition.meta.scale.mmPerPx)} mm
+          {' · '}
+          H: {Math.round(resizeLabel.h * composition.meta.scale.mmPerPx)} mm
+        </div>,
+        document.body,
+      )}
     </div>
   );
 };

@@ -865,6 +865,8 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
             onChange({ ...composition, meta: { ...composition.meta, ...patch } });
           }}
           onClose={() => setEditingLayerId(null)}
+          compositionScale={composition.meta?.scale?.mmPerPx}
+          onSetCompositionScale={(mmPerPx) => onChange({ ...composition, meta: { ...composition.meta, scale: { mmPerPx } } })}
         />
       )}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">

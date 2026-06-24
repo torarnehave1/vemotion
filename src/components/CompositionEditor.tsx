@@ -411,6 +411,8 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
             compositionDuration={composition.duration}
             compositionWidth={composition.width}
             compositionHeight={composition.height}
+            compositionScale={composition.meta?.scale?.mmPerPx}
+            onSetCompositionScale={(mmPerPx) => onChange({ ...composition, meta: { ...composition.meta, scale: { mmPerPx } } })}
           />
         )}
 

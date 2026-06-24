@@ -83,6 +83,14 @@ export type CompositionMeta = {
    */
   guides?: Guide[];
   /**
+   * Global real-world scale for the composition. When set, any layer resize
+   * shows live mm dimensions. Also used by the pen-tool measurements panel
+   * as the composition-level calibration source — set it once and all path
+   * layers and resize handles share the same scale.
+   * Value: canvas pixels → millimetres (e.g. 0.5 means 1 px = 0.5 mm).
+   */
+  scale?: { mmPerPx: number };
+  /**
    * Named time markers on the timeline. Editor-only: the renderer and the MP4
    * exporter ignore them entirely — they never affect output. Their purpose is
    * communication: annotate exact timeline positions so a human or an AI agent

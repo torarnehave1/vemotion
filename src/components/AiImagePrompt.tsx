@@ -32,21 +32,21 @@ export const AiImagePrompt: React.FC<AiImagePromptProps> = ({ onResult, busy }) 
   const disabled = generating || busy;
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
-      <label className="text-xs text-slate-400 block">Or ask AI to draw it (gpt-image-2)</label>
+    <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-3">
+      <label className="text-xs text-slate-500 dark:text-slate-400 block">Or ask AI to draw it (gpt-image-2)</label>
       <div className="flex items-center gap-2">
         <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } }}
           placeholder="e.g. a turtle, flat colors, simple"
-          className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
         />
         <button
           type="button"
           onClick={run}
           disabled={disabled || !prompt.trim()}
-          className="flex items-center gap-1 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition"
+          className="flex items-center gap-1 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition"
         >
           {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Generate
         </button>

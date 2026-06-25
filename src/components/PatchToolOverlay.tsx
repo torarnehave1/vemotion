@@ -184,9 +184,9 @@ export const PatchToolOverlay: React.FC<PatchToolOverlayProps> = ({
 
       {/* Floating instruction + action bar */}
       <div className="absolute left-3 top-3 z-10 flex items-center gap-2 pointer-events-none">
-        <div className="pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 shadow-2xl flex items-center gap-3">
+        <div className="pointer-events-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-200 shadow-2xl flex items-center gap-3">
           <span className="font-medium">Patch tool</span>
-          <span className="text-slate-400">
+          <span className="text-slate-500 dark:text-slate-400">
             {phase === 'draw'
               ? (anchors.length === 0
                   ? 'Click around the mark you want to remove (3+ points)'
@@ -198,7 +198,7 @@ export const PatchToolOverlay: React.FC<PatchToolOverlayProps> = ({
           <button
             onClick={toSource}
             disabled={anchors.length < 3}
-            className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white shadow-2xl"
+            className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white shadow-2xl"
           >
             Set source → ({anchors.length})
           </button>
@@ -206,14 +206,14 @@ export const PatchToolOverlay: React.FC<PatchToolOverlayProps> = ({
           <button
             onClick={apply}
             disabled={!sample}
-            className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white shadow-2xl"
+            className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white shadow-2xl"
           >
             Apply patch
           </button>
         )}
         <button
           onClick={onCancel}
-          className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-2xl"
+          className="pointer-events-auto px-3 py-1.5 text-xs font-medium rounded-lg transition bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xl"
         >
           Cancel
         </button>

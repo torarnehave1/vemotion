@@ -44,11 +44,11 @@ export const Login: React.FC<LoginProps> = ({ onDevLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-950 p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl"
+        className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 shadow-2xl"
       >
         <div className="flex justify-center mb-8">
           <img
@@ -58,24 +58,24 @@ export const Login: React.FC<LoginProps> = ({ onDevLogin }) => {
           />
         </div>
 
-        <h1 className="text-2xl font-bold text-white text-center mb-2">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white text-center mb-2">
           Video Generator
         </h1>
-        <p className="text-slate-400 text-center text-sm mb-8">
+        <p className="text-slate-500 dark:text-slate-400 text-center text-sm mb-8">
           Sign in with your Vegvisr account to generate videos
         </p>
 
         {!isSent ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 w-4 h-4" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 required
-                className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-500 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
               />
             </div>
 
@@ -88,7 +88,7 @@ export const Login: React.FC<LoginProps> = ({ onDevLogin }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-sky-800 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition"
+              className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-sky-800 disabled:cursor-not-allowed text-slate-900 dark:text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition"
             >
               {isLoading ? (
                 <>
@@ -104,7 +104,7 @@ export const Login: React.FC<LoginProps> = ({ onDevLogin }) => {
               <button
                 type="button"
                 onClick={onDevLogin}
-                className="w-full mt-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl py-3 transition text-sm"
+                className="w-full mt-3 bg-amber-600 hover:bg-amber-500 text-slate-900 dark:text-white font-semibold rounded-xl py-3 transition text-sm"
               >
                 🔨 Dev Login (Local Only)
               </button>
@@ -119,8 +119,8 @@ export const Login: React.FC<LoginProps> = ({ onDevLogin }) => {
             <div className="flex justify-center">
               <CheckCircle2 className="w-12 h-12 text-green-400" />
             </div>
-            <p className="text-white font-medium">Check your inbox!</p>
-            <p className="text-slate-400 text-sm">
+            <p className="text-slate-900 dark:text-white font-medium">Check your inbox!</p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
               We sent a magic link to <span className="text-sky-400">{email}</span>.
               Click the link to sign in.
             </p>

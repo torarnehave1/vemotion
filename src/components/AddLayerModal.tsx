@@ -1049,29 +1049,29 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   // Inline "Set scale" block — rendered after W/H in image/kg-shape/generic edit forms.
   // `refPx` is the layer's current width in canvas pixels.
   const makeSetScaleBlock = (refPx: number) => (
-    <div className="border border-slate-700 rounded-lg p-3 space-y-2 bg-slate-800/50">
-      <div className="text-xs text-slate-400 font-medium">Set composition scale</div>
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2 bg-slate-100/50 dark:bg-slate-800/50">
+      <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Set composition scale</div>
       <div className="text-xs text-slate-500">
-        Layer width: <span className="text-slate-300 font-mono">{Math.round(refPx)} px</span>
+        Layer width: <span className="text-slate-700 dark:text-slate-300 font-mono">{Math.round(refPx)} px</span>
         {compositionScale ? <span className="text-emerald-400 ml-2">= {Math.round(refPx * compositionScale)} mm</span> : null}
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-400 whitespace-nowrap">{Math.round(refPx)} px =</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{Math.round(refPx)} px =</span>
         <input
           type="number"
           value={scaleRefMm}
           onChange={e => setScaleRefMm(e.target.value)}
           placeholder="real mm"
-          className="w-24 bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
+          className="w-24 bg-slate-200 dark:bg-slate-700 border border-slate-600 text-slate-900 dark:text-white rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
         />
-        <span className="text-xs text-slate-400">mm</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">mm</span>
         <button
           type="button"
           onClick={() => {
             const mm = parseFloat(scaleRefMm);
             if (mm > 0 && refPx > 0) { onSetCompositionScale?.(mm / refPx); setScaleRefMm(''); }
           }}
-          className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs font-medium disabled:opacity-40"
+          className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded text-xs font-medium disabled:opacity-40"
           disabled={!(parseFloat(scaleRefMm) > 0)}
         >
           Set scale
@@ -1082,13 +1082,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
   const motionScenesField = (
     <div className="space-y-2">
-      <label className="text-xs text-slate-400 block">Advanced motion scenes (JSON)</label>
+      <label className="text-xs text-slate-500 dark:text-slate-400 block">Advanced motion scenes (JSON)</label>
       <textarea
         value={motionScenesJson}
         onChange={(e) => setMotionScenesJson(e.target.value)}
         rows={6}
         placeholder={`[\n  {\n    "start": 0,\n    "end": 2.5,\n    "xFormula": "x0 + cos(t*2)*120",\n    "yFormula": "y0 + sin(t*2)*60"\n  }\n]`}
-        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500 resize-y"
+        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500 resize-y"
       />
       <p className="text-xs text-slate-500">
         Uses absolute coordinates. Available vars: <code>t</code>, <code>p</code>, <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>sin</code>, <code>cos</code>, <code>pi</code>.
@@ -1099,7 +1099,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
   const opacityField = (
     <div className="space-y-2">
-      <label className="text-xs text-slate-400 block">Opacity</label>
+      <label className="text-xs text-slate-500 dark:text-slate-400 block">Opacity</label>
       <div className="flex items-center gap-3">
         <input
           type="range"
@@ -1120,7 +1120,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             const next = parseFloat(e.target.value);
             if (Number.isFinite(next)) setOpacityValue(Math.max(0, Math.min(1, next)));
           }}
-          className="w-24 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+          className="w-24 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
         />
       </div>
     </div>
@@ -1177,7 +1177,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               fetchAlbum(next);
             }}
             disabled={albumsLoading}
-            className="w-full appearance-none bg-slate-800 border border-slate-700 text-white rounded-lg pl-3 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
+            className="w-full appearance-none bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg pl-3 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
           >
             {/* Always keep the current album selectable, even if the
                 list fetch failed or it has not loaded yet. */}
@@ -1188,14 +1188,14 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
-          <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
+          <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-500 dark:text-slate-400">
             {albumsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
           </div>
         </div>
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-sm transition"
+          className="flex items-center gap-1 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-sm transition"
           title={`Upload an image to album "${albumName}"`}
         >
           {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -1204,7 +1204,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
       </div>
 
-      {imagesLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+      {imagesLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-500 dark:text-slate-400" /></div>}
       {imagesError && <p className="text-red-400 text-sm">{imagesError}</p>}
 
       {/* Selection toolbar — add mode only. In replace mode the grid is a
@@ -1230,20 +1230,20 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
           <button
             key={img.key}
             onClick={() => (multiImageSelect ? toggleSelect(img.key) : handleImagePick(img))}
-            className={`relative flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 border rounded-xl transition group ${
-              selected ? 'border-sky-500 ring-2 ring-sky-500/50' : 'border-slate-700 hover:border-sky-500'
+            className={`relative flex flex-col items-center gap-1 p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border rounded-xl transition group ${
+              selected ? 'border-sky-500 ring-2 ring-sky-500/50' : 'border-slate-200 dark:border-slate-700 hover:border-sky-500'
             }`}
           >
             {multiImageSelect && (
               <span
                 className={`absolute top-1.5 left-1.5 z-10 w-5 h-5 rounded-md flex items-center justify-center border transition ${
-                  selected ? 'bg-sky-500 border-sky-500 text-white' : 'bg-slate-900/70 border-slate-500 text-transparent'
+                  selected ? 'bg-sky-500 border-sky-500 text-slate-900 dark:text-white' : 'bg-white/70 dark:bg-slate-900/70 border-slate-500 text-transparent'
                 }`}
               >
                 <Check className="w-3.5 h-3.5" />
               </span>
             )}
-            <div className="w-full aspect-square bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
+            <div className="w-full aspect-square bg-white dark:bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
               <img
                 src={img.url}
                 alt={img.displayName ?? img.key}
@@ -1251,13 +1251,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 loading="lazy"
               />
             </div>
-            <span className="text-xs text-slate-400 group-hover:text-white truncate w-full text-center">
+            <span className="text-xs text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white truncate w-full text-center">
               {img.displayName ?? img.name ?? img.key}
             </span>
             {img.tags && img.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 justify-center">
                 {img.tags.slice(0, 3).map(tag => (
-                  <span key={tag} className="text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full">{tag}</span>
+                  <span key={tag} className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">{tag}</span>
                 ))}
               </div>
             )}
@@ -1271,7 +1271,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         <button
           onClick={handleInsertSelected}
           disabled={inserting}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white font-medium rounded-lg text-sm transition"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-slate-900 dark:text-white font-medium rounded-lg text-sm transition"
         >
           {inserting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
           {`Insert ${selectedKeys.size} image${selectedKeys.size === 1 ? '' : 's'}`}
@@ -1282,70 +1282,70 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-800 shrink-0">
-          <h2 className="text-lg font-semibold text-white">{isEditing ? `Edit layer — ${editingLayer.id}` : 'Add Layer'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{isEditing ? `Edit layer — ${editingLayer.id}` : 'Add Layer'}</h2>
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs — hidden when editing an existing layer */}
         {!isEditing && (
-          <div className="flex border-b border-slate-800 shrink-0">
+          <div className="flex border-b border-slate-200 dark:border-slate-800 shrink-0">
             <button
               onClick={() => setTab('manual')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'manual' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'manual' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Manual
             </button>
             <button
               onClick={() => setTab('shapes')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'shapes' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'shapes' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Shapes
             </button>
             <button
               onClick={() => setTab('cards')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'cards' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'cards' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Cards
             </button>
             <button
               onClick={() => setTab('images')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'images' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'images' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Images
             </button>
             <button
               onClick={() => setTab('animations')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'animations' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'animations' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Animations
             </button>
             <button
               onClick={() => setTab('audio')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'audio' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'audio' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Audio
             </button>
             <button
               onClick={() => setTab('video')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'video' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'video' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Video
             </button>
             <button
               onClick={() => setTab('knitting')}
-              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'knitting' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition ${tab === 'knitting' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               Pixel Grid
             </button>
             <button
               onClick={() => setTab('ai')}
-              className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${tab === 'ai' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-white'}`}
+              className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${tab === 'ai' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
             >
               <Sparkles className="w-4 h-4" /> AI
             </button>
@@ -1366,10 +1366,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             <>
               {/* Replace-image picker — same album/upload UI as the Images tab */}
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-white">Choose a replacement image</h3>
+                <h3 className="text-sm font-medium text-slate-900 dark:text-white">Choose a replacement image</h3>
                 <button
                   onClick={() => setReplacingImage(false)}
-                  className="text-xs text-slate-400 hover:text-white transition px-2 py-1"
+                  className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition px-2 py-1"
                 >
                   Cancel
                 </button>
@@ -1380,7 +1380,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             <>
               {/* Image preview */}
               <div className="flex justify-center py-2">
-                <div className="w-40 h-28 bg-slate-800 rounded-lg overflow-hidden flex items-center justify-center border border-slate-700">
+                <div className="w-40 h-28 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-700">
                   <img
                     src={imgSrc}
                     alt=""
@@ -1397,18 +1397,18 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   fetchAlbum(albumName);
                   if (!albumsLoaded) fetchAlbumList();
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
               >
                 <ImageIcon className="w-4 h-4" /> Replace image
               </button>
 
               {/* Fit mode */}
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Fit</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Fit</label>
                 <div className="flex gap-2">
                   {(['cover', 'contain', 'fill'] as const).map(f => (
                     <button key={f} onClick={() => setImgFit(f)}
-                      className={`flex-1 py-2 rounded-lg text-sm capitalize transition ${imgFit === f ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                      className={`flex-1 py-2 rounded-lg text-sm capitalize transition ${imgFit === f ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
                       {f}
                     </button>
                   ))}
@@ -1417,30 +1417,30 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
               {/* Border — width 0 = none. Black/White presets + colour wheel. */}
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Border</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Border</label>
                 <div className="flex gap-2 mb-2">
                   <button
                     onClick={() => setImgBorderWidth(0)}
-                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth === 0 ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth === 0 ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   >
                     None
                   </button>
                   <button
                     onClick={() => { setImgBorderColor('#000000'); setImgBorderWidth(w => (w > 0 ? w : 2)); }}
-                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth > 0 && imgBorderColor.toLowerCase() === '#000000' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth > 0 && imgBorderColor.toLowerCase() === '#000000' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   >
                     Black
                   </button>
                   <button
                     onClick={() => { setImgBorderColor('#ffffff'); setImgBorderWidth(w => (w > 0 ? w : 2)); }}
-                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth > 0 && imgBorderColor.toLowerCase() === '#ffffff' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm transition ${imgBorderWidth > 0 && imgBorderColor.toLowerCase() === '#ffffff' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   >
                     White
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Color (wheel)</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Color (wheel)</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -1451,18 +1451,18 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                       <input
                         value={imgBorderColor}
                         onChange={e => setImgBorderColor(e.target.value)}
-                        className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Width (px)</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Width (px)</label>
                     <input
                       type="number"
                       min={0}
                       value={imgBorderWidth}
                       onChange={e => setImgBorderWidth(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
                 </div>
@@ -1472,26 +1472,26 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {opacityField}
 
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Rotation (°)</label>
                 <input type="number" value={layerRotation} step={1}
                   onChange={e => setLayerRotation(Number(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
               </div>
 
               {/* Mask feather (Slice 5, control C — number field). Only shown
                   when this image already has a clip mask. 0 = hard edge. */}
               {editMask && (
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Mask feather (soft edge, px)</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Mask feather (soft edge, px)</label>
                   <input
                     type="number"
                     min={0}
                     value={maskFeather}
                     onChange={e => setMaskFeather(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">0 = hard edge · higher = softer. Same value as the canvas Feather slider.</p>
-                  <label className="flex items-center gap-2 mt-3 text-xs text-slate-300 cursor-pointer">
+                  <label className="flex items-center gap-2 mt-3 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={maskInvert}
@@ -1505,30 +1505,30 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
               {/* Position & size */}
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">Position X</label>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position X</label>
                   <input type="number" value={imgPosX} onChange={e => setImgPosX(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position Y</label>
                   <input type="number" value={imgPosY} onChange={e => setImgPosY(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-slate-400">Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(imgWidth * compositionScale)} mm)</span> : ''}</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400">Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(imgWidth * compositionScale)} mm)</span> : ''}</label>
                     <button
                       type="button"
                       onClick={() => setLockAspect(v => !v)}
                       title={lockAspect ? 'Aspect ratio locked — width & height scale together. Click to unlock.' : 'Aspect ratio unlocked — width & height resize independently. Click to lock.'}
-                      className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition ${lockAspect ? 'text-sky-400 hover:text-sky-300' : 'text-slate-500 hover:text-slate-300'}`}
+                      className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition ${lockAspect ? 'text-sky-400 hover:text-sky-300' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                     >
                       {lockAspect ? <Link2 className="w-3.5 h-3.5" /> : <Link2Off className="w-3.5 h-3.5" />}
                       {lockAspect ? 'Linked' : 'Free'}
                     </button>
                   </div>
                   <input type="number" value={imgWidth} onChange={e => setWidthLinked(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(imgHeight * compositionScale)} mm)</span> : ''}</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(imgHeight * compositionScale)} mm)</span> : ''}</label>
                   <input type="number" value={imgHeight} onChange={e => setHeightLinked(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
 
               {makeSetScaleBlock(imgWidth)}
@@ -1536,7 +1536,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {/* Animation */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs text-slate-400">Animation</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400">Animation</label>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 mb-3">
@@ -1549,7 +1549,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     { value: 'bounce',      label: 'Bounce' },
                   ] as { value: ImgAnimType; label: string }[]).map(opt => (
                     <button key={opt.value} onClick={() => setImgAnimType(opt.value)}
-                      className={`py-2 rounded-lg text-sm transition ${imgAnimType === opt.value ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                      className={`py-2 rounded-lg text-sm transition ${imgAnimType === opt.value ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
                       {opt.label}
                     </button>
                   ))}
@@ -1558,27 +1558,27 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   <div className="space-y-3">
                     {imgAnimType === 'slide' && (
                       <div className="grid grid-cols-2 gap-3">
-                        <div><label className="text-xs text-slate-400 mb-1 block">Start X</label>
+                        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Start X</label>
                           <input type="number" value={animStartX} onChange={e => setAnimStartX(parseInt(e.target.value))}
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                        <div><label className="text-xs text-slate-400 mb-1 block">Start Y</label>
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Start Y</label>
                           <input type="number" value={animStartY} onChange={e => setAnimStartY(parseInt(e.target.value))}
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                        <div><label className="text-xs text-slate-400 mb-1 block">End X</label>
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">End X</label>
                           <input type="number" value={animEndX} onChange={e => setAnimEndX(parseInt(e.target.value))}
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                        <div><label className="text-xs text-slate-400 mb-1 block">End Y</label>
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">End Y</label>
                           <input type="number" value={animEndY} onChange={e => setAnimEndY(parseInt(e.target.value))}
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className="text-xs text-slate-400 mb-1 block">Start time (s)</label>
+                      <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Start time (s)</label>
                         <input type="number" step="0.1" min="0" value={animStartTime} onChange={e => setAnimStartTime(parseFloat(e.target.value))}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                      <div><label className="text-xs text-slate-400 mb-1 block">End time (s)</label>
+                          className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                      <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">End time (s)</label>
                         <input type="number" step="0.1" min="0" value={animEndTime} onChange={e => setAnimEndTime(parseFloat(e.target.value))}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                          className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
                     </div>
                     {imgAnimType === 'slide' && (
                       <p className="text-xs text-slate-500">Canvas: {compositionWidth} × {compositionHeight}. Use negative values to start off-screen.</p>
@@ -1590,7 +1590,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {motionScenesField}
 
               <button onClick={handleSaveImage}
-                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                className="w-full bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
               </button>
             </>
@@ -1604,35 +1604,35 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   <p className="text-xs mt-1 opacity-80 line-clamp-2" style={{ color: (editingLayer.properties.bodyColor as string) ?? '#cbd5e1' }}>{cardBody || 'Body text'}</p>
                 </div>
               </div>
-              <div><label className="text-xs text-slate-400 mb-1 block">Title</label>
+              <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Title</label>
                 <input value={cardTitle} onChange={e => setCardTitle(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-              <div><label className="text-xs text-slate-400 mb-1 block">Body</label>
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+              <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Body</label>
                 <textarea value={cardBody} onChange={e => setCardBody(e.target.value)} rows={3}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none" /></div>
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">Position X</label>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position X</label>
                   <input type="number" value={cardPosX} onChange={e => setCardPosX(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position Y</label>
                   <input type="number" value={cardPosY} onChange={e => setCardPosY(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Width</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Width</label>
                   <input type="number" value={cardWidth} onChange={e => setCardWidth(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Height</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Height</label>
                   <input type="number" value={cardHeight} onChange={e => setCardHeight(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
-              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
+              <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Animation</label>
                 <select value={cardPreset} onChange={e => setCardPreset(e.target.value as AnimationPreset)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
-              <div><label className="text-xs text-slate-400 mb-1 block">Font override</label>
+              <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Font override</label>
                 <select value={cardFontFamily} onChange={e => setCardFontFamily(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                   style={{ fontFamily: cardFontFamily || undefined }}>
                   {FONT_OPTIONS.map(f => (
                     <option key={f.value} value={f.value} style={{ fontFamily: f.value || undefined }}>{f.label}</option>
@@ -1642,7 +1642,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {opacityField}
               {motionScenesField}
               <button onClick={handleSaveCard}
-                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                className="w-full bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
               </button>
             </>
@@ -1654,47 +1654,47 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                 </svg>
               </div>
               <label className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Color</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Color</span>
                 <div className="flex items-center gap-2">
                   <input type="color" value={kgColor} onChange={e => setKgColor(e.target.value)}
                     className="w-10 h-10 rounded cursor-pointer border border-slate-600 bg-transparent" />
                   <input value={kgColor} onChange={e => setKgColor(e.target.value)}
-                    className="w-28 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-28 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
               </label>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-slate-400 mb-1 block">Position X</label>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position X</label>
                   <input type="number" value={kgPosX} onChange={e => setKgPosX(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Position Y</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position Y</label>
                   <input type="number" value={kgPosY} onChange={e => setKgPosY(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(kgWidth * compositionScale)} mm)</span> : ''}</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(kgWidth * compositionScale)} mm)</span> : ''}</label>
                   <input type="number" value={kgWidth} onChange={e => setKgWidth(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
-                <div><label className="text-xs text-slate-400 mb-1 block">Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(kgHeight * compositionScale)} mm)</span> : ''}</label>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(kgHeight * compositionScale)} mm)</span> : ''}</label>
                   <input type="number" value={kgHeight} onChange={e => setKgHeight(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" /></div>
               </div>
 
               {makeSetScaleBlock(kgWidth)}
 
-              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
+              <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Animation</label>
                 <select value={kgPreset} onChange={e => setKgPreset(e.target.value as AnimationPreset)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
               {opacityField}
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Rotation (°)</label>
                 <input type="number" value={layerRotation} step={1}
                   onChange={e => setLayerRotation(Number(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
               </div>
               {motionScenesField}
               <button onClick={handleSaveKgShape}
-                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                className="w-full bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
               </button>
             </>
@@ -1707,67 +1707,67 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             />
           ) : isGenericEdit ? (
             <>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Editing a <span className="text-sky-400">{editingLayer?.type}</span> layer. Common settings below;
                 edit type-specific properties via the JSON editor.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">X</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">X</label>
                   <input type="number" value={posX} onChange={e => setPosX(Number(e.target.value) || 0)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Y</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Y</label>
                   <input type="number" value={posY} onChange={e => setPosY(Number(e.target.value) || 0)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">
                     Width{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(width * compositionScale)} mm)</span> : ''}
                   </label>
                   <input type="number" value={width} onChange={e => setWidth(Number(e.target.value) || 0)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">
                     Height{compositionScale ? <span className="text-emerald-400 ml-1">({Math.round(height * compositionScale)} mm)</span> : ''}
                   </label>
                   <input type="number" value={height} onChange={e => setHeight(Number(e.target.value) || 0)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
 
                 {makeSetScaleBlock(width)}
 
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Start (s)</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Start (s)</label>
                   <input type="number" min={0} step={0.1} value={genStart} onChange={e => setGenStart(Math.max(0, Number(e.target.value) || 0))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Duration (s)</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Duration (s)</label>
                   <input type="number" min={0.1} step={0.1} value={genDuration} onChange={e => setGenDuration(Math.max(0.1, Number(e.target.value) || 0.1))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Opacity ({opacityValue.toFixed(2)})</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Opacity ({opacityValue.toFixed(2)})</label>
                 <input type="range" min={0} max={1} step={0.01} value={opacityValue}
                   onChange={e => setOpacityValue(Number(e.target.value))} className="w-full" />
               </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Rotation (°)</label>
                 <input type="number" value={layerRotation} step={1}
                   onChange={e => setLayerRotation(Number(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
               </div>
 
               {/* Measurements calibration — path layers only */}
               {editingLayer?.type === 'path' && (
-                <div className="space-y-2 border-t border-slate-700 pt-3">
+                <div className="space-y-2 border-t border-slate-200 dark:border-slate-700 pt-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-300 font-medium">Measurements</p>
-                    <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
+                    <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">Measurements</p>
+                    <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={pathShowLabels}
@@ -1790,7 +1790,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                               <span className="text-amber-400 font-bold w-10 flex-shrink-0">
                                 {String.fromCharCode(65 + i)}→{String.fromCharCode(66 + i)}
                               </span>
-                              <span className="text-slate-300">{pxLen} px</span>
+                              <span className="text-slate-700 dark:text-slate-300">{pxLen} px</span>
                               {mmLen !== null && (
                                 <span className="text-emerald-400 ml-1">= {mmLen} mm</span>
                               )}
@@ -1800,9 +1800,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                       </div>
                       <div className="flex gap-2 items-end">
                         <div className="flex-1">
-                          <label className="text-xs text-slate-400 mb-1 block">Ref segment</label>
+                          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Ref segment</label>
                           <select value={refSegIdx} onChange={e => setRefSegIdx(Number(e.target.value))}
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                             {pathAnchors.slice(0, -1).map((_, i) => (
                               <option key={i} value={i}>
                                 {String.fromCharCode(65 + i)}→{String.fromCharCode(66 + i)}
@@ -1811,14 +1811,14 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                           </select>
                         </div>
                         <div className="flex-1">
-                          <label className="text-xs text-slate-400 mb-1 block">Real length (mm)</label>
+                          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Real length (mm)</label>
                           <input type="number" value={refLengthMmStr}
                             onChange={e => setRefLengthMmStr(e.target.value)}
                             placeholder="e.g. 1400"
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                         </div>
                         <button onClick={applyCalibration}
-                          className="px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-lg flex-shrink-0">
+                          className="px-3 py-2 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white text-xs rounded-lg flex-shrink-0">
                           Set scale
                         </button>
                       </div>
@@ -1842,27 +1842,27 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               )}
 
               <button onClick={handleSaveGeneric}
-                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                className="w-full bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition">
                 Save Changes
               </button>
             </>
           ) : tab === 'shapes' ? (
             <>
-              <p className="text-xs text-slate-400">Pick a shape from the <span className="text-sky-400">vemotion-shapes</span> graph. It will be snapshotted into your composition.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Pick a shape from the <span className="text-sky-400">vemotion-shapes</span> graph. It will be snapshotted into your composition.</p>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Animation</label>
                 <select value={shapePreset} onChange={e => setShapePreset(e.target.value as AnimationPreset)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
-              {kgLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+              {kgLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-500 dark:text-slate-400" /></div>}
               {kgError && <p className="text-red-400 text-sm">{kgError}</p>}
               <div className="grid grid-cols-3 gap-3">
                 {kgShapes.map(shape => (
                   <button
                     key={shape.id}
-                    className="flex flex-col items-center gap-2 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-sky-500 rounded-xl transition group"
+                    className="flex flex-col items-center gap-2 p-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 hover:border-sky-500 rounded-xl transition group"
                     onClick={() => {
                       const viewBox = shape.metadata?.viewBox ?? '0 0 24 24';
                       const animation = buildAnimation(shapePreset, compositionDuration, compositionWidth, compositionHeight, 200, 200);
@@ -1888,21 +1888,21 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     <svg viewBox={shape.metadata?.viewBox ?? '0 0 24 24'} className="w-10 h-10" fill="none" stroke={shape.color} strokeWidth="1.5">
                       <path d={shape.info} fill={shape.color} stroke="none" />
                     </svg>
-                    <span className="text-xs text-slate-400 group-hover:text-white truncate w-full text-center">{shape.label}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white truncate w-full text-center">{shape.label}</span>
                   </button>
                 ))}
               </div>
             </>
           ) : tab === 'cards' ? (
             <>
-              <p className="text-xs text-slate-400">Pick a card template from the <span className="text-sky-400">vemotion-cards</span> graph. Title and body text are editable after adding.</p>
-              <div><label className="text-xs text-slate-400 mb-1 block">Animation</label>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Pick a card template from the <span className="text-sky-400">vemotion-cards</span> graph. Title and body text are editable after adding.</p>
+              <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Animation</label>
                 <select value={cardPickPreset} onChange={e => setCardPickPreset(e.target.value as AnimationPreset)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                   {PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
-              {kgLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+              {kgLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-500 dark:text-slate-400" /></div>}
               {kgError && <p className="text-red-400 text-sm">{kgError}</p>}
               <div className="grid grid-cols-2 gap-3">
                 {kgCards.map(card => {
@@ -1914,7 +1914,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   return (
                     <button
                       key={card.id}
-                      className="flex flex-col items-start gap-1 p-3 rounded-xl border border-slate-700 hover:border-sky-500 transition group"
+                      className="flex flex-col items-start gap-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-sky-500 transition group"
                       style={{ backgroundColor: bg }}
                       onClick={() => {
                         const animation = buildAnimation(cardPickPreset, compositionDuration, compositionWidth, compositionHeight, dw, dh);
@@ -1953,7 +1953,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   <button
                     key={t}
                     onClick={() => setLayerType(t)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition ${layerType === t ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition ${layerType === t ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   >
                     {t}
                   </button>
@@ -1964,39 +1964,39 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               {layerType === 'text' ? (
                 <>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Text</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Text</label>
                     <input
                       value={text}
                       onChange={e => setText(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Font Size</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Font Size</label>
                       <input type="number" value={fontSize} onChange={e => setFontSize(parseInt(e.target.value))}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Align</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Align</label>
                       <select value={align} onChange={e => setAlign(e.target.value as 'left' | 'center' | 'right')}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                         <option value="left">Left</option>
                         <option value="center">Center</option>
                         <option value="right">Right</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Rotation (°)</label>
                       <input type="number" value={layerRotation} step={1}
                         onChange={e => setLayerRotation(Number(e.target.value))}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Font override</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Font override</label>
                     <select value={fontFamily} onChange={e => setFontFamily(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                       style={{ fontFamily: fontFamily || undefined }}>
                       {FONT_OPTIONS.map(f => (
                         <option key={f.value} value={f.value} style={{ fontFamily: f.value || undefined }}>{f.label}</option>
@@ -2005,11 +2005,11 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   </div>
                   {/* Text fill — solid (uses Color above) or image (letters become a window onto the URL) */}
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Text fill</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Text fill</label>
                     <select
                       value={fillMode}
                       onChange={e => setFillMode(e.target.value as 'solid' | 'image')}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
                       <option value="solid">Solid color</option>
                       <option value="image">Image (letters mask image)</option>
@@ -2017,12 +2017,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   </div>
                   {fillMode === 'image' && (
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Image URL</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Image URL</label>
                       <input
                         value={fillSource}
                         onChange={e => setFillSource(e.target.value)}
                         placeholder="https://example.com/image.jpg"
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         The image is cover-fit into the layer bounds and clipped to the letter shapes. Must be CORS-accessible.
@@ -2033,21 +2033,21 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               ) : layerType === 'shape' ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Shape</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Shape</label>
                     <div className="flex gap-2">
                       {(['rect', 'circle'] as const).map(s => (
                         <button key={s} onClick={() => setShape(s)}
-                          className={`flex-1 py-2 rounded-lg text-sm capitalize transition ${shape === s ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                          className={`flex-1 py-2 rounded-lg text-sm capitalize transition ${shape === s ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
                           {s}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Rotation (°)</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Rotation (°)</label>
                     <input type="number" value={layerRotation} step={1}
                       onChange={e => setLayerRotation(Number(e.target.value))}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                   </div>
                 </div>
               ) : (
@@ -2056,11 +2056,11 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     Parametric curve. Use <code>t</code> from <code>tStart</code> to <code>tEnd</code>. Available vars: <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>sin</code>, <code>cos</code>, <code>min</code>, <code>max</code>, <code>pi</code>.
                   </p>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Preset</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Preset</label>
                     <select
                       value={mathPreset}
                       onChange={e => applyMathShapePreset(e.target.value as MathShapePresetKey)}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
                       {Object.entries(MATH_SHAPE_PRESETS).map(([key, preset]) => (
                         <option key={key} value={key}>{preset.label}</option>
@@ -2069,99 +2069,99 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Samples</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Samples</label>
                       <input type="number" value={samples} onChange={e => setSamples(parseInt(e.target.value) || 180)}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Stroke width</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Stroke width</label>
                       <input type="number" step="0.5" value={strokeWidth} onChange={e => setStrokeWidth(parseFloat(e.target.value) || 3)}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">tStart</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">tStart</label>
                       <input type="number" step="0.01" value={tStart} onChange={e => setTStart(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">tEnd</label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">tEnd</label>
                       <input type="number" step="0.01" value={tEnd} onChange={e => setTEnd(parseFloat(e.target.value) || Math.PI * 2)}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">xFormula</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">xFormula</label>
                     <input value={xFormula} onChange={e => setXFormula(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">yFormula</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">yFormula</label>
                     <input value={yFormula} onChange={e => setYFormula(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
                     <input type="checkbox" checked={closePath} onChange={e => setClosePath(e.target.checked)} />
                     Close path
                   </label>
-                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
                     <input type="checkbox" checked={drawOverTime} onChange={e => setDrawOverTime(e.target.checked)} />
                     Draw over time
                   </label>
                   {drawOverTime && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Draw start (s)</label>
+                        <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Draw start (s)</label>
                         <input type="number" step="0.1" min="0" value={drawStartTime} onChange={e => setDrawStartTime(parseFloat(e.target.value) || 0)}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                          className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                       </div>
                       <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Draw end (s)</label>
+                        <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Draw end (s)</label>
                         <input type="number" step="0.1" min="0" value={drawEndTime} onChange={e => setDrawEndTime(parseFloat(e.target.value) || Math.min(3, compositionDuration))}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                          className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                       </div>
                     </div>
                   )}
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Optional fill</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Optional fill</label>
                     <input value={fillColor} onChange={e => setFillColor(e.target.value)}
                       placeholder="#0ea5e9 or leave blank"
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
                   </div>
                 </div>
               )}
 
               {/* Color */}
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Color</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Color</label>
                 <div className="flex items-center gap-3">
                   <input type="color" value={color} onChange={e => setColor(e.target.value)}
                     className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
                   <input value={color} onChange={e => setColor(e.target.value)}
-                    className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
 
               {/* Position & Size */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Position X</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position X</label>
                   <input type="number" value={posX} onChange={e => setPosX(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Position Y</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Position Y</label>
                   <input type="number" value={posY} onChange={e => setPosY(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Width</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Width</label>
                   <input type="number" value={width} onChange={e => setWidth(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Height</label>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Height</label>
                   <input type="number" value={height} onChange={e => setHeight(parseInt(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
               {opacityField}
@@ -2169,15 +2169,15 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
 
               {/* Animation preset — text layers get char-stagger effects (Type-on etc.) in addition to PRESETS */}
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Animation</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Animation</label>
                 <select value={preset} onChange={e => setPreset(e.target.value as AnimationPreset)}
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                   {(layerType === 'text' ? TEXT_PRESETS : PRESETS).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
 
               <button onClick={handleAdd}
-                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+                className="w-full bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition">
                 {isEditing ? 'Save Changes' : 'Add Layer'}
               </button>
             </>
@@ -2203,7 +2203,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             />
           ) : tab === 'animations' ? (
             <>
-              <p className="text-xs text-slate-400 mb-4">Pick an animation from the library. It will be applied to the selected layer, or you can add a new text/shape layer with it.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Pick an animation from the library. It will be applied to the selected layer, or you can add a new text/shape layer with it.</p>
               {kgAnims.length === 0 && <div className="text-xs text-slate-500 text-center py-6">Loading animations...</div>}
               <div className="grid grid-cols-2 gap-4">
                 {kgAnims.map(anim => (
@@ -2214,31 +2214,31 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                       setImgAnimType(anim.id as ImgAnimType);
                       setTab('manual');
                     }}
-                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-700 hover:border-sky-500 bg-slate-800 hover:bg-slate-700 transition group"
+                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-sky-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition group"
                   >
                     <div className="w-full h-16 rounded-lg flex items-center justify-center" style={{ background: anim.color + '22', border: `2px solid ${anim.color}` }}>
                       <div className="w-6 h-6 rounded-full" style={{ background: anim.color }} />
                     </div>
-                    <span className="text-sm text-slate-300 group-hover:text-white font-medium text-center">{anim.label}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white font-medium text-center">{anim.label}</span>
                   </button>
                 ))}
               </div>
             </>
           ) : (
             <>
-              <p className="text-sm text-slate-400">Describe the layer you want to add and AI will generate it for you.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Describe the layer you want to add and AI will generate it for you.</p>
               <textarea
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
                 rows={4}
                 placeholder="e.g. A red rectangle that slides in from the left and fades out at the end"
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
               />
               {aiError && (
                 <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{aiError}</p>
               )}
               <button onClick={handleAiGenerate} disabled={aiLoading || !prompt.trim()}
-                className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2">
+                className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2">
                 {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4" /> Generate with AI</>}
               </button>
               <p className="text-xs text-slate-500 text-center">AI endpoint requires worker to be configured</p>

@@ -93,7 +93,7 @@ export default function ImpersonationBar() {
   // Impersonating → prominent banner with one-click return.
   if (impersonating) {
     return (
-      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-amber-600 text-white text-sm">
+      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-amber-600 text-slate-900 dark:text-white text-sm">
         <span className="truncate">
           👁 Viewing as <b>{stored?.email}</b>
           {stored?.role ? ` (${stored.role})` : ''} — impersonated by System Owner
@@ -112,15 +112,15 @@ export default function ImpersonationBar() {
   if (!users || users.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-slate-800/60 border-b border-slate-700 text-sm">
-      <label htmlFor="impersonate-user" className="text-slate-400 text-xs whitespace-nowrap">
+    <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-slate-100/60 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 text-sm">
+      <label htmlFor="impersonate-user" className="text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">
         🔑 Login as
       </label>
       <select
         id="impersonate-user"
         value={selected}
         onChange={(e) => setSelected(e.target.value)}
-        className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-sky-500 flex-1 min-w-0 max-w-full sm:max-w-xs"
+        className="bg-white dark:bg-slate-900 border border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-sky-500 flex-1 min-w-0 max-w-full sm:max-w-xs"
       >
         <option value="">Select a user…</option>
         {users
@@ -133,7 +133,7 @@ export default function ImpersonationBar() {
           ))}
       </select>
       <button
-        className="px-3 py-1 bg-sky-700 hover:bg-sky-600 rounded text-white text-xs disabled:opacity-40"
+        className="px-3 py-1 bg-sky-700 hover:bg-sky-600 rounded text-slate-900 dark:text-white text-xs disabled:opacity-40"
         disabled={!selected || busy}
         onClick={impersonate}
       >

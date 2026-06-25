@@ -103,12 +103,12 @@ export const TemplatesPane: React.FC<TemplatesPaneProps> = ({ active, className,
           placeholder="Search templates by name, author, tags, category…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-sky-500"
         />
         <button
           onClick={() => void fetchAll()}
           disabled={loading || !userEmail}
-          className="p-2 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition disabled:opacity-40"
+          className="p-2 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40"
           title="Refresh templates"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -135,11 +135,11 @@ export const TemplatesPane: React.FC<TemplatesPaneProps> = ({ active, className,
             const isCloning = cloningId === t.templateId;
             const isUnpublishing = unpublishingId === t.templateId;
             return (
-              <div key={t.templateId} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex flex-col gap-2">
+              <div key={t.templateId} className="bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-2">
                 <div className="flex items-start gap-2">
                   <LayoutTemplate className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
                   <div className="min-w-0">
-                    <p className="text-sm text-slate-200 font-medium truncate" title={t.name}>{t.name}</p>
+                    <p className="text-sm text-slate-900 dark:text-slate-200 font-medium truncate" title={t.name}>{t.name}</p>
                     <p className="text-[11px] text-slate-500 truncate">
                       {t.width}×{t.height} · {t.layerCount ?? 0} layers
                       {t.authorName || t.authorEmail ? ` · by ${t.authorName || t.authorEmail}` : ''}
@@ -148,24 +148,24 @@ export const TemplatesPane: React.FC<TemplatesPaneProps> = ({ active, className,
                 </div>
 
                 {t.meta?.description && (
-                  <p className="text-[11px] text-slate-400 line-clamp-2">{t.meta.description}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">{t.meta.description}</p>
                 )}
 
                 {(t.meta?.tags?.length || t.meta?.category || t.meta?.metaArea) && (
                   <div className="flex flex-wrap gap-1">
-                    {t.meta?.category && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-300">{t.meta.category}</span>}
-                    {t.meta?.metaArea && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-300">{t.meta.metaArea}</span>}
+                    {t.meta?.category && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.meta.category}</span>}
+                    {t.meta?.metaArea && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.meta.metaArea}</span>}
                     {(t.meta?.tags ?? []).slice(0, 4).map(tag => (
                       <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-900/40 text-sky-300">#{tag}</span>
                     ))}
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-1 border-t border-slate-700 pt-2 mt-auto">
+                <div className="flex items-center justify-between gap-1 border-t border-slate-200 dark:border-slate-700 pt-2 mt-auto">
                   <button
                     onClick={() => void handleUse(t)}
                     disabled={isCloning}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 text-white rounded transition disabled:bg-slate-700"
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded transition disabled:bg-slate-200 dark:disabled:bg-slate-700"
                     title="Clone this template into your own account and open it"
                   >
                     {isCloning ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderOpen className="w-3 h-3" />}

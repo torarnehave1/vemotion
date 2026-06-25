@@ -253,19 +253,19 @@ export const AnimationPortfolioModal: React.FC<AnimationPortfolioModalProps> = (
 
   return createPortal(
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl shadow-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-5xl shadow-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
           <div>
-            <h2 className="text-lg font-semibold text-white">Animation Portfolio</h2>
-            <p className="text-xs text-slate-400 mt-1">Pick an animation — its scene will be added as one or more layers to your composition.</p>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Animation Portfolio</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Pick an animation — its scene will be added as one or more layers to your composition.</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6 overflow-y-auto">
-          {loading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+          {loading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-500 dark:text-slate-400" /></div>}
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -273,13 +273,13 @@ export const AnimationPortfolioModal: React.FC<AnimationPortfolioModalProps> = (
               <button
                 key={`${anim.nodeId}-${idx}`}
                 onClick={() => handlePick(anim)}
-                className="flex flex-col items-stretch gap-2 p-3 rounded-xl border border-slate-700 hover:border-sky-500 bg-slate-800 hover:bg-slate-700 transition group text-left"
+                className="flex flex-col items-stretch gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-sky-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition group text-left"
               >
                 {anim.kind === 'scene'
                   ? <ScenePreview scene={anim.scene} />
                   : <CssAnimPreview spec={anim.spec} />}
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-sm text-slate-300 group-hover:text-white font-medium truncate">
+                  <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white font-medium truncate">
                     {anim.label}
                   </span>
                   <span className="text-xs text-slate-500">

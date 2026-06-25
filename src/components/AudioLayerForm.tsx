@@ -259,7 +259,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
           onClick={() => setMode('record')}
           className={[
             'flex-1 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2',
-            mode === 'record' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
+            mode === 'record' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
           ].join(' ')}
         >
           <Mic className="w-4 h-4" />
@@ -269,7 +269,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
           onClick={() => setMode('upload')}
           className={[
             'flex-1 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2',
-            mode === 'upload' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
+            mode === 'upload' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
           ].join(' ')}
         >
           <Upload className="w-4 h-4" />
@@ -279,7 +279,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
           onClick={() => setMode('pick')}
           className={[
             'flex-1 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2',
-            mode === 'pick' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
+            mode === 'pick' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
           ].join(' ')}
         >
           <Library className="w-4 h-4" />
@@ -295,22 +295,22 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
               <button
                 onClick={() => void startRecording()}
                 disabled={uploading || !userEmail}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition"
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
               >
                 <Mic className="w-4 h-4" /> Start recording
               </button>
             ) : (
               <button
                 onClick={stopRecording}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition"
+                className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
               >
                 <Square className="w-4 h-4 fill-current" /> Stop
               </button>
             )}
-            {(uploading || recording) && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            {(uploading || recording) && <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />}
             {!userEmail && <span className="text-xs text-amber-400">Sign in to save recordings</span>}
           </div>
-          {status && <p className="text-xs text-slate-400">{status}</p>}
+          {status && <p className="text-xs text-slate-500 dark:text-slate-400">{status}</p>}
           {error && <p className="text-xs text-red-400">{error}</p>}
           {r2Url && (
             <audio src={r2Url} controls className="w-full h-10" />
@@ -332,17 +332,17 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading || !userEmail}
-              className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition"
+              className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
             >
               <Upload className="w-4 h-4" /> Choose audio file
             </button>
-            {uploading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            {uploading && <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />}
             {!userEmail && <span className="text-xs text-amber-400">Sign in to upload audio</span>}
           </div>
           <p className="text-xs text-slate-500">
             MP3, WAV, M4A, OGG, WebM. Uploaded files are tagged <em>vemotion</em> and published, so they appear under <em>Pick from portfolio</em> next time.
           </p>
-          {status && <p className="text-xs text-slate-400">{status}</p>}
+          {status && <p className="text-xs text-slate-500 dark:text-slate-400">{status}</p>}
           {error && <p className="text-xs text-red-400">{error}</p>}
           {r2Url && (
             <audio src={r2Url} controls className="w-full h-10" />
@@ -354,7 +354,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
       {mode === 'pick' && (
         <div className="space-y-2">
           {!userEmail && <p className="text-xs text-amber-400">Sign in to load your portfolio.</p>}
-          {pickLoading && <p className="text-xs text-slate-400 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Loading recordings…</p>}
+          {pickLoading && <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Loading recordings…</p>}
           {pickError && <p className="text-xs text-red-400">{pickError}</p>}
           {!pickLoading && !pickError && recordings.length === 0 && userEmail && (
             <p className="text-xs text-slate-500">No Vemotion-tagged recordings yet. Switch to <em>Record new</em> to make one — it'll be tagged automatically and appear here next time.</p>
@@ -367,7 +367,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
                   key={r.r2Url}
                   className={[
                     'flex items-center justify-between gap-2 p-2 rounded-lg cursor-pointer transition border',
-                    active ? 'bg-sky-600/15 border-sky-500/50' : 'bg-slate-800 hover:bg-slate-700 border-transparent',
+                    active ? 'bg-sky-600/15 border-sky-500/50' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-transparent',
                   ].join(' ')}
                   onClick={() => {
                     setR2Url(r.r2Url);
@@ -380,7 +380,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
                   }}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-200 truncate">{r.displayName || r.fileName || '(unnamed)'}</p>
+                    <p className="text-sm text-slate-900 dark:text-slate-200 truncate">{r.displayName || r.fileName || '(unnamed)'}</p>
                     <p className="text-xs text-slate-500">
                       {r.duration ? `${r.duration.toFixed(1)}s · ` : ''}
                       {r.audioFormat ?? 'webm'}
@@ -396,19 +396,19 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
       )}
 
       {/* COMMON PER-LAYER SETTINGS */}
-      <div className="border-t border-slate-800 pt-3 space-y-3">
+      <div className="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-3">
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">Display name (optional)</label>
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Display name (optional)</label>
           <input
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
             placeholder="e.g. Opening narration"
-            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
         </div>
 
         <div>
-          <label className="text-xs text-slate-400 mb-1 block flex items-center gap-1">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block flex items-center gap-1">
             <Volume2 className="w-3 h-3" /> Volume: {Math.round(volume * 100)}%
           </label>
           <input
@@ -424,25 +424,25 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Start time (s)</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Start time (s)</label>
             <input
               type="number"
               min={0}
               step={0.1}
               value={startTime}
               onChange={e => setStartTime(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Duration (s)</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Duration (s)</label>
             <input
               type="number"
               min={0.1}
               step={0.1}
               value={layerDuration}
               onChange={e => setLayerDuration(parseFloat(e.target.value) || compositionDuration)}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
         </div>
@@ -455,7 +455,7 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
         <button
           onClick={() => { void handleAdd(); }}
           disabled={!r2Url || analysing}
-          className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2"
+          className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2"
         >
           {analysing && <Loader2 className="w-4 h-4 animate-spin" />}
           {analysing

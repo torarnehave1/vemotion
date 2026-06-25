@@ -236,15 +236,15 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
     >
       <div
         className={[
-          'bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-h-[85vh] flex flex-col overflow-hidden transition-[max-width] duration-150',
+          'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-h-[85vh] flex flex-col overflow-hidden transition-[max-width] duration-150',
           showAssist ? 'max-w-6xl' : 'max-w-3xl',
         ].join(' ')}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-baseline gap-3">
-            <h2 className="text-sm font-semibold text-slate-200">Composition JSON</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-200">Composition JSON</h2>
             <span className="text-xs text-slate-500">
               {layerCount !== null ? `${layerCount} layer${layerCount === 1 ? '' : 's'} · ` : ''}
               {sizeKB} KB
@@ -253,7 +253,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
           </div>
           <button
             onClick={handleClose}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Close (Esc)"
           >
             <X className="w-4 h-4" />
@@ -261,7 +261,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
         </div>
 
         {/* Body — editable textarea, with optional Assist side panel */}
-        <div className="flex-1 flex overflow-hidden bg-slate-950">
+        <div className="flex-1 flex overflow-hidden bg-white dark:bg-slate-950">
           <div className={['overflow-hidden', showAssist ? 'flex-1 min-w-0' : 'w-full'].join(' ')}>
             <textarea
               value={edited}
@@ -272,21 +272,21 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
-              className="w-full h-full text-xs text-slate-200 font-mono p-4 bg-slate-950 outline-none resize-none leading-relaxed"
+              className="w-full h-full text-xs text-slate-900 dark:text-slate-200 font-mono p-4 bg-white dark:bg-slate-950 outline-none resize-none leading-relaxed"
               style={{ whiteSpace: 'pre', overflowWrap: 'normal', overflowX: 'auto', minHeight: '50vh' }}
             />
           </div>
           {showAssist && (
-            <div className="w-[420px] flex-shrink-0 border-l border-slate-800 bg-slate-900 flex flex-col">
+            <div className="w-[420px] flex-shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
               {/* Panel header */}
-              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-slate-200">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                   Assistant
                 </div>
                 <button
                   onClick={() => setShowAssist(false)}
-                  className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+                  className="p-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                   title="Hide assistant"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -298,7 +298,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                 {chatMessages.length === 0 && !sending && (
                   <div className="text-xs text-slate-500 leading-relaxed px-1">
                     Ask the assistant to change this composition. Examples:
-                    <ul className="mt-2 space-y-1 list-disc list-inside text-slate-400">
+                    <ul className="mt-2 space-y-1 list-disc list-inside text-slate-500 dark:text-slate-400">
                       <li>"Move the circle 100 pixels right."</li>
                       <li>"Add a title 'Hello' centered at the top."</li>
                       <li>"What does the scaleFormula field do?"</li>
@@ -318,7 +318,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                         'rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap break-words',
                         m.role === 'user'
                           ? 'bg-sky-900/40 border border-sky-800 text-sky-100 ml-6'
-                          : 'bg-slate-800 border border-slate-700 text-slate-200 mr-2',
+                          : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 mr-2',
                       ].join(' ')}
                     >
                       <div className="text-[10px] uppercase tracking-wide opacity-60 mb-1">
@@ -328,7 +328,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                       {block && (
                         <button
                           onClick={() => applyJsonBlock(block)}
-                          className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md bg-amber-600 hover:bg-amber-500 text-white transition"
+                          className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md bg-amber-600 hover:bg-amber-500 text-slate-900 dark:text-white transition"
                           title="Replace the JSON in the editor with this block. Click Save afterward to apply."
                         >
                           <ArrowDownToLine className="w-3 h-3" />
@@ -339,7 +339,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                   );
                 })}
                 {sending && (
-                  <div className="flex items-center gap-2 text-xs text-slate-400 px-1">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 px-1">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     Assistant is thinking…
                   </div>
@@ -353,7 +353,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
               </div>
 
               {/* Input */}
-              <div className="border-t border-slate-800 p-2.5">
+              <div className="border-t border-slate-200 dark:border-slate-800 p-2.5">
                 <div className="flex items-end gap-2">
                   <textarea
                     value={chatInput}
@@ -366,7 +366,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                     }}
                     placeholder="Ask the assistant…  (⌘/Ctrl+Enter to send)"
                     rows={2}
-                    className="flex-1 text-xs text-slate-200 bg-slate-950 border border-slate-700 rounded-md px-2.5 py-2 outline-none focus:border-amber-600 resize-none placeholder:text-slate-600"
+                    className="flex-1 text-xs text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-2 outline-none focus:border-amber-600 resize-none placeholder:text-slate-600"
                   />
                   <button
                     onClick={() => void sendChat()}
@@ -374,8 +374,8 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                     className={[
                       'p-2 rounded-md transition flex-shrink-0',
                       chatInput.trim() && !sending
-                        ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                        : 'bg-slate-800 text-slate-600 cursor-not-allowed',
+                        ? 'bg-amber-600 hover:bg-amber-500 text-slate-900 dark:text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 cursor-not-allowed',
                     ].join(' ')}
                     title="Send (⌘/Ctrl+Enter)"
                   >
@@ -396,7 +396,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-800">
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 dark:border-slate-800">
           <span className="text-xs text-slate-500">
             {onSave
               ? 'Edit the JSON directly. Save applies changes and triggers autosave.'
@@ -409,8 +409,8 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                 className={[
                   'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition',
                   showAssist
-                    ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                    : 'bg-slate-700 hover:bg-slate-600 text-white',
+                    ? 'bg-amber-600 hover:bg-amber-500 text-slate-900 dark:text-white'
+                    : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white',
                 ].join(' ')}
                 title={showAssist ? 'Hide AI assistant' : 'Open AI assistant'}
               >
@@ -423,10 +423,10 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
               className={[
                 'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition',
                 copyState === 'copied'
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-emerald-600 text-slate-900 dark:text-white'
                   : copyState === 'error'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-slate-700 hover:bg-slate-600 text-white',
+                  ? 'bg-red-600 text-slate-900 dark:text-white'
+                  : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white',
               ].join(' ')}
               title="Copy current JSON to clipboard"
             >
@@ -440,8 +440,8 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
                 className={[
                   'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition',
                   dirty && !saving
-                    ? 'bg-sky-600 hover:bg-sky-500 text-white'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed',
+                    ? 'bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed',
                 ].join(' ')}
                 title={dirty ? 'Apply edited JSON to the composition' : 'No changes to save'}
               >
@@ -451,7 +451,7 @@ export const CompositionJsonModal: React.FC<CompositionJsonModalProps> = ({ comp
             )}
             <button
               onClick={handleClose}
-              className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition"
+              className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
             >
               Close
             </button>

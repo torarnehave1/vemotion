@@ -44,13 +44,13 @@ export const EmbedView: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center p-4">
       {state === 'loading' && (
-        <div className="text-slate-400 text-sm animate-pulse">Loading composition…</div>
+        <div className="text-slate-500 dark:text-slate-400 text-sm animate-pulse">Loading composition…</div>
       )}
       {state === 'no-id' && (
-        <div className="text-slate-400 text-sm text-center max-w-md">
-          No composition specified. Append <code className="text-slate-200 bg-slate-800 px-1.5 py-0.5 rounded text-xs">?compositionId=&lt;id&gt;&amp;embed=1</code> to the URL.
+        <div className="text-slate-500 dark:text-slate-400 text-sm text-center max-w-md">
+          No composition specified. Append <code className="text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">?compositionId=&lt;id&gt;&amp;embed=1</code> to the URL.
         </div>
       )}
       {state === 'error' && (

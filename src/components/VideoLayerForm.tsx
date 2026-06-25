@@ -137,7 +137,7 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
         <button
           onClick={() => setMode('upload')}
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-            mode === 'upload' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            mode === 'upload' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
           <Upload className="w-4 h-4" /> Upload
@@ -145,7 +145,7 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
         <button
           onClick={() => setMode('url')}
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-            mode === 'url' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            mode === 'url' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
           <Link2 className="w-4 h-4" /> URL
@@ -165,11 +165,11 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition"
+              className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
             >
               <Upload className="w-4 h-4" /> Choose video file
             </button>
-            {uploading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            {uploading && <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />}
           </div>
           <p className="text-xs text-slate-500">Uploaded to your R2 store. MP4 / WebM work best.</p>
         </div>
@@ -181,11 +181,11 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               placeholder="https://…/clip.mp4"
-              className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              className="flex-1 px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
             />
             <button
               onClick={useUrl}
-              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition"
+              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
             >
               Use
             </button>
@@ -196,8 +196,8 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
 
       {/* Selected source preview */}
       {src && (
-        <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-          <div className="flex items-center gap-2 text-sm text-slate-300">
+        <div className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-3">
+          <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <Film className="w-4 h-4 text-sky-400" />
             <span className="truncate">{name || src}</span>
           </div>
@@ -205,11 +205,11 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
 
           {/* Fit */}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400 w-20">Fit</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 w-20">Fit</label>
             <select
               value={fit}
               onChange={(e) => setFit(e.target.value as Fit)}
-              className="flex-1 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500"
+              className="flex-1 px-2 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
             >
               <option value="cover">Cover (crop to fill the box)</option>
               <option value="contain">Contain (fit inside, letterbox)</option>
@@ -219,60 +219,60 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
 
           {/* Size / position of the layer box */}
           <div className="flex items-center justify-between gap-2">
-            <label className="text-xs text-slate-400">Size &amp; position</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400">Size &amp; position</label>
             <button
               type="button"
               onClick={fillCanvas}
-              className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs font-medium transition"
+              className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded text-xs font-medium transition"
               title={`Set the box to the full ${compositionWidth}×${compositionHeight} canvas`}
             >
               Fill canvas
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               X
               <input type="number" value={posX} onChange={(e) => setPosX(Math.round(Number(e.target.value) || 0))}
-                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+                className="flex-1 w-full px-2 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:border-sky-500" />
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               Y
               <input type="number" value={posY} onChange={(e) => setPosY(Math.round(Number(e.target.value) || 0))}
-                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+                className="flex-1 w-full px-2 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:border-sky-500" />
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               W
               <input type="number" min={1} value={boxW} onChange={(e) => setBoxW(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+                className="flex-1 w-full px-2 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:border-sky-500" />
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               H
               <input type="number" min={1} value={boxH} onChange={(e) => setBoxH(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                className="flex-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500" />
+                className="flex-1 w-full px-2 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:border-sky-500" />
             </label>
           </div>
 
           {/* Timing */}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400 w-20">Start (s)</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 w-20">Start (s)</label>
             <input
               type="number"
               min={0}
               step={0.1}
               value={startTime}
               onChange={(e) => setStartTime(Math.max(0, Number(e.target.value) || 0))}
-              className="w-24 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500"
+              className="w-24 px-2 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400 w-20">Length (s)</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 w-20">Length (s)</label>
             <input
               type="number"
               min={0.1}
               step={0.1}
               value={layerDuration}
               onChange={(e) => setLayerDuration(Math.max(0.1, Number(e.target.value) || 0.1))}
-              className="w-24 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:outline-none focus:border-sky-500"
+              className="w-24 px-2 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
             />
           </div>
         </div>
@@ -283,7 +283,7 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
       <button
         onClick={handleAdd}
         disabled={!src}
-        className="w-full px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-medium transition"
+        className="w-full px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
       >
         {editingLayer ? 'Save video layer' : 'Add video layer'}
       </button>

@@ -518,22 +518,22 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
       onClick={onClose}
     >
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="flex items-center rounded-lg bg-slate-800 p-0.5 text-xs">
+            <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs">
               <button
                 onClick={() => setView('compositions')}
-                className={`px-2.5 py-1 rounded-md transition ${view === 'compositions' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`px-2.5 py-1 rounded-md transition ${view === 'compositions' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
               >
                 My Compositions
               </button>
               <button
                 onClick={() => setView('templates')}
-                className={`px-2.5 py-1 rounded-md transition ${view === 'templates' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`px-2.5 py-1 rounded-md transition ${view === 'templates' ? 'bg-sky-600 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
               >
                 Templates
               </button>
@@ -548,7 +548,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
               <button
                 onClick={() => void fetchAll()}
                 disabled={loading || !userEmail}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition disabled:opacity-40"
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40"
                 title="Refresh"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -556,7 +556,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
             )}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               title="Close (Esc)"
             >
               <X className="w-4 h-4" />
@@ -567,12 +567,12 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
         {/* Body: sidebar + main */}
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar (composition filters only; hidden in templates view) */}
-          <aside className={`w-60 flex-shrink-0 border-r border-slate-800 overflow-y-auto p-4 space-y-5 bg-slate-900/40 ${view === 'templates' ? 'hidden' : ''}`}>
+          <aside className={`w-60 flex-shrink-0 border-r border-slate-200 dark:border-slate-800 overflow-y-auto p-4 space-y-5 bg-white/40 dark:bg-slate-900/40 ${view === 'templates' ? 'hidden' : ''}`}>
             <Section title="Sort by">
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as SortBy)}
-                className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
               >
                 {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -587,7 +587,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                     'w-full text-left px-2 py-1 text-xs rounded transition border-l-2',
                     selectedProjectId === null && !unassignedMode
                       ? 'bg-sky-600/20 text-sky-300 border-sky-500'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-transparent',
                   ].join(' ')}
                 >
                   All compositions
@@ -598,7 +598,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                     'w-full text-left px-2 py-1 text-xs rounded transition border-l-2',
                     unassignedMode
                       ? 'bg-amber-600/20 text-amber-300 border-amber-500'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-transparent',
                   ].join(' ')}
                   title="Compositions not yet filed into any project"
                 >
@@ -615,7 +615,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                           'w-full flex items-center gap-1 px-2 py-1 text-xs rounded transition border-l-2',
                           active
                             ? 'bg-sky-600/20 text-sky-300 border-sky-500'
-                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-transparent',
                         ].join(' ')}
                         title={p.title}
                       >
@@ -625,7 +625,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                       </button>
 
                       {active && (
-                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-slate-700 pl-2">
+                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-slate-200 dark:border-slate-700 pl-2">
                           {projectBusy && !projectDetail && (
                             <p className="text-[11px] text-slate-500 px-1">Loading…</p>
                           )}
@@ -637,7 +637,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                                 'w-full text-left px-2 py-0.5 text-xs rounded transition border-l-2',
                                 selectedChapterId === ch.id
                                   ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500'
-                                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-transparent',
+                                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-transparent',
                               ].join(' ')}
                             >
                               <span className="truncate">{ch.title}</span>
@@ -665,12 +665,12 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                                 onChange={(e) => setNewChapterName(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Escape') setNewChapterName(null); }}
                                 placeholder="Chapter title"
-                                className="flex-1 min-w-0 bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
                               />
                               <button
                                 type="submit"
                                 disabled={projectBusy}
-                                className="px-1.5 py-1 text-[11px] bg-sky-600 hover:bg-sky-500 text-white rounded disabled:bg-slate-700"
+                                className="px-1.5 py-1 text-[11px] bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded disabled:bg-slate-200 dark:disabled:bg-slate-700"
                               >
                                 {projectBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
                               </button>
@@ -700,12 +700,12 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                       onChange={(e) => setNewProjectName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Escape') setNewProjectName(null); }}
                       placeholder="Project meta area"
-                      className="flex-1 min-w-0 bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      className="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                     <button
                       type="submit"
                       disabled={projectBusy}
-                      className="px-1.5 py-1 text-[11px] bg-sky-600 hover:bg-sky-500 text-white rounded disabled:bg-slate-700"
+                      className="px-1.5 py-1 text-[11px] bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded disabled:bg-slate-200 dark:disabled:bg-slate-700"
                     >
                       {projectBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Create'}
                     </button>
@@ -744,7 +744,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
               placeholder="Search name, description, tags, category, area…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />
 
             {/* Tag chips */}
@@ -760,8 +760,8 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                       className={[
                         'text-xs px-2 py-0.5 rounded-full border transition',
                         active
-                          ? 'bg-sky-600 text-white border-sky-500'
-                          : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600',
+                          ? 'bg-sky-600 text-slate-900 dark:text-white border-sky-500'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-600',
                       ].join(' ')}
                     >
                       #{tag}
@@ -799,7 +799,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                   return (
                     <div
                       key={item.id}
-                      className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 flex flex-col gap-2"
+                      className="bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-2"
                     >
                       <CardThumbnail
                         compositionId={item.id}
@@ -828,14 +828,14 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                           </span>
                         )}
                         {(item.meta?.tags ?? []).map(t => (
-                          <span key={t} className="px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300 border border-slate-600">
+                          <span key={t} className="px-1.5 py-0.5 rounded bg-slate-200/50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border border-slate-600">
                             #{t}
                           </span>
                         ))}
                       </div>
 
                       {item.meta?.description && (
-                        <p className="text-xs text-slate-400 line-clamp-3" title={item.meta.description}>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3" title={item.meta.description}>
                           {item.meta.description}
                         </p>
                       )}
@@ -847,14 +847,14 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
 
                       {/* Edit form */}
                       {isEditing && (
-                        <div className="border-t border-slate-700 pt-2 space-y-2">
+                        <div className="border-t border-slate-200 dark:border-slate-700 pt-2 space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-[11px] text-slate-500">Description, tags, category & meta area</span>
                             <button
                               onClick={() => void aiFillMeta(item)}
                               disabled={aiFilling || savingEdit}
                               title="Let AI (gemma) suggest these from the composition"
-                              className="px-2 py-1 text-xs bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 text-white rounded transition flex items-center gap-1"
+                              className="px-2 py-1 text-xs bg-violet-600 hover:bg-violet-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 text-slate-900 dark:text-white rounded transition flex items-center gap-1"
                             >
                               {aiFilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                               AI fill
@@ -866,40 +866,40 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                             value={editDescription}
                             onChange={e => setEditDescription(e.target.value)}
                             rows={3}
-                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-xs rounded px-2 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-sky-500"
                           />
                           <input
                             placeholder="Tags (comma separated, e.g. animation, title-card)"
                             value={editTagsInput}
                             onChange={e => setEditTagsInput(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
                           />
                           <div className="grid grid-cols-2 gap-2">
                             <input
                               placeholder="Category"
                               value={editCategory}
                               onChange={e => setEditCategory(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
                             />
                             <input
                               placeholder="Meta area"
                               value={editMetaArea}
                               onChange={e => setEditMetaArea(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500"
                             />
                           </div>
                           <div className="flex justify-end gap-1.5">
                             <button
                               onClick={cancelEdit}
                               disabled={savingEdit}
-                              className="px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 rounded transition"
+                              className="px-2 py-1 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition"
                             >
                               Cancel
                             </button>
                             <button
                               onClick={() => void saveEdit(item)}
                               disabled={savingEdit}
-                              className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 text-white rounded transition flex items-center gap-1 disabled:bg-slate-700"
+                              className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded transition flex items-center gap-1 disabled:bg-slate-200 dark:disabled:bg-slate-700"
                             >
                               {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                               Save
@@ -910,11 +910,11 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
 
                       {/* Action row */}
                       {!isEditing && (
-                        <div className="flex items-center justify-between gap-1 border-t border-slate-700 pt-2">
+                        <div className="flex items-center justify-between gap-1 border-t border-slate-200 dark:border-slate-700 pt-2">
                           <button
                             onClick={() => void handleOpen(item.id, item.name)}
                             disabled={isOpening}
-                            className="flex items-center gap-1 px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 text-white rounded transition disabled:bg-slate-700"
+                            className="flex items-center gap-1 px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded transition disabled:bg-slate-200 dark:disabled:bg-slate-700"
                           >
                             {isOpening ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderOpen className="w-3 h-3" />}
                             Open
@@ -929,7 +929,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                                   e.target.value = '';
                                   if (ch) void handleAddToChapter(item, ch);
                                 }}
-                                className="bg-slate-900 border border-slate-700 text-slate-300 text-[10px] rounded px-1 py-0.5 max-w-[7.5rem] focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
+                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] rounded px-1 py-0.5 max-w-[7.5rem] focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
                                 title="Add this composition to a chapter of the selected project"
                               >
                                 <option value="">{addingToChapterId === item.id ? 'Adding…' : '+ Chapter'}</option>
@@ -951,7 +951,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({ onClose, onOpen,
                                   const ch = v.slice(sep + 1);
                                   if (pg && ch) void fileIntoChapter(item, pg, ch);
                                 }}
-                                className="bg-slate-900 border border-slate-700 text-slate-300 text-[10px] rounded px-1 py-0.5 max-w-[9rem] focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
+                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] rounded px-1 py-0.5 max-w-[9rem] focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
                                 title="File this composition into a project chapter"
                               >
                                 <option value="">{addingToChapterId === item.id ? 'Filing…' : '+ Project'}</option>
@@ -1066,7 +1066,7 @@ const CardThumbnail: React.FC<{
   return (
     <div
       ref={ref}
-      className="w-full bg-slate-950/80 border border-slate-700/50 rounded overflow-hidden flex items-center justify-center"
+      className="w-full bg-white/80 dark:bg-slate-950/80 border border-slate-200/50 dark:border-slate-700/50 rounded overflow-hidden flex items-center justify-center"
       style={{ aspectRatio: `${aspectRatio}` }}
     >
       {state.kind === 'ready' ? (
@@ -1100,7 +1100,7 @@ const RadioList: React.FC<{ value: string; options: RadioOption[]; onChange: (v:
           'w-full text-left px-2 py-1 text-xs rounded transition',
           value === opt.v
             ? 'bg-sky-600/20 text-sky-300 border-l-2 border-sky-500'
-            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-l-2 border-transparent',
+            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-l-2 border-transparent',
         ].join(' ')}
       >
         {opt.label}

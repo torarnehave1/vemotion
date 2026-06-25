@@ -178,8 +178,8 @@ function App() {
 
   if (authStatus === 'checking') {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
-        <div className="animate-pulse text-slate-400">Loading…</div>
+      <div className="flex items-center justify-center h-screen bg-white dark:bg-slate-950">
+        <div className="animate-pulse text-slate-500 dark:text-slate-400">Loading…</div>
       </div>
     );
   }
@@ -190,7 +190,7 @@ function App() {
 
   return (
     <AuthContext.Provider value={authUser}>
-      <div className="min-h-screen bg-slate-950 flex flex-col">
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
         <AuthBar
           userEmail={authUser?.email}
           badgeLabel="Vemotion"

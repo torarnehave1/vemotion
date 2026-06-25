@@ -35,11 +35,11 @@ export const PathStreamPanel: React.FC<Props> = ({ pathId, settings, onApply }) 
   const [s, setS] = useState<StreamSettings>(settings);
   const set = (patch: Partial<StreamSettings>) => setS((prev) => ({ ...prev, ...patch }));
 
-  const field = 'w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-slate-100 focus:outline-none focus:border-sky-500';
-  const label = 'block text-xs text-slate-400 mb-1';
+  const field = 'w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-sm text-slate-100 focus:outline-none focus:border-sky-500';
+  const label = 'block text-xs text-slate-500 dark:text-slate-400 mb-1';
 
   return (
-    <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900 p-3">
+    <div className="mt-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-slate-100">Path stream</h3>
         <span className="text-[11px] text-slate-500 truncate max-w-[120px]" title={pathId}>{pathId}</span>
@@ -50,7 +50,7 @@ export const PathStreamPanel: React.FC<Props> = ({ pathId, settings, onApply }) 
           <label className={label}>Colour</label>
           <div className="flex items-center gap-2">
             <input type="color" value={s.color} onChange={(e) => set({ color: e.target.value })}
-              className="h-8 w-10 rounded border border-slate-700 bg-slate-800 p-0.5" aria-label="Stream colour" />
+              className="h-8 w-10 rounded border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-0.5" aria-label="Stream colour" />
             <input type="text" value={s.color} onChange={(e) => set({ color: e.target.value })} className={field} />
           </div>
         </div>
@@ -80,7 +80,7 @@ export const PathStreamPanel: React.FC<Props> = ({ pathId, settings, onApply }) 
 
       <button
         onClick={() => onApply({ ...s, end: Math.max(s.start + 0.5, s.end) })}
-        className="mt-3 w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-2 text-sm font-medium text-white transition"
+        className="mt-3 w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-2 text-sm font-medium text-slate-900 dark:text-white transition"
       >
         Apply to stream
       </button>

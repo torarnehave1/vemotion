@@ -268,17 +268,17 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl h-[88vh] flex flex-col overflow-hidden"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl h-[88vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-200">
             <Wand2 className="w-4 h-4 text-sky-400" /> AI Image Studio
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Close"
           >
             <X className="w-4 h-4" />
@@ -294,9 +294,9 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
           <div className="flex flex-col gap-3 lg:w-[34%] lg:min-h-0">
             {/* Start from an image: pick a reference from upload / album /
                 stock / clipboard, then analyze it into prompt text. */}
-            <div className="flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800/40 p-2.5 space-y-2">
+            <div className="flex-shrink-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-2.5 space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-slate-400">Start from an image (optional)</label>
+                <label className="text-xs text-slate-500 dark:text-slate-400">Start from an image (optional)</label>
                 <span className="text-[10px] text-slate-500">or paste ⌘V / Ctrl+V</span>
               </div>
 
@@ -305,7 +305,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                 <button
                   type="button"
                   onClick={() => { setRefSource(null); fileRef.current?.click(); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs border bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 transition"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs border bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
                 >
                   <Upload className="w-3.5 h-3.5" /> Upload
                 </button>
@@ -314,7 +314,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   onClick={() => setRefSource(s => (s === 'album' ? null : 'album'))}
                   className={[
                     'flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition',
-                    refSource === 'album' ? 'bg-sky-600 border-sky-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                    refSource === 'album' ? 'bg-sky-600 border-sky-500 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
                   ].join(' ')}
                 >
                   <Images className="w-3.5 h-3.5" /> Album
@@ -324,7 +324,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   onClick={() => setRefSource(s => (s === 'stock' ? null : 'stock'))}
                   className={[
                     'flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition',
-                    refSource === 'stock' ? 'bg-sky-600 border-sky-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                    refSource === 'stock' ? 'bg-sky-600 border-sky-500 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
                   ].join(' ')}
                 >
                   <Search className="w-3.5 h-3.5" /> Stock
@@ -337,7 +337,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   <select
                     value={album}
                     onChange={e => setAlbum(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
                     {(albums.length ? albums : ['VEmotion']).map(a => <option key={a} value={a}>{a}</option>)}
                   </select>
@@ -352,7 +352,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                           onClick={() => { setRefImage(img.url); setRefSource(null); }}
                           className={[
                             'aspect-square rounded overflow-hidden border-2 transition',
-                            refImage === img.url ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-slate-700 hover:border-slate-400',
+                            refImage === img.url ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-slate-200 dark:border-slate-700 hover:border-slate-400',
                           ].join(' ')}
                           title={img.displayName ?? img.name ?? img.key}
                         >
@@ -374,12 +374,12 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
               {/* Selected reference + analyze */}
               {refImage && (
                 <div className="flex items-center gap-2">
-                  <img src={refImage} alt="Reference" className="w-12 h-12 rounded object-cover border border-slate-700 flex-shrink-0" />
+                  <img src={refImage} alt="Reference" className="w-12 h-12 rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0" />
                   <button
                     type="button"
                     onClick={analyzeRefImage}
                     disabled={analyzing}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-xs font-medium transition"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition"
                   >
                     {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                     {analyzing ? 'Analyzing…' : 'Describe → prompt'}
@@ -387,7 +387,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setRefImage('')}
-                    className="p-1 text-slate-500 hover:text-slate-200 transition"
+                    className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition"
                     title="Remove reference image"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -399,17 +399,17 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
               <p className="text-[10px] text-slate-500">Analyzes the image and writes a prompt into the box below — edit it, then Generate.</p>
             </div>
             <div className="flex flex-col flex-1 min-h-0">
-              <label className="text-xs text-slate-400 mb-1 block">What do you want to see?</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">What do you want to see?</label>
               <textarea
                 value={subject}
                 onChange={e => setSubject(e.target.value)}
                 placeholder="Describe the image in as much detail as you like — subject, setting, mood, colors, composition. Longer, specific prompts give better results."
-                className="w-full flex-1 min-h-[160px] bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full flex-1 min-h-[160px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
             <div className="flex-shrink-0">
               <label className="text-[11px] text-slate-500 block mb-1">Final prompt sent to the model</label>
-              <div className="text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 max-h-32 overflow-y-auto whitespace-pre-wrap">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 max-h-32 overflow-y-auto whitespace-pre-wrap">
                 {finalPrompt || <span className="text-slate-600">Describe what you want to see…</span>}
               </div>
             </div>
@@ -418,7 +418,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
           {/* Column 2 — Settings */}
           <div className="space-y-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Style</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Style</label>
               <div className="flex flex-wrap gap-1.5">
                 {STYLES.map(s => (
                   <button
@@ -428,8 +428,8 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                     className={[
                       'px-2.5 py-1 rounded-full text-xs border transition',
                       style === s.key
-                        ? 'bg-sky-600 border-sky-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                        ? 'bg-sky-600 border-sky-500 text-slate-900 dark:text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
                     ].join(' ')}
                   >
                     {s.label}
@@ -439,7 +439,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Aspect ratio</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Aspect ratio</label>
               <div className="grid grid-cols-3 gap-2">
                 {ASPECTS.map(a => (
                   <button
@@ -449,8 +449,8 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                     className={[
                       'px-2 py-1.5 rounded-lg text-xs border transition flex flex-col items-center',
                       aspect === a.key
-                        ? 'bg-sky-600 border-sky-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                        ? 'bg-sky-600 border-sky-500 text-slate-900 dark:text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
                     ].join(' ')}
                   >
                     <span>{a.label}</span>
@@ -461,7 +461,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Speed vs quality</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Speed vs quality</label>
               <div className="grid grid-cols-3 gap-2">
                 {QUALITIES.map(q => (
                   <button
@@ -471,8 +471,8 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                     className={[
                       'px-2 py-1.5 rounded-lg text-xs border transition flex flex-col items-center',
                       quality === q.key
-                        ? 'bg-sky-600 border-sky-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                        ? 'bg-sky-600 border-sky-500 text-slate-900 dark:text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
                     ].join(' ')}
                   >
                     <span>{q.label}</span>
@@ -484,7 +484,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Model</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Model</label>
               <div className="grid grid-cols-2 gap-2">
                 {MODELS.map(m => (
                   <button
@@ -494,8 +494,8 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                     className={[
                       'px-2 py-1.5 rounded-lg text-xs border transition flex flex-col items-center',
                       model === m.key
-                        ? 'bg-sky-600 border-sky-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+                        ? 'bg-sky-600 border-sky-500 text-slate-900 dark:text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
                     ].join(' ')}
                   >
                     <span>{m.label}</span>
@@ -506,18 +506,18 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Text to render in the image (optional)</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Text to render in the image (optional)</label>
               <input
                 value={textInImage}
                 onChange={e => setTextInImage(e.target.value)}
                 placeholder='e.g. "Autumn Sale"'
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 mb-1.5 block">Detail & quality</label>
-              <div className="flex flex-wrap gap-3 text-xs text-slate-300">
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block">Detail & quality</label>
+              <div className="flex flex-wrap gap-3 text-xs text-slate-700 dark:text-slate-300">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input type="checkbox" checked={highDetail} onChange={e => setHighDetail(e.target.checked)} className="accent-sky-500" />
                   High detail
@@ -548,20 +548,20 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Avoid (optional)</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Avoid (optional)</label>
               <input
                 value={avoid}
                 onChange={e => setAvoid(e.target.value)}
                 placeholder="e.g. text, watermarks, extra limbs"
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
           </div>
 
           {/* Column 3 — Preview */}
           <div className="flex flex-col gap-3 lg:w-[32%] lg:min-h-0">
-            <label className="text-xs text-slate-400 block flex-shrink-0">Preview</label>
-            <div className="aspect-square w-full rounded-lg border border-slate-700 bg-slate-950/60 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <label className="text-xs text-slate-500 dark:text-slate-400 block flex-shrink-0">Preview</label>
+            <div className="aspect-square w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-950/60 flex items-center justify-center overflow-hidden flex-shrink-0">
               {generating ? (
                 <div className="flex flex-col items-center gap-2 text-slate-500 text-xs">
                   <Loader2 className="w-6 h-6 animate-spin" />
@@ -580,7 +580,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-800">
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800">
           <p className="text-[11px] text-slate-500">
             {userEmail ? 'Image is saved to your VEmotion album.' : 'Sign in to generate images.'}
           </p>
@@ -588,7 +588,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             {resultUrl && (
               <button
                 onClick={reset}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
               >
                 <RotateCcw className="w-3.5 h-3.5" /> Start over
               </button>
@@ -596,7 +596,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             <button
               onClick={generate}
               disabled={!canGenerate}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white"
             >
               {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
               {resultUrl ? 'Regenerate' : 'Generate'}
@@ -604,7 +604,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             <button
               onClick={addToComposition}
               disabled={!resultUrl || adding}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white"
             >
               {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
               Add to composition

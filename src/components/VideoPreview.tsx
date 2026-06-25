@@ -1024,18 +1024,18 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
   const totalTime = composition.duration.toFixed(2);
   const progressPct = totalFrames > 0 ? (currentFrame / totalFrames) * 100 : 0;
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4">
 
       {/* Canvas */}
       <div className="space-y-3">
         {!embed && (
           <div className="flex items-center justify-end gap-2">
-            <label htmlFor="preview-zoom" className="text-xs font-medium text-slate-400">Zoom</label>
+            <label htmlFor="preview-zoom" className="text-xs font-medium text-slate-500 dark:text-slate-400">Zoom</label>
             <select
               id="preview-zoom"
               value={zoom}
               onChange={(e) => setZoom(parseFloat(e.target.value))}
-              className="bg-slate-800 border border-slate-700 text-white rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
             >
               <option value={1}>1x</option>
               <option value={1.5}>1.5x</option>
@@ -1053,9 +1053,9 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
 
         {/* Pen / mask tool action bar — rendered ABOVE the canvas so it never covers the image */}
         {penMode && (
-          <div className="flex items-center gap-2 px-3 py-1.5 mb-1 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200">
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-200">
             <span className="font-medium">{maskTargetId ? 'Mask tool' : 'Pen tool'}</span>
-            <span className="text-slate-400 flex-1">
+            <span className="text-slate-500 dark:text-slate-400 flex-1">
               {penAnchorCount === 0
                 ? (maskTargetId ? 'Click around the part of the image to keep (drag to set curve)' : 'Click to start path (drag to set curve)')
                 : `${penAnchorCount} anchor${penAnchorCount === 1 ? '' : 's'}`}
@@ -1069,16 +1069,16 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         >
           {!embed && onUpdateGuides && (
             <>
-              <div className="bg-slate-800/70 border-b border-r border-slate-700 rounded-tl" />
+              <div className="bg-slate-100/70 dark:bg-slate-800/70 border-b border-r border-slate-200 dark:border-slate-700 rounded-tl" />
               <div
                 onMouseDown={handleRulerMouseDown('y')}
                 title="Drag down to add a horizontal guide"
-                className="bg-slate-800/70 border-b border-slate-700 cursor-row-resize hover:bg-slate-700/70 transition-colors"
+                className="bg-slate-100/70 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-700 cursor-row-resize hover:bg-slate-200/70 dark:hover:bg-slate-700/70 transition-colors"
               />
               <div
                 onMouseDown={handleRulerMouseDown('x')}
                 title="Drag right to add a vertical guide"
-                className="bg-slate-800/70 border-r border-slate-700 cursor-col-resize hover:bg-slate-700/70 transition-colors"
+                className="bg-slate-100/70 dark:bg-slate-800/70 border-r border-slate-200 dark:border-slate-700 cursor-col-resize hover:bg-slate-200/70 dark:hover:bg-slate-700/70 transition-colors"
               />
             </>
           )}
@@ -1136,7 +1136,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               const label = ((sel.properties as Record<string, unknown>).displayName as string) || 'Audio';
               return (
                 <div
-                  className="absolute top-2 left-2 z-20 w-64 rounded-lg border border-slate-700 bg-slate-900 p-3"
+                  className="absolute top-2 left-2 z-20 w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3"
                   style={{ pointerEvents: 'auto' }}
                   onMouseDown={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -1144,7 +1144,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-slate-100 truncate" title={label}>🔊 {label}</span>
-                    <span className="text-xs text-slate-400">{Math.round(vol * 100)}%</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{Math.round(vol * 100)}%</span>
                   </div>
                   <input
                     type="range" min={0} max={1} step={0.05} value={vol}
@@ -1189,14 +1189,14 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           onChange={handleScrub}
           className="w-full accent-sky-500"
         />
-        <div className="flex justify-between text-xs text-slate-400">
+        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
           <span>Frame {currentFrame} / {totalFrames}</span>
           <span>{currentTime}s / {totalTime}s</span>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-slate-800 rounded-full h-1">
+      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1">
         <div
           className="bg-sky-600 h-1 rounded-full transition-all"
           style={{ width: `${progressPct}%` }}
@@ -1208,21 +1208,21 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         {isPlaying ? (
           <button
             onClick={handlePause}
-            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition"
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
           >
             <Pause className="w-4 h-4" /> Pause
           </button>
         ) : (
           <button
             onClick={handlePlay}
-            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition"
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
           >
             <Play className="w-4 h-4" /> Play
           </button>
         )}
         <button
           onClick={handleStop}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition"
+          className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
         >
           <Square className="w-4 h-4" /> Stop
         </button>
@@ -1230,7 +1230,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           onClick={() => setShowTeleprompter((v) => !v)}
           className={[
             'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
-            showTeleprompter ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+            showTeleprompter ? 'bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white border-sky-500' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700',
           ].join(' ')}
           title="Floating teleprompter — shows the Narration line for the current playhead in its own readable panel"
         >
@@ -1250,7 +1250,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         {onSetNarrationScript && (
           <button
             onClick={() => setShowNarrModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700"
             title="Edit the teleprompter script — paste timed lines (time | text)"
           >
             <FileText className="w-4 h-4" /> Script
@@ -1272,7 +1272,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
           <button
             onClick={startNarration}
             disabled={narrSaving}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-rose-200 border-rose-800 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-100 dark:bg-slate-800 hover:bg-rose-900/40 text-rose-200 border-rose-800 disabled:opacity-50"
             title="Record narration from your mic (music is muted while recording). On stop it uploads and is added as an audio layer at 0:00."
           >
             <Mic className="w-4 h-4" /> {narrSaving ? 'Saving…' : 'Narrate'}
@@ -1284,15 +1284,15 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               {narrState === 'recording' ? 'Recording' : 'Paused'}
             </span>
             {narrState === 'recording' ? (
-              <button onClick={pauseNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700">
+              <button onClick={pauseNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700">
                 <Pause className="w-4 h-4" /> Pause
               </button>
             ) : (
-              <button onClick={resumeNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-sky-600 hover:bg-sky-500 text-white">
+              <button onClick={resumeNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white">
                 <Mic className="w-4 h-4" /> Resume
               </button>
             )}
-            <button onClick={stopNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-rose-700 hover:bg-rose-600 text-white">
+            <button onClick={stopNarration} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-rose-700 hover:bg-rose-600 text-slate-900 dark:text-white">
               <Square className="w-4 h-4" /> Stop &amp; add
             </button>
           </>
@@ -1304,8 +1304,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               className={[
                 'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
                 editMode
-                  ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                  ? 'bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white border-sky-500'
+                  : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700',
               ].join(' ')}
               title={editMode ? 'Exit edit mode (deselects, returns to preview)' : 'Enter edit mode (click layers to select and drag to move)'}
             >
@@ -1317,8 +1317,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               className={[
                 'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
                 penMode
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                  ? 'bg-amber-600 hover:bg-amber-500 text-slate-900 dark:text-white border-amber-500'
+                  : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700',
               ].join(' ')}
             >
               <PenTool className="w-4 h-4" />
@@ -1332,8 +1332,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                   className={[
                     'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition border',
                     showGrid
-                      ? 'bg-emerald-700 hover:bg-emerald-600 text-white border-emerald-500'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                      ? 'bg-emerald-700 hover:bg-emerald-600 text-slate-900 dark:text-white border-emerald-500'
+                      : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700',
                   ].join(' ')}
                   title="Toggle mm grid overlay"
                 >
@@ -1347,8 +1347,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                   className={[
                     'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition border',
                     showRuler
-                      ? 'bg-emerald-700 hover:bg-emerald-600 text-white border-emerald-500'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                      ? 'bg-emerald-700 hover:bg-emerald-600 text-slate-900 dark:text-white border-emerald-500'
+                      : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700',
                   ].join(' ')}
                   title="Toggle mm ruler overlay"
                 >
@@ -1371,7 +1371,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 <>
                   <button
                     onClick={() => { setMaskTargetId(selectedLayerId); setPenMode(true); }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700"
                   >
                     <Scissors className="w-4 h-4" />
                     {hasMask ? 'Redraw mask' : 'Mask'}
@@ -1379,7 +1379,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                   {hasMask && onRemoveLayerMask && (
                     <button
                       onClick={() => onRemoveLayerMask(selectedLayerId)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-slate-200 border-slate-700 hover:border-rose-700"
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-100 dark:bg-slate-800 hover:bg-rose-900/40 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-rose-700"
                     >
                       <Eraser className="w-4 h-4" />
                       Remove mask
@@ -1390,7 +1390,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                     const featherVal = typeof mask?.feather === 'number' ? mask.feather : 0;
                     return (
                       <label
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-300 bg-slate-800 border border-slate-700"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                         title="Soften the mask edge (0 = hard edge)"
                       >
                         Feather
@@ -1415,8 +1415,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                         className={[
                           'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border',
                           inverted
-                            ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700',
+                            ? 'bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white border-sky-500'
+                            : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700',
                         ].join(' ')}
                       >
                         <Scissors className="w-4 h-4" />
@@ -1444,7 +1444,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                       setPenMode(false);
                       setPatchTargetId(selectedLayerId);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700"
                   >
                     <Stamp className="w-4 h-4" />
                     {count > 0 ? 'Add patch' : 'Patch'}
@@ -1452,7 +1452,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                   {count > 0 && onClearPatches && (
                     <button
                       onClick={() => onClearPatches(selectedLayerId)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-800 hover:bg-rose-900/40 text-slate-200 border-slate-700 hover:border-rose-700"
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border bg-slate-100 dark:bg-slate-800 hover:bg-rose-900/40 text-slate-900 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-rose-700"
                     >
                       <Eraser className="w-4 h-4" />
                       Clear patches ({count})
@@ -1464,13 +1464,13 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
             {editMode && selectedLayerId && (() => {
               const sel = composition.layers.find((l) => l.id === selectedLayerId);
               return (
-                <span className="text-xs font-mono text-slate-400 truncate max-w-[12rem]" title={selectedLayerId}>
+                <span className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate max-w-[12rem]" title={selectedLayerId}>
                   Selected: {sel ? layerLabel(sel) : selectedLayerId}
                 </span>
               );
             })()}
             <div className="ml-auto">
-              <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition">
+              <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition">
                 <Download className="w-4 h-4" /> Export MP4
               </button>
             </div>
@@ -1479,7 +1479,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       </div>
 
       {/* Composition info */}
-      <div className="flex gap-4 text-xs text-slate-500 pt-2 border-t border-slate-800">
+      <div className="flex gap-4 text-xs text-slate-500 pt-2 border-t border-slate-200 dark:border-slate-800">
         <span>{composition.width}×{composition.height}</span>
         <span>{composition.fps} fps</span>
         <span>{composition.duration}s</span>
@@ -1495,7 +1495,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
       {resizeLabel && createPortal(
         <div
           style={{ position: 'fixed', left: resizeLabel.cx, top: resizeLabel.cy, pointerEvents: 'none', zIndex: 9999 }}
-          className="bg-slate-900/90 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono shadow-lg"
+          className="bg-white/90 dark:bg-slate-900/90 border border-slate-600 rounded px-2 py-1 text-xs text-slate-900 dark:text-white font-mono shadow-lg"
         >
           {composition.meta?.scale?.mmPerPx
             ? <>W: {Math.round(resizeLabel.w * composition.meta.scale.mmPerPx)} mm · H: {Math.round(resizeLabel.h * composition.meta.scale.mmPerPx)} mm</>

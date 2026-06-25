@@ -186,28 +186,28 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
-      <h2 className="text-lg font-semibold text-white">Composition Editor</h2>
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6">
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Composition Editor</h2>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Duration (seconds)</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Duration (seconds)</label>
           <input
             type="number"
             value={composition.duration}
             min={1}
             max={300}
             onChange={(e) => set({ duration: parseFloat(e.target.value) })}
-            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">FPS</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">FPS</label>
           <select
             value={composition.fps}
             onChange={(e) => set({ fps: parseInt(e.target.value) })}
-            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
           >
             <option value={24}>24 fps</option>
             <option value={30}>30 fps</option>
@@ -216,14 +216,14 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Canvas size</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Canvas size</label>
           <select
             value={SIZE_PRESETS.find(p => p.w === composition.width && p.h === composition.height)?.label ?? 'Custom'}
             onChange={(e) => {
               const preset = SIZE_PRESETS.find(p => p.label === e.target.value);
               if (preset && preset.w !== 0) set({ width: preset.w, height: preset.h });
             }}
-            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
           >
             {SIZE_PRESETS.map(p => (
               <option key={p.label} value={p.label}>{p.label}</option>
@@ -232,11 +232,11 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Default font</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Default font</label>
           <select
             value={composition.fontFamily ?? 'Inter'}
             onChange={(e) => set({ fontFamily: e.target.value })}
-            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
             style={{ fontFamily: composition.fontFamily ?? 'Inter' }}
           >
             {FONT_PRESETS.map(f => (
@@ -254,7 +254,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
               min={100}
               max={3840}
               onChange={(e) => set({ width: parseInt(e.target.value) || composition.width })}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
           <div>
@@ -265,7 +265,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
               min={100}
               max={3840}
               onChange={(e) => set({ height: parseInt(e.target.value) || composition.height })}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
         </div>
@@ -278,7 +278,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         */}
         <button
           onClick={() => setShowRefitModal(true)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm rounded-lg transition"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-sm rounded-lg transition"
           title="Scale all layers to a new canvas size"
         >
           <Maximize2 className="w-4 h-4" />
@@ -287,14 +287,14 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       </div>
 
       {/* Layers */}
-      <div className="pt-4 border-t border-slate-800 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Layers</h3>
+      <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Layers</h3>
 
         {composition.layers.map((layer, idx) => (
           <div
             key={layer.id}
             className={[
-              'bg-slate-800 border border-slate-700 rounded-lg p-4 space-y-2 transition',
+              'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-2 transition',
               layer.visible === false && 'opacity-60',
             ].join(' ')}
           >
@@ -313,10 +313,10 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
                 }}
                 placeholder={layer.id}
                 title="Rename this layer"
-                className="flex-1 min-w-0 bg-transparent hover:bg-slate-700/50 focus:bg-slate-700 text-sm font-medium text-white rounded px-1.5 py-0.5 border border-transparent focus:border-sky-500 focus:outline-none placeholder:text-slate-400 placeholder:font-normal transition"
+                className="flex-1 min-w-0 bg-transparent hover:bg-slate-200/50 dark:hover:bg-slate-700/50 focus:bg-slate-200 dark:focus:bg-slate-700 text-sm font-medium text-slate-900 dark:text-white rounded px-1.5 py-0.5 border border-transparent focus:border-sky-500 focus:outline-none placeholder:text-slate-500 dark:placeholder:text-slate-400 placeholder:font-normal transition"
               />
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">{layer.type}</span>
+                <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full">{layer.type}</span>
                 <button
                   onClick={() => moveLayer(layer.id, 'up')}
                   disabled={idx === 0}
@@ -366,7 +366,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
                   onChange({ ...composition, layers });
                 }}
                 placeholder="Layer text"
-                className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full bg-slate-200 dark:bg-slate-700 border border-slate-600 text-slate-900 dark:text-white text-sm rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
             )}
 
@@ -381,14 +381,14 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
         <button
           onClick={() => setShowModal(true)}
-          className="w-full border border-dashed border-slate-700 hover:border-sky-500 text-slate-400 hover:text-sky-400 font-medium rounded-lg py-2 flex items-center justify-center gap-2 transition text-sm">
+          className="w-full border border-dashed border-slate-200 dark:border-slate-700 hover:border-sky-500 text-slate-500 dark:text-slate-400 hover:text-sky-400 font-medium rounded-lg py-2 flex items-center justify-center gap-2 transition text-sm">
           <Plus className="w-4 h-4" />
           Add Layer
         </button>
 
         <button
           onClick={() => setShowAnimModal(true)}
-          className="w-full border border-dashed border-slate-700 hover:border-sky-500 text-slate-400 hover:text-sky-400 font-medium rounded-lg py-2 flex items-center justify-center gap-2 transition text-sm">
+          className="w-full border border-dashed border-slate-200 dark:border-slate-700 hover:border-sky-500 text-slate-500 dark:text-slate-400 hover:text-sky-400 font-medium rounded-lg py-2 flex items-center justify-center gap-2 transition text-sm">
           <Sparkles className="w-4 h-4" />
           Add Animation
         </button>
@@ -436,20 +436,20 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
       {exportProgress && (
         <div className="space-y-1">
-          <div className="w-full bg-slate-700 rounded-full h-2">
+          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
             <div
               className="bg-green-500 h-2 rounded-full transition-all duration-300"
               style={{ width: `${exportProgress.percent}%` }}
             />
           </div>
-          <p className="text-xs text-slate-400 text-center">{exportProgress.message}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 text-center">{exportProgress.message}</p>
         </div>
       )}
 
       <button
         onClick={handleExport}
         disabled={exporting}
-        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2"
+        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2"
       >
         {exporting
           ? <><Loader2 className="w-4 h-4 animate-spin" /> {exportProgress?.message ?? 'Preparing...'}</>
@@ -460,7 +460,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       <button
         onClick={handleSaveAsTraining}
         disabled={savingTraining || exporting}
-        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
         title="Render this composition and save it to the Academy as a DRAFT training video. Publish + set its audience from Manage training videos. Superadmin only."
       >
         {savingTraining
@@ -478,7 +478,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
       <button
         onClick={() => setShowTrainingManager(true)}
-        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
         title="Filter by draft/published, set who can see each training video, schedule release/end dates, unpublish, or delete."
       >
         <ListVideo className="w-4 h-4" /> Manage training videos
@@ -488,7 +488,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       <button
         onClick={handleExportPng}
         disabled={exportingPng}
-        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
       >
         {exportingPng
           ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting…</>
@@ -499,7 +499,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       <button
         onClick={handleSavePngToAlbum}
         disabled={savingPng}
-        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 text-slate-200 border border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
         title={`Save the current frame to your "${VEMOTION_ALBUM}" photo album`}
       >
         {savingPng

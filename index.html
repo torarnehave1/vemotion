@@ -9,7 +9,26 @@
     <title>Video Generator - Vegvisr</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Anek+Devanagari:wght@400;600;700&family=Caveat:wght@400;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Inter:wght@400;600;700&family=Lora:wght@400;600;700&family=Montserrat:wght@400;600;700;800&family=Noto+Sans+Devanagari:wght@400;600;700&family=Playfair+Display:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700&family=Poppins:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Tiro+Devanagari+Sanskrit&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Anek+Devanagari:wght@400;600;700&family=Caveat:wght@400;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Inter:wght@400;500;600;700&family=Lora:wght@400;600;700&family=Montserrat:wght@400;600;700;800&family=Noto+Sans+Devanagari:wght@400;600;700&family=Playfair+Display:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700&family=Poppins:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Tiro+Devanagari+Sanskrit&display=swap" rel="stylesheet">
+    <script>
+      // Theme boot — runs BEFORE React mounts so there's no flash of the
+      // wrong theme. Reads localStorage.theme ('light' | 'dark' | 'system').
+      // Defaults to 'dark' so existing users keep their current experience;
+      // new users can switch from Settings. 'system' follows OS preference.
+      // Mirrored in src/lib/theme-service.ts.
+      (function() {
+        try {
+          var pref = localStorage.getItem('theme') || 'dark';
+          var resolved = pref === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : pref;
+          if (resolved === 'dark') document.documentElement.classList.add('dark');
+          else document.documentElement.classList.remove('dark');
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

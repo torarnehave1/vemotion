@@ -697,7 +697,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           data-no-marquee="true"
           {...dndRowProps('group', row.group.id, true)}
           className={[
-            'flex items-center px-3 text-xs text-slate-300 gap-1 transition bg-slate-800/50 cursor-grab active:cursor-grabbing',
+            'flex items-center px-3 text-xs text-slate-700 dark:text-slate-300 gap-1 transition bg-slate-100/50 dark:bg-slate-800/50 cursor-grab active:cursor-grabbing',
             dragging && 'opacity-40',
             selectedGroupId === row.group.id && 'ring-1 ring-sky-500/60',
             ...dropEdgeClass(`G:${row.group.id}`),
@@ -707,11 +707,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           title="Drag to reorder the whole group"
         >
           <GripVertical className="w-3 h-3 flex-shrink-0 text-slate-500" />
-          <button data-no-marquee="true" className="text-slate-400 hover:text-white transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupCollapsed(row.group.id); }}>
+          <button data-no-marquee="true" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupCollapsed(row.group.id); }}>
             {row.group.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
           <span className="font-medium truncate flex-1">{row.group.name}</span>
-          <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupVisibility(row.group.id); }} title={anyHidden ? 'Show group' : 'Hide group'}>
+          <button data-no-marquee="true" className="text-slate-500 dark:text-slate-400 hover:text-sky-400 transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupVisibility(row.group.id); }} title={anyHidden ? 'Show group' : 'Hide group'}>
             {anyHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -726,10 +726,10 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
         data-no-marquee="true"
         {...dndRowProps('layer', layer.id, renamingLayerId !== layer.id)}
         className={[
-          'flex items-center px-3 text-xs text-slate-400 truncate gap-1 transition cursor-grab active:cursor-grabbing',
+          'flex items-center px-3 text-xs text-slate-500 dark:text-slate-400 truncate gap-1 transition cursor-grab active:cursor-grabbing',
           layer.visible === false && 'opacity-50',
           dragging && 'opacity-40',
-          (selectedLayerIds.has(layer.id) || layer.id === sharedSelectedLayerId) && 'ring-1 ring-sky-500/60 bg-slate-800/40',
+          (selectedLayerIds.has(layer.id) || layer.id === sharedSelectedLayerId) && 'ring-1 ring-sky-500/60 bg-slate-100/40 dark:bg-slate-800/40',
           ...dropEdgeClass(`L:${layer.id}`),
           layer.groupId && 'pl-8',
         ].join(' ')}
@@ -750,7 +750,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
               if (e.key === 'Enter') { renameLayer(layer.id, (e.target as HTMLInputElement).value); setRenamingLayerId(null); }
               else if (e.key === 'Escape') { setRenamingLayerId(null); }
             }}
-            className="flex-1 min-w-0 bg-slate-700 border border-sky-500 text-white text-xs rounded px-1 py-0.5 focus:outline-none"
+            className="flex-1 min-w-0 bg-slate-200 dark:bg-slate-700 border border-sky-500 text-slate-900 dark:text-white text-xs rounded px-1 py-0.5 focus:outline-none"
           />
         ) : (
           <span
@@ -761,16 +761,16 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
             {layerLabel(layer)}
           </span>
         )}
-        <button data-no-marquee="true" disabled={composition.layers[0]?.id === layer.id} className="text-slate-400 hover:text-sky-400 disabled:opacity-25 disabled:hover:text-slate-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'up'); }} title="Move back (render behind the layer above)">
+        <button data-no-marquee="true" disabled={composition.layers[0]?.id === layer.id} className="text-slate-500 dark:text-slate-400 hover:text-sky-400 disabled:opacity-25 disabled:hover:text-slate-500 dark:disabled:hover:text-slate-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'up'); }} title="Move back (render behind the layer above)">
           <ChevronUp className="w-3.5 h-3.5" />
         </button>
-        <button data-no-marquee="true" disabled={composition.layers[composition.layers.length - 1]?.id === layer.id} className="text-slate-400 hover:text-sky-400 disabled:opacity-25 disabled:hover:text-slate-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'down'); }} title="Move forward (render on top of the layer below)">
+        <button data-no-marquee="true" disabled={composition.layers[composition.layers.length - 1]?.id === layer.id} className="text-slate-500 dark:text-slate-400 hover:text-sky-400 disabled:opacity-25 disabled:hover:text-slate-500 dark:disabled:hover:text-slate-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'down'); }} title="Move forward (render on top of the layer below)">
           <ChevronDown className="w-3.5 h-3.5" />
         </button>
-        <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} title={layer.visible === false ? 'Show layer' : 'Hide layer'}>
+        <button data-no-marquee="true" className="text-slate-500 dark:text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} title={layer.visible === false ? 'Show layer' : 'Hide layer'}>
           {layer.visible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
-        <button data-no-marquee="true" className="text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); setEditingLayerId(layer.id); }} title="Edit layer">
+        <button data-no-marquee="true" className="text-slate-500 dark:text-slate-400 hover:text-sky-400 transition flex-shrink-0 p-0.5" onClick={(e) => { e.stopPropagation(); setEditingLayerId(layer.id); }} title="Edit layer">
           <Pencil className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -805,7 +805,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
             onMouseDown={(e) => startDragMoveGroup(e, row.group, row.members)}
             onClick={() => selectGroup(row.group.id)}
           >
-            <span className="text-[10px] px-3 truncate flex-1 text-slate-300">{row.group.name}</span>
+            <span className="text-[10px] px-3 truncate flex-1 text-slate-700 dark:text-slate-300">{row.group.name}</span>
           </div>
         </div>
       );
@@ -869,12 +869,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           onSetCompositionScale={(mmPerPx) => onChange({ ...composition, meta: { ...composition.meta, scale: { mmPerPx } } })}
         />
       )}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-300">Timeline</span>
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Timeline</span>
             <button
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
               onClick={groupSelectedLayers}
               disabled={selectedLayerIds.size < 2}
               title="Group selected layers"
@@ -883,7 +883,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
               Group
             </button>
             <button
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
               onClick={ungroupSelectedGroup}
               disabled={!selectedGroupId}
               title="Ungroup selected group"
@@ -892,7 +892,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
               Ungroup
             </button>
             <button
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
               onClick={distributeSelectedLayers}
               disabled={selectedLayerIds.size < 3}
               title="Distribute selected layers by start time"
@@ -901,7 +901,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
               Distribute
             </button>
             <button
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-800 text-slate-300 hover:bg-slate-700"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
               onClick={insertTimeAtPlayhead}
               title="Insert 1 second at playhead"
             >
@@ -925,7 +925,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
 
         {/* Marker editor — appears when a marker flag is added/clicked. */}
         {editingMarker && (
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-violet-500/5">
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-violet-500/5">
             <Flag className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
             <input
               autoFocus
@@ -933,22 +933,22 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
               placeholder="What happens here? (note for you / an agent)"
               onChange={(e) => updateMarker(editingMarker.id, { label: e.target.value })}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingMarkerId(null); }}
-              className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500"
             />
-            <label className="flex items-center gap-1 text-xs text-slate-400 flex-shrink-0">
+            <label className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">
               <span>at</span>
               <input
                 type="number" min={0} max={composition.duration} step={0.1}
                 value={editingMarker.time}
                 onChange={(e) => updateMarker(editingMarker.id, { time: Math.max(0, Math.min(composition.duration, parseFloat(e.target.value) || 0)) })}
-                className="w-16 bg-slate-800 border border-slate-700 text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-16 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
               <span>s</span>
             </label>
-            <button onClick={() => removeMarker(editingMarker.id)} title="Delete marker" className="text-slate-400 hover:text-red-400 transition flex-shrink-0 p-1">
+            <button onClick={() => removeMarker(editingMarker.id)} title="Delete marker" className="text-slate-500 dark:text-slate-400 hover:text-red-400 transition flex-shrink-0 p-1">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setEditingMarkerId(null)} className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-200 hover:bg-slate-600 flex-shrink-0">Done</button>
+            <button onClick={() => setEditingMarkerId(null)} className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-200 hover:bg-slate-600 flex-shrink-0">Done</button>
           </div>
         )}
 
@@ -958,12 +958,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           style={{ minHeight: totalHeight }}
           onMouseDown={startBoxSelection}
         >
-          <div className="flex-shrink-0 border-r border-slate-800" style={{ width: LABEL_WIDTH, paddingTop: RULER_HEIGHT }}>
+          <div className="flex-shrink-0 border-r border-slate-200 dark:border-slate-800" style={{ width: LABEL_WIDTH, paddingTop: RULER_HEIGHT }}>
             {rows.map(renderLabelRow)}
           </div>
 
           <div ref={trackRef} className="flex-1 relative select-none overflow-hidden">
-            <div className="sticky top-0 z-10 bg-slate-900 border-b border-slate-800 cursor-pointer" style={{ height: RULER_HEIGHT }} onMouseDown={handleRulerMouseDown}>
+            <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 cursor-pointer" style={{ height: RULER_HEIGHT }} onMouseDown={handleRulerMouseDown}>
               {ticks.map((t) => (
                 <div key={t} className="absolute top-0 flex flex-col items-center" style={{ left: t * pxPerSecond }}>
                   <div className="w-px bg-slate-600" style={{ height: t % 1 === 0 ? 10 : 6, marginTop: 4 }} />
@@ -992,7 +992,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
                   title={m.label || 'Marker (click to edit)'}
                   className={[
                     'absolute top-0 flex items-center gap-1 h-[18px] pl-0.5 pr-1.5 rounded-r rounded-bl text-[10px] whitespace-nowrap max-w-[160px] pointer-events-auto transition',
-                    editingMarkerId === m.id ? 'bg-violet-500 text-white' : 'bg-violet-500/80 text-white hover:bg-violet-500',
+                    editingMarkerId === m.id ? 'bg-violet-500 text-slate-900 dark:text-white' : 'bg-violet-500/80 text-slate-900 dark:text-white hover:bg-violet-500',
                   ].join(' ')}
                   style={{ left: 0 }}
                 >

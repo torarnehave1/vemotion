@@ -1,10 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Play, Square } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Square, Settings as SettingsIcon } from 'lucide-react';
 import type { CompositionData, Layer } from '../lib/api';
 import { CompositionEditor } from './CompositionEditor';
 import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
+import { AppearanceModal } from './AppearanceModal';
 import { useAuth } from '../App';
 import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeCompositionIdToUrl, writeLastCompositionRef } from '../lib/cloud-compositions';
 import { type StreamSettings } from './PathStreamPanel';
@@ -198,6 +199,7 @@ export const Dashboard: React.FC = () => {
   const [replayActive, setReplayActive] = useState(false);
   const [replayStep, setReplayStep] = useState(0);
   const [replayTotal, setReplayTotal] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [replaySec, setReplaySec] = useState(1);
   const replayingRef = useRef(false);
   const replayScriptRef = useRef<Layer[]>([]);
@@ -454,24 +456,24 @@ export const Dashboard: React.FC = () => {
     <div className="flex flex-col flex-1">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-800">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setSidebarOpen(v => !v)}
-          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition flex-shrink-0"
+          className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0"
           title={sidebarOpen ? 'Close panel' : 'Open panel'}
         >
           {sidebarOpen
             ? <ChevronLeft className="w-5 h-5" />
             : <ChevronRight className="w-5 h-5" />}
         </button>
-        <h1 className="text-lg font-semibold text-slate-200 flex-shrink-0">Vemotion</h1>
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-200 flex-shrink-0">Vemotion</h1>
         {/* Build marker — visual confirmation of latest deploy. Bump the label on each push. */}
         <span
-          aria-label="Build marker VL"
-          title="Build marker VL — visual confirmation of latest deploy"
-          className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-white text-[10px] font-bold tracking-wider flex-shrink-0"
+          aria-label="Build marker VM"
+          title="Build marker VM — visual confirmation of latest deploy"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-slate-900 dark:text-white text-[10px] font-bold tracking-wider flex-shrink-0"
         >
-          VL
+          VM
         </span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview
@@ -480,7 +482,7 @@ export const Dashboard: React.FC = () => {
           'text-xs px-2 py-0.5 rounded-full border flex-shrink-0',
           restoreState === 'loading' && 'bg-violet-500/10 text-violet-300 border-violet-500/30',
           restoreState === 'error' && 'bg-red-500/10 text-red-300 border-red-500/30',
-          (restoreState === 'idle' || restoreState === 'ready') && 'bg-slate-800 text-slate-400 border-slate-700',
+          (restoreState === 'idle' || restoreState === 'ready') && 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700',
         ].join(' ')}>
           {restoreState === 'loading' ? 'Restoring…' : restoreState === 'error' ? 'Restore failed' : 'Composition mode'}
         </span>
@@ -489,7 +491,7 @@ export const Dashboard: React.FC = () => {
           autosaveState === 'saving' && 'bg-sky-500/10 text-sky-300 border-sky-500/30',
           autosaveState === 'saved' && 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
           autosaveState === 'error' && 'bg-red-500/10 text-red-300 border-red-500/30',
-          autosaveState === 'idle' && 'bg-slate-800 text-slate-400 border-slate-700',
+          autosaveState === 'idle' && 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700',
         ].join(' ')}>
           {autosaveState === 'saving' ? 'Autosaving…' : autosaveState === 'saved' ? `Autosaved v${autosaveVersion}` : autosaveState === 'error' ? 'Autosave failed' : 'Autosave idle'}
         </span>
@@ -539,7 +541,7 @@ export const Dashboard: React.FC = () => {
           <button
             onClick={startReplay}
             title="Replay build-up — re-add layers one per second in the editor (for screen recording)"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm rounded-lg border border-slate-700 transition flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 text-sm rounded-lg border border-slate-200 dark:border-slate-700 transition flex-shrink-0"
           >
             <Play className="w-3.5 h-3.5" /> Replay
           </button>
@@ -547,7 +549,7 @@ export const Dashboard: React.FC = () => {
           <button
             onClick={finishReplay}
             title="Stop replay and restore the full composition"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg transition flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white text-sm rounded-lg transition flex-shrink-0"
           >
             <Square className="w-3.5 h-3.5" /> Stop {replayStep}/{replayTotal}
           </button>
@@ -557,11 +559,21 @@ export const Dashboard: React.FC = () => {
             type="number" min={0.2} step={0.1} value={replaySec}
             disabled={replayActive}
             onChange={e => setReplaySec(Math.max(0.2, parseFloat(e.target.value) || 1))}
-            className="w-12 bg-slate-800 border border-slate-700 text-slate-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
+            className="w-12 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
           />
           s
         </label>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          title="Settings"
+          aria-label="Settings"
+          className="ml-auto p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0"
+        >
+          <SettingsIcon className="w-4 h-4" />
+        </button>
       </div>
+      {settingsOpen && <AppearanceModal onClose={() => setSettingsOpen(false)} />}
 
       {/* Deep-link load failure banner */}
       {deepLinkError && (
@@ -592,12 +604,12 @@ export const Dashboard: React.FC = () => {
         <aside
           className={[
             // Mobile: fixed drawer
-            'fixed inset-y-0 left-0 z-40 bg-slate-900 overflow-y-auto',
+            'fixed inset-y-0 left-0 z-40 bg-white dark:bg-slate-900 overflow-y-auto',
             'transition-transform duration-300 ease-in-out',
             sidebarOpen ? 'translate-x-0' : '-translate-x-full',
             // Desktop: static sidebar in flow, collapses via width
             'lg:static lg:inset-auto lg:z-auto lg:translate-x-0 lg:transition-none',
-            'lg:border-r lg:border-slate-800 lg:overflow-y-auto lg:self-stretch',
+            'lg:border-r lg:border-slate-200 dark:lg:border-slate-800 lg:overflow-y-auto lg:self-stretch',
             !sidebarOpen && 'lg:hidden',
           ].join(' ')}
           style={{ width: sidebarWidth }}
@@ -610,7 +622,7 @@ export const Dashboard: React.FC = () => {
         {/* Resize handle — desktop only */}
         {sidebarOpen && (
           <div
-            className="hidden lg:flex w-1.5 self-stretch flex-shrink-0 cursor-col-resize bg-slate-800 hover:bg-sky-500 active:bg-sky-400 transition-colors items-center justify-center group"
+            className="hidden lg:flex w-1.5 self-stretch flex-shrink-0 cursor-col-resize bg-slate-100 dark:bg-slate-800 hover:bg-sky-500 active:bg-sky-400 transition-colors items-center justify-center group"
             onMouseDown={startResize}
           >
             <div className="w-0.5 h-8 rounded-full bg-slate-600 group-hover:bg-sky-200 transition-colors" />

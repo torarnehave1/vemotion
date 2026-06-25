@@ -258,12 +258,12 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       <div className="flex items-center gap-3">
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition"
+          className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
         >
           <Upload className="w-4 h-4" /> Choose image
         </button>
-        {name && <span className="text-sm text-slate-300 truncate">{name}</span>}
-        {sourceUploading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+        {name && <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{name}</span>}
+        {sourceUploading && <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />}
       </div>
       <p className="text-xs text-slate-500">
         The image is pixelated into stitches. The source is saved to your VEmotion album so you can
@@ -271,13 +271,13 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       </p>
 
       {/* Or pick an image already in an album (same source as the Images tab). */}
-      <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+      <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-3">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs text-slate-400">Or choose from an album</label>
+          <label className="text-xs text-slate-500 dark:text-slate-400">Or choose from an album</label>
           <select
             value={albumName}
             onChange={(e) => { setAlbumName(e.target.value); setAlbumImages([]); }}
-            className="bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 max-w-[55%]"
+            className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 max-w-[55%]"
           >
             {(albums.includes(albumName) ? albums : [albumName, ...albums]).map((a) => (
               <option key={a} value={a}>{a}</option>
@@ -301,7 +301,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
                 onClick={() => handleAlbumPick(image)}
                 title={image.displayName ?? image.name ?? image.key}
                 className={`relative aspect-square rounded overflow-hidden border-2 transition ${
-                  pickedKey === image.key ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-slate-700 hover:border-slate-400'
+                  pickedKey === image.key ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-slate-200 dark:border-slate-700 hover:border-slate-400'
                 }`}
               >
                 <img src={image.url} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -318,12 +318,12 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       <AiImagePrompt onResult={handleAiResult} busy={stockBusy} />
 
       {/* Live preview */}
-      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-2">
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-2">
         <canvas
           ref={previewRef}
           width={480}
           height={360}
-          className="w-full rounded bg-slate-900"
+          className="w-full rounded bg-white dark:bg-slate-900"
         />
         {!img && (
           <p className="text-center text-xs text-slate-500 py-2 flex items-center justify-center gap-2">
@@ -335,9 +335,9 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       {/* Grid controls */}
       <div className="space-y-3">
         <div className="space-y-1">
-          <label className="flex items-center justify-between text-xs text-slate-400">
+          <label className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Stitches across</span>
-            <span className="text-slate-200">{cols}</span>
+            <span className="text-slate-900 dark:text-slate-200">{cols}</span>
           </label>
           <input
             type="range"
@@ -351,9 +351,9 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         </div>
 
         <div className="space-y-1">
-          <label className="flex items-center justify-between text-xs text-slate-400">
+          <label className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Yarn colours</span>
-            <span className="text-slate-200">{paletteSize}</span>
+            <span className="text-slate-900 dark:text-slate-200">{paletteSize}</span>
           </label>
           <input
             type="range"
@@ -371,7 +371,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
             ['Numbers', showNumbers, setShowNumbers],
             ['Legend', showLegend, setShowLegend],
           ] as [string, boolean, (v: boolean) => void][]).map(([label, value, set]) => (
-            <label key={label} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <label key={label} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={value}
@@ -387,7 +387,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       {/* Editable palette — click a small swatch to recolor every pixel using it */}
       {chart && effectivePalette.length > 0 && (
         <div className="space-y-2">
-          <label className="text-xs text-slate-400 block">Colors (click to change)</label>
+          <label className="text-xs text-slate-500 dark:text-slate-400 block">Colors (click to change)</label>
           <div className="flex flex-wrap gap-1.5">
             {effectivePalette.map((hex, i) => (
               <input
@@ -410,7 +410,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       <button
         onClick={handleAdd}
         disabled={!chart}
-        className="w-full px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-medium transition"
+        className="w-full px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
       >
         Add pixel grid
       </button>

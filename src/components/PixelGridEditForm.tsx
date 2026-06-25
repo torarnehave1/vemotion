@@ -310,21 +310,21 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     });
   };
 
-  const num = 'w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';
+  const num = 'w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
         Editing a <span className="text-sky-400">pixel grid</span> ({chart.cols}×{chart.rows}, {effectivePalette.length} colors).
       </p>
 
       {/* Live preview — click/drag a cell to paint it with the selected colour. */}
-      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-2">
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-2">
         <canvas
           ref={previewRef}
           width={480}
           height={360}
-          className="w-full rounded bg-slate-900"
+          className="w-full rounded bg-white dark:bg-slate-900"
           style={{ cursor: canPaint ? 'crosshair' : 'default', touchAction: 'none' }}
           onMouseDown={(e) => { if (!canPaint) return; painting.current = true; paintAtPointer(e.clientX, e.clientY); }}
           onMouseMove={(e) => { if (painting.current) paintAtPointer(e.clientX, e.clientY); }}
@@ -338,7 +338,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
         <button
           onClick={clearGrid}
           disabled={!canPaint}
-          className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition"
+          className="flex items-center gap-2 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition"
         >
           <Eraser className="w-4 h-4" /> Clear grid
         </button>
@@ -350,15 +350,15 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       {sourceUrl ? (
         <div className="space-y-3">
           <div className="space-y-1">
-            <label className="flex items-center justify-between text-xs text-slate-400">
-              <span>Stitches across</span><span className="text-slate-200">{cols}</span>
+            <label className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span>Stitches across</span><span className="text-slate-900 dark:text-slate-200">{cols}</span>
             </label>
             <input type="range" min={10} max={80} value={cols} disabled={!sourceImg}
               onChange={(e) => changeCols(Number(e.target.value))} className="w-full accent-sky-500 disabled:opacity-40" />
           </div>
           <div className="space-y-1">
-            <label className="flex items-center justify-between text-xs text-slate-400">
-              <span>Yarn colours</span><span className="text-slate-200">{colors}</span>
+            <label className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span>Yarn colours</span><span className="text-slate-900 dark:text-slate-200">{colors}</span>
             </label>
             <input type="range" min={2} max={16} value={colors} disabled={!sourceImg}
               onChange={(e) => changeColors(Number(e.target.value))} className="w-full accent-sky-500 disabled:opacity-40" />
@@ -368,10 +368,10 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       ) : (
         <div className="flex items-center gap-3">
           <button onClick={() => fileInputRef.current?.click()} disabled={sourceUploading}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition">
+            className="flex items-center gap-2 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">
             <Upload className="w-4 h-4" /> Set source image
           </button>
-          {sourceUploading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+          {sourceUploading && <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />}
           <span className="text-[11px] text-slate-500">enables changing stitches/colours</span>
         </div>
       )}
@@ -385,7 +385,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       {/* Palette — click a swatch to pick the paint brush; edit / add colours below */}
       {effectivePalette.length > 0 && (
         <div className="space-y-2">
-          <label className="text-xs text-slate-400 block">Colors (click to select the brush)</label>
+          <label className="text-xs text-slate-500 dark:text-slate-400 block">Colors (click to select the brush)</label>
           <div className="flex flex-wrap gap-1.5">
             {effectivePalette.map((hex, i) => (
               <button
@@ -404,7 +404,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
               onClick={addColor}
               disabled={effectivePalette.length >= 36}
               title="Add a new yarn colour"
-              className="w-7 h-7 rounded border-2 border-dashed border-slate-600 hover:border-sky-400 disabled:opacity-40 text-slate-400 flex items-center justify-center transition"
+              className="w-7 h-7 rounded border-2 border-dashed border-slate-600 hover:border-sky-400 disabled:opacity-40 text-slate-500 dark:text-slate-400 flex items-center justify-center transition"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -430,14 +430,14 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
 
       {/* Display toggles */}
       <div className="flex flex-wrap gap-4">
-        <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid</label>
-        <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={showNumbers} onChange={(e) => setShowNumbers(e.target.checked)} /> Numbers</label>
-        <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} /> Legend</label>
+        <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300"><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid</label>
+        <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300"><input type="checkbox" checked={showNumbers} onChange={(e) => setShowNumbers(e.target.checked)} /> Numbers</label>
+        <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300"><input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} /> Legend</label>
       </div>
 
       {/* Animate the recorded drawing, stitch by stitch */}
-      <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
-        <label className="flex items-center gap-2 text-xs text-slate-300">
+      <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-3">
+        <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
           <input type="checkbox" checked={animateDrawing}
             onChange={(e) => setAnimateDrawing(e.target.checked)} />
           Animate drawing (pixel by pixel)
@@ -449,10 +449,10 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
             <p className="text-[11px] text-slate-500">{drawOrder.length} painted stitches will appear in the order you painted them.</p>
             {animateDrawing && (
               <div className="flex items-center gap-2 flex-wrap">
-                <label className="text-[11px] text-slate-400">Seconds per stitch</label>
+                <label className="text-[11px] text-slate-500 dark:text-slate-400">Seconds per stitch</label>
                 <input type="number" min={0.1} step={0.1} value={secondsPerPixel}
                   onChange={(e) => setSecondsPerPixel(Math.max(0.1, Number(e.target.value) || 0.1))}
-                  className="w-24 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  className="w-24 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 <span className="text-[11px] text-slate-500">
                   ≈ {(secondsPerPixel * drawOrder.length).toFixed(1)}s total for {drawOrder.length} stitches
                 </span>
@@ -464,19 +464,19 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
 
       {/* Box / timing / opacity */}
       <div className="grid grid-cols-2 gap-3">
-        <div><label className="text-xs text-slate-400 mb-1 block">X</label><input type="number" value={posX} onChange={(e) => setPosX(Math.round(Number(e.target.value) || 0))} className={num} /></div>
-        <div><label className="text-xs text-slate-400 mb-1 block">Y</label><input type="number" value={posY} onChange={(e) => setPosY(Math.round(Number(e.target.value) || 0))} className={num} /></div>
-        <div><label className="text-xs text-slate-400 mb-1 block">Width</label><input type="number" min={1} value={boxW} onChange={(e) => setBoxW(Math.max(1, Math.round(Number(e.target.value) || 1)))} className={num} /></div>
-        <div><label className="text-xs text-slate-400 mb-1 block">Height</label><input type="number" min={1} value={boxH} onChange={(e) => setBoxH(Math.max(1, Math.round(Number(e.target.value) || 1)))} className={num} /></div>
-        <div><label className="text-xs text-slate-400 mb-1 block">Start (s)</label><input type="number" min={0} step={0.1} value={startTime} onChange={(e) => setStartTime(Math.max(0, Number(e.target.value) || 0))} className={num} /></div>
-        <div><label className="text-xs text-slate-400 mb-1 block">Duration (s)</label><input type="number" min={0.1} step={0.1} value={layerDuration} onChange={(e) => setLayerDuration(Math.max(0.1, Number(e.target.value) || 0.1))} className={num} /></div>
+        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">X</label><input type="number" value={posX} onChange={(e) => setPosX(Math.round(Number(e.target.value) || 0))} className={num} /></div>
+        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Y</label><input type="number" value={posY} onChange={(e) => setPosY(Math.round(Number(e.target.value) || 0))} className={num} /></div>
+        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Width</label><input type="number" min={1} value={boxW} onChange={(e) => setBoxW(Math.max(1, Math.round(Number(e.target.value) || 1)))} className={num} /></div>
+        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Height</label><input type="number" min={1} value={boxH} onChange={(e) => setBoxH(Math.max(1, Math.round(Number(e.target.value) || 1)))} className={num} /></div>
+        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Start (s)</label><input type="number" min={0} step={0.1} value={startTime} onChange={(e) => setStartTime(Math.max(0, Number(e.target.value) || 0))} className={num} /></div>
+        <div><label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Duration (s)</label><input type="number" min={0.1} step={0.1} value={layerDuration} onChange={(e) => setLayerDuration(Math.max(0.1, Number(e.target.value) || 0.1))} className={num} /></div>
       </div>
       <div>
-        <label className="text-xs text-slate-400 mb-1 block">Opacity ({opacity.toFixed(2)})</label>
+        <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Opacity ({opacity.toFixed(2)})</label>
         <input type="range" min={0} max={1} step={0.01} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} className="w-full" />
       </div>
 
-      <button onClick={handleSave} className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg py-3 transition">
+      <button onClick={handleSave} className="w-full bg-sky-600 hover:bg-sky-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition">
         Save Changes
       </button>
     </div>

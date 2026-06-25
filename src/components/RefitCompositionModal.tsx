@@ -90,15 +90,15 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
-          <h2 className="text-sm font-semibold text-slate-200">Refit layers to canvas</h2>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-200">Refit layers to canvas</h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Close"
           >
             <X className="w-4 h-4" />
@@ -108,18 +108,18 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
         {/* Body */}
         <div className="p-5 space-y-5">
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">From (current)</label>
-            <div className="text-sm text-slate-200 font-mono bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2">
+            <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">From (current)</label>
+            <div className="text-sm text-slate-900 dark:text-slate-200 font-mono bg-white/60 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2">
               {composition.width} × {composition.height} <span className="text-slate-500">({aspectFrom})</span>
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">To (target preset)</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">To (target preset)</label>
             <select
               value={presetLabel}
               onChange={e => handlePresetChange(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             >
               {SIZE_PRESETS.map(p => (
                 <option key={p.label} value={p.label}>{p.label}</option>
@@ -139,7 +139,7 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
                   setTargetW(parseInt(e.target.value) || targetW);
                   setPresetLabel('Custom');
                 }}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
             <div>
@@ -153,17 +153,17 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
                   setTargetH(parseInt(e.target.value) || targetH);
                   setPresetLabel('Custom');
                 }}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Mode</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Mode</label>
             <select
               value={mode}
               onChange={e => setMode(e.target.value as RefitMode)}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             >
               {MODES.map(m => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -172,12 +172,12 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
             {modeHint && <p className="text-xs text-slate-500 mt-1.5">{modeHint}</p>}
           </div>
 
-          <div className="text-xs text-slate-500 border-t border-slate-800 pt-3 space-y-1">
+          <div className="text-xs text-slate-500 border-t border-slate-200 dark:border-slate-800 pt-3 space-y-1">
             <p>
-              <span className="text-slate-400">Layers affected:</span> {composition.layers.length}
+              <span className="text-slate-500 dark:text-slate-400">Layers affected:</span> {composition.layers.length}
             </p>
             <p>
-              <span className="text-slate-400">Target aspect:</span> {aspectTo}
+              <span className="text-slate-500 dark:text-slate-400">Target aspect:</span> {aspectTo}
             </p>
             <p className="text-slate-600">
               Note: math-shape <code>xFormula</code> / <code>yFormula</code> with hard-coded
@@ -188,17 +188,17 @@ export const RefitCompositionModal: React.FC<RefitCompositionModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition"
+            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
           >
             Cancel
           </button>
           <button
             onClick={handleApply}
             disabled={noChange || targetW <= 0 || targetH <= 0}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg transition bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg transition bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white"
             title={noChange ? 'Pick a different target size first' : 'Apply refit'}
           >
             Apply refit

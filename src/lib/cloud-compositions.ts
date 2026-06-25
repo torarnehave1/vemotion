@@ -158,6 +158,50 @@ export const saveCompositionToCloud = async ({
   return data;
 };
 
+export type CompositionVersionSummary = {
+  id: string;
+  name: string;
+  version: number;
+  updatedAt: string;
+  createdAt: string;
+  duration: number;
+  fps: number;
+  width: number;
+  height: number;
+  layerCount: number;
+};
+
+export const getCompositionHistory = async (id: string): Promise<CompositionVersionSummary[]> => {
+  const token = getToken();
+  if (!token) throw new Error('Sign in to view version history.');
+  const res = await fetch(`${VEMOTION_API}/composition/history?id=${encodeURIComponent(id)}`, {
+    headers: { 'X-API-Token': token },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to load history.');
+  return Array.isArray(data.history) ? (data.history as CompositionVersionSummary[]) : [];
+};
+
+export const getCompositionVersion = async (id: string, version: number) => {
+  const token = getToken();
+  if (!token) throw new Error('Sign in to load a version.');
+  const res = await fetch(
+    `${VEMOTION_API}/composition/version?id=${encodeURIComponent(id)}&v=${version}`,
+    { headers: { 'X-API-Token': token } },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to load version.');
+  return data as {
+    ok: true;
+    id: string;
+    version: number;
+    name: string;
+    composition: CompositionData;
+    updatedAt: string;
+    createdAt: string;
+  };
+};
+
 export type AssistMessage = { role: 'user' | 'assistant'; content: string };
 
 export type AssistResponse = {

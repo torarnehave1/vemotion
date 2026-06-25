@@ -1,11 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Play, Square, Settings as SettingsIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Square, Settings as SettingsIcon, Undo2, Redo2, History as HistoryIcon } from 'lucide-react';
 import type { CompositionData, Layer } from '../lib/api';
 import { CompositionEditor } from './CompositionEditor';
 import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
 import { AppearanceModal } from './AppearanceModal';
+import { VersionHistoryModal } from './VersionHistoryModal';
 import { useAuth } from '../App';
 import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeCompositionIdToUrl, writeLastCompositionRef } from '../lib/cloud-compositions';
 import { type StreamSettings } from './PathStreamPanel';
@@ -200,6 +201,68 @@ export const Dashboard: React.FC = () => {
   const [replayStep, setReplayStep] = useState(0);
   const [replayTotal, setReplayTotal] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Undo / redo — checkpoints captured at the autosave settle boundary, so one
+  // undo step ≈ one "settled" change (not one drag frame). Caps the stack at
+  // MAX_UNDO snapshots so memory stays bounded for long sessions.
+  const MAX_UNDO = 20;
+  const pastRef = useRef<string[]>([]);
+  const futureRef = useRef<string[]>([]);
+  const skipUndoTrackingRef = useRef(false);
+  const [undoCounts, setUndoCounts] = useState({ past: 0, future: 0 });
+
+  const resetUndoHistory = useCallback((snapshot?: string) => {
+    pastRef.current = [];
+    futureRef.current = [];
+    if (snapshot) lastSavedSnapshotRef.current = snapshot;
+    setUndoCounts({ past: 0, future: 0 });
+  }, []);
+
+  const doUndo = useCallback(() => {
+    if (pastRef.current.length === 0) return;
+    const popped = pastRef.current.pop()!;
+    futureRef.current.push(JSON.stringify(composition));
+    skipUndoTrackingRef.current = true;
+    try { setComposition(JSON.parse(popped)); } catch { /* ignore */ }
+    setUndoCounts({ past: pastRef.current.length, future: futureRef.current.length });
+  }, [composition]);
+
+  const doRedo = useCallback(() => {
+    if (futureRef.current.length === 0) return;
+    const popped = futureRef.current.pop()!;
+    pastRef.current.push(JSON.stringify(composition));
+    if (pastRef.current.length > MAX_UNDO) pastRef.current.shift();
+    skipUndoTrackingRef.current = true;
+    try { setComposition(JSON.parse(popped)); } catch { /* ignore */ }
+    setUndoCounts({ past: pastRef.current.length, future: futureRef.current.length });
+  }, [composition]);
+
+  const applyHistoricalVersion = useCallback((c: CompositionData) => {
+    resetUndoHistory(JSON.stringify(c));
+    setComposition(c);
+    setCurrentFrame(0);
+    setSeekFrame(0);
+  }, [resetUndoHistory]);
+
+  // Cmd+Z / Ctrl+Z = undo, Cmd+Shift+Z / Ctrl+Y = redo. Skip when an input
+  // is focused so per-field editing keeps the browser's native undo.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (!meta) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      const z = e.key === 'z' || e.key === 'Z';
+      const y = e.key === 'y' || e.key === 'Y';
+      if (z && e.shiftKey) { e.preventDefault(); doRedo(); return; }
+      if (z) { e.preventDefault(); doUndo(); return; }
+      if (y) { e.preventDefault(); doRedo(); return; }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [doUndo, doRedo]);
   const [replaySec, setReplaySec] = useState(1);
   const replayingRef = useRef(false);
   const replayScriptRef = useRef<Layer[]>([]);
@@ -298,7 +361,7 @@ export const Dashboard: React.FC = () => {
           setCloudCompositionId(data.id);
           setCloudCompositionName(data.name || 'Untitled composition');
           setAutosaveVersion(data.version ?? 1);
-          lastSavedSnapshotRef.current = JSON.stringify(data.composition);
+          resetUndoHistory(JSON.stringify(data.composition));
           writeLastCompositionRef({ id: data.id, name: data.name || 'Untitled composition' });
           setAutosaveState('idle');
           setRestoreState('ready');
@@ -328,7 +391,7 @@ export const Dashboard: React.FC = () => {
         setCloudCompositionId(data.id);
         setCloudCompositionName(data.name || lastRef.name || 'Untitled composition');
         setAutosaveVersion(data.version ?? 1);
-        lastSavedSnapshotRef.current = JSON.stringify(data.composition);
+        resetUndoHistory(JSON.stringify(data.composition));
         setAutosaveState('idle');
         setRestoreState('ready');
       })
@@ -368,7 +431,7 @@ export const Dashboard: React.FC = () => {
         setCloudCompositionId(null);
         setCloudCompositionName('Untitled composition');
         setAutosaveVersion(0);
-        lastSavedSnapshotRef.current = JSON.stringify(defaultComposition);
+        resetUndoHistory(JSON.stringify(defaultComposition));
         setAutosaveState('idle');
         setCurrentFrame(0);
         setSeekFrame(0);
@@ -387,7 +450,7 @@ export const Dashboard: React.FC = () => {
           setCloudCompositionId(data.id);
           setCloudCompositionName(data.name || 'Untitled composition');
           setAutosaveVersion(data.version ?? 1);
-          lastSavedSnapshotRef.current = JSON.stringify(data.composition);
+          resetUndoHistory(JSON.stringify(data.composition));
           writeLastCompositionRef({ id: data.id, name: data.name || 'Untitled composition' });
           setAutosaveState('idle');
           setRestoreState('ready');
@@ -418,6 +481,13 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
+    // User edit while a redo path exists: the new branch invalidates redo.
+    // Skip this clear when the change came from undo/redo themselves.
+    if (!skipUndoTrackingRef.current && futureRef.current.length > 0) {
+      futureRef.current = [];
+      setUndoCounts((c) => ({ ...c, future: 0 }));
+    }
+
     setAutosaveState('saving');
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -432,7 +502,17 @@ export const Dashboard: React.FC = () => {
           saveType: 'autosave',
         });
 
+        const prevSavedSnapshot = lastSavedSnapshotRef.current;
         lastSavedSnapshotRef.current = nextSnapshot;
+        // Push the just-superseded snapshot to the undo stack. Skip when the
+        // change came from undo/redo (the corresponding future/past stack was
+        // already updated by doUndo/doRedo itself).
+        if (!skipUndoTrackingRef.current && prevSavedSnapshot && prevSavedSnapshot !== nextSnapshot) {
+          pastRef.current.push(prevSavedSnapshot);
+          if (pastRef.current.length > MAX_UNDO) pastRef.current.shift();
+          setUndoCounts({ past: pastRef.current.length, future: futureRef.current.length });
+        }
+        skipUndoTrackingRef.current = false;
         setCloudCompositionId(response.id);
         writeLastCompositionRef({
           id: response.id,
@@ -469,11 +549,11 @@ export const Dashboard: React.FC = () => {
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-200 flex-shrink-0">Vemotion</h1>
         {/* Build marker — visual confirmation of latest deploy. Bump the label on each push. */}
         <span
-          aria-label="Build marker VM"
-          title="Build marker VM — visual confirmation of latest deploy"
+          aria-label="Build marker VN"
+          title="Build marker VN — visual confirmation of latest deploy"
           className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-slate-900 dark:text-white text-[10px] font-bold tracking-wider flex-shrink-0"
         >
-          VM
+          VN
         </span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview
@@ -506,7 +586,7 @@ export const Dashboard: React.FC = () => {
           }}
           onLoad={c => {
             setComposition(c);
-            lastSavedSnapshotRef.current = JSON.stringify(c);
+            resetUndoHistory(JSON.stringify(c));
             setAutosaveState('idle');
             setCurrentFrame(0);
             setSeekFrame(0);
@@ -516,7 +596,7 @@ export const Dashboard: React.FC = () => {
             setCloudCompositionId(null);
             setCloudCompositionName('Untitled composition');
             writeLastCompositionRef(null);
-            lastSavedSnapshotRef.current = JSON.stringify(defaultComposition);
+            resetUndoHistory(JSON.stringify(defaultComposition));
             setAutosaveState('idle');
             setAutosaveVersion(0);
             setCurrentFrame(0);
@@ -563,17 +643,57 @@ export const Dashboard: React.FC = () => {
           />
           s
         </label>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          title="Settings"
-          aria-label="Settings"
-          className="ml-auto p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0"
-        >
-          <SettingsIcon className="w-4 h-4" />
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={doUndo}
+            disabled={undoCounts.past === 0}
+            title={`Undo last change (${navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+'}Z)`}
+            aria-label="Undo"
+            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={doRedo}
+            disabled={undoCounts.future === 0}
+            title={`Redo (${navigator.platform.toLowerCase().includes('mac') ? '⌘⇧' : 'Ctrl+Shift+'}Z)`}
+            aria-label="Redo"
+            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            disabled={!cloudCompositionId}
+            title="Version history (last 30 autosaves)"
+            aria-label="Version history"
+            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          >
+            <HistoryIcon className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            aria-label="Settings"
+            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0"
+          >
+            <SettingsIcon className="w-4 h-4" />
+          </button>
+        </div>
       </div>
       {settingsOpen && <AppearanceModal onClose={() => setSettingsOpen(false)} />}
+      {historyOpen && cloudCompositionId && (
+        <VersionHistoryModal
+          compositionId={cloudCompositionId}
+          currentVersion={autosaveVersion}
+          onClose={() => setHistoryOpen(false)}
+          onRestore={(c) => { applyHistoricalVersion(c); setHistoryOpen(false); }}
+        />
+      )}
 
       {/* Deep-link load failure banner */}
       {deepLinkError && (

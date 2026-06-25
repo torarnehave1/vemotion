@@ -469,11 +469,11 @@ export const Dashboard: React.FC = () => {
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-200 flex-shrink-0">Vemotion</h1>
         {/* Build marker — visual confirmation of latest deploy. Bump the label on each push. */}
         <span
-          aria-label="Build marker VM"
-          title="Build marker VM — visual confirmation of latest deploy"
+          aria-label="Build marker VO"
+          title="Build marker VO — visual confirmation of latest deploy"
           className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-slate-900 dark:text-white text-[10px] font-bold tracking-wider flex-shrink-0"
         >
-          VM
+          VO
         </span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview

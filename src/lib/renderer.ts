@@ -1081,7 +1081,7 @@ export class CanvasRenderer {
         this.drawCard(layer, values);
         break;
       case 'path':
-        this.drawPath(layer, values);
+        this.drawPath(layer, values, composition);
         break;
       case 'knitting-chart':
         this.drawKnittingChart(layer, values, time);
@@ -1264,7 +1264,7 @@ export class CanvasRenderer {
    * If `showInPreview` is false, the path is invisible at render time —
    * useful when the path exists only as a motion source for a dot.
    */
-  private drawPath(_layer: Layer, values: Record<string, unknown>): void {
+  private drawPath(_layer: Layer, values: Record<string, unknown>, composition?: CompositionData): void {
     const anchors = values.anchors as PathAnchor[] | undefined;
     if (!Array.isArray(anchors) || anchors.length < 2) return;
     const showInPreview = values.showInPreview !== false; // default true
@@ -1321,6 +1321,9 @@ export class CanvasRenderer {
     // Guarded by showLabels — false turns off the whole block; absent or true = show.
     if (values.showLabels !== false) {
       const measurements = values.measurements as { mmPerPx?: number } | undefined;
+      const activeMmPerPx = (measurements?.mmPerPx && measurements.mmPerPx > 0)
+        ? measurements.mmPerPx
+        : (composition?.meta?.scale?.mmPerPx ?? 0);
       const labelFontSize = Math.max(14, Math.min(28, this.canvas.width / 60));
       const segFontSize = Math.max(11, labelFontSize * 0.78);
       this.ctx.save();
@@ -1344,8 +1347,8 @@ export class CanvasRenderer {
         const mx = (a.x + b.x) / 2;
         const my = (a.y + b.y) / 2;
         const pxLen = Math.hypot(b.x - a.x, b.y - a.y);
-        const text = (measurements?.mmPerPx && measurements.mmPerPx > 0)
-          ? `${Math.round(pxLen * measurements.mmPerPx)} mm`
+        const text = activeMmPerPx > 0
+          ? `${Math.round(pxLen * activeMmPerPx)} mm`
           : `${Math.round(pxLen)} px`;
         this.ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         this.ctx.lineWidth = segFontSize * 0.18;

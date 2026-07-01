@@ -109,6 +109,7 @@ function resolveLayerValues(layer: Layer, time: number, composition?: Compositio
         amp: ampSample.amp,
         ampL: ampSample.ampL,
         ampR: ampSample.ampR,
+        time,
       };
       const sceneX = evaluateFormula(currentScene.xFormula, context);
       const sceneY = evaluateFormula(currentScene.yFormula, context);
@@ -150,6 +151,7 @@ function evaluateFormula(
     t: number; p: number; start: number; end: number; duration: number;
     x0: number; y0: number; w: number; h: number;
     amp: number; ampL: number; ampR: number;
+    time: number;
   },
 ): number | null {
   if (!formula || !formula.trim()) return null;
@@ -159,13 +161,13 @@ function evaluateFormula(
   try {
     const fn = new Function(
       't', 'p', 'start', 'end', 'duration', 'x0', 'y0', 'w', 'h',
-      'amp', 'ampL', 'ampR',
+      'amp', 'ampL', 'ampR', 'time',
       'sin', 'cos', 'tan', 'abs', 'min', 'max', 'pow', 'sqrt', 'pi',
       `"use strict"; return (${safe});`
     ) as (...args: unknown[]) => number;
     const result = fn(
       context.t, context.p, context.start, context.end, context.duration, context.x0, context.y0, context.w, context.h,
-      context.amp, context.ampL, context.ampR,
+      context.amp, context.ampL, context.ampR, context.time,
       Math.sin, Math.cos, Math.tan, Math.abs, Math.min, Math.max, Math.pow, Math.sqrt, Math.PI
     );
     return Number.isFinite(result) ? result : null;
@@ -1066,7 +1068,7 @@ export class CanvasRenderer {
         this.drawShape(layer, values);
         break;
       case 'math-shape':
-        this.drawMathShape(layer, values);
+        this.drawMathShape(layer, values, time);
         break;
       case 'image':
         this.drawImage(layer, values);
@@ -1677,7 +1679,7 @@ export class CanvasRenderer {
     if (rotation !== 0) this.ctx.restore();
   }
 
-  private drawMathShape(layer: Layer, values: Record<string, unknown>): void {
+  private drawMathShape(layer: Layer, values: Record<string, unknown>, time = 0): void {
     const kind = (values.mathKind as string) ?? 'parametric';
     const x = layer.position.x + ((values.offsetX as number) ?? 0);
     const y = layer.position.y + ((values.offsetY as number) ?? 0);
@@ -1715,6 +1717,10 @@ export class CanvasRenderer {
       const context = {
         t, p, start: tStart, end: tEnd, duration: tEnd - tStart, x0: x, y0: y, w, h,
         amp: ampVal, ampL: ampLVal, ampR: ampRVal,
+        // Layer-local composition time (seconds). Lets a formula animate over
+        // wall-clock time — e.g. a rotating 3D projection (spin) that renders
+        // to MP4 with no per-frame layer regeneration.
+        time,
       };
       const px = evaluateFormula(xFormula, context);
       const py = evaluateFormula(yFormula, context);

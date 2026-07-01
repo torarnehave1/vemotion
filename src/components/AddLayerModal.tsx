@@ -1784,7 +1784,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                           const a = pathAnchors[i];
                           const b = pathAnchors[i + 1];
                           const pxLen = Math.round(Math.hypot(b.x - a.x, b.y - a.y));
-                          const mmLen = pathMeasurements ? Math.round(pxLen * pathMeasurements.mmPerPx) : null;
+                          const activeMmPerPx = pathMeasurements?.mmPerPx ?? compositionScale ?? null;
+                          const mmLen = activeMmPerPx ? Math.round(pxLen * activeMmPerPx) : null;
                           return (
                             <div key={i} className="flex items-center gap-2 text-xs">
                               <span className="text-amber-400 font-bold w-10 flex-shrink-0">

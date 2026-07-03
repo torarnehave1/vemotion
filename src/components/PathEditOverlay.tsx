@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { CompositionData, Layer, PathAnchor } from '../lib/api';
+import type { CompositionData, Layer, PathAnchor, PathMask } from '../lib/api';
 
 interface PathEditOverlayProps {
   composition: CompositionData;
@@ -11,14 +11,24 @@ interface PathEditOverlayProps {
   onSelectPath?: (id: string) => void;
   /** Replace a single path layer's properties (atomic). */
   onUpdatePath: (layerId: string, nextAnchors: PathAnchor[]) => void;
+  /**
+   * Replace the SELECTED image layer's mask anchors (local 0..1 space). When
+   * provided, the selected image's committed mask outline renders as draggable
+   * anchors + Bezier handles, same gestures as path layers.
+   */
+  onUpdateMask?: (layerId: string, nextAnchors: PathAnchor[]) => void;
 }
 
 const HIT_RADIUS_SCREEN_PX = 10;
 
+/** Which anchor store a gesture edits: a path layer's `properties.anchors`
+ *  (composition px) or an image layer's `properties.mask.anchors` (local 0..1). */
+type Space = 'path' | 'mask';
+
 type Gesture =
   | { kind: 'idle' }
-  | { kind: 'dragging-anchor'; layerId: string; anchorIdx: number; dx: number; dy: number }
-  | { kind: 'dragging-handle'; layerId: string; anchorIdx: number; which: 'in' | 'out'; mirror: boolean };
+  | { kind: 'dragging-anchor'; space: Space; layerId: string; anchorIdx: number; dx: number; dy: number }
+  | { kind: 'dragging-handle'; space: Space; layerId: string; anchorIdx: number; which: 'in' | 'out'; mirror: boolean };
 
 /**
  * Post-commit path editing overlay. Renders while Edit Mode is on; iterates
@@ -43,9 +53,45 @@ type Gesture =
  * fast because the [composition] effect re-uses the existing renderer
  * (no recreate).
  */
-export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, currentTime, selectedLayerId, onSelectPath, onUpdatePath }) => {
+export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, currentTime, selectedLayerId, onSelectPath, onUpdatePath, onUpdateMask }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [gesture, setGesture] = useState<Gesture>({ kind: 'idle' });
+
+  // ── Space conversion ─────────────────────────────────────────────────────
+  // All rendering + gesture math runs in COMPOSITION px. Path layers store
+  // anchors in that space already; mask anchors are LOCAL 0..1 fractions of
+  // the image layer's box (PathMask contract) so they convert on read/write.
+  const readCompAnchors = useCallback((layer: Layer, space: Space): PathAnchor[] => {
+    if (space === 'path') {
+      return ((layer.properties as Record<string, unknown>).anchors as PathAnchor[] | undefined) ?? [];
+    }
+    const mask = (layer.properties as Record<string, unknown>).mask as PathMask | undefined;
+    if (!mask?.anchors) return [];
+    const w = layer.size.width, h = layer.size.height;
+    const ox = layer.position.x, oy = layer.position.y;
+    return mask.anchors.map((a) => ({
+      x: ox + a.x * w,
+      y: oy + a.y * h,
+      ...(a.in  ? { in:  { x: a.in.x  * w, y: a.in.y  * h } } : {}),
+      ...(a.out ? { out: { x: a.out.x * w, y: a.out.y * h } } : {}),
+    }));
+  }, []);
+
+  const writeCompAnchors = useCallback((layer: Layer, space: Space, next: PathAnchor[]) => {
+    if (space === 'path') {
+      onUpdatePath(layer.id, next);
+      return;
+    }
+    if (!onUpdateMask) return;
+    const w = layer.size.width || 1, h = layer.size.height || 1;
+    const ox = layer.position.x, oy = layer.position.y;
+    onUpdateMask(layer.id, next.map((a) => ({
+      x: (a.x - ox) / w,
+      y: (a.y - oy) / h,
+      ...(a.in  ? { in:  { x: a.in.x  / w, y: a.in.y  / h } } : {}),
+      ...(a.out ? { out: { x: a.out.x / w, y: a.out.y / h } } : {}),
+    })));
+  }, [onUpdatePath, onUpdateMask]);
 
   const clientToUserspace = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     const svg = svgRef.current;
@@ -97,15 +143,15 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
       if (gesture.kind === 'dragging-anchor') {
         const layer = composition.layers.find(l => l.id === gesture.layerId);
         if (!layer) return;
-        const anchors = ((layer.properties as Record<string, unknown>).anchors as PathAnchor[] | undefined) ?? [];
+        const anchors = readCompAnchors(layer, gesture.space);
         const newX = pt.x - gesture.dx;
         const newY = pt.y - gesture.dy;
         const next = anchors.map((a, i) => i === gesture.anchorIdx ? { ...a, x: newX, y: newY } : a);
-        onUpdatePath(gesture.layerId, next);
+        writeCompAnchors(layer, gesture.space, next);
       } else if (gesture.kind === 'dragging-handle') {
         const layer = composition.layers.find(l => l.id === gesture.layerId);
         if (!layer) return;
-        const anchors = ((layer.properties as Record<string, unknown>).anchors as PathAnchor[] | undefined) ?? [];
+        const anchors = readCompAnchors(layer, gesture.space);
         const anchor = anchors[gesture.anchorIdx];
         if (!anchor) return;
         const offsetX = pt.x - anchor.x;
@@ -123,7 +169,7 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
           }
           return updated;
         });
-        onUpdatePath(gesture.layerId, next);
+        writeCompAnchors(layer, gesture.space, next);
       }
     };
     const onUp = () => setGesture({ kind: 'idle' });
@@ -133,11 +179,11 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [gesture, composition.layers, clientToUserspace, onUpdatePath]);
+  }, [gesture, composition.layers, clientToUserspace, readCompAnchors, writeCompAnchors]);
 
   // Anchor mousedown — start anchor drag. Captures dx/dy so the anchor
   // doesn't jump to cursor centre on first move.
-  const startAnchorDrag = (layerId: string, anchorIdx: number, anchor: PathAnchor) => (e: React.MouseEvent) => {
+  const startAnchorDrag = (space: Space, layerId: string, anchorIdx: number, anchor: PathAnchor) => (e: React.MouseEvent) => {
     if (e.button !== 0) return; // left only
     e.preventDefault();
     e.stopPropagation();
@@ -146,6 +192,7 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
     if (!pt) return;
     setGesture({
       kind: 'dragging-anchor',
+      space,
       layerId,
       anchorIdx,
       dx: pt.x - anchor.x,
@@ -154,13 +201,14 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
   };
 
   // Handle mousedown — start handle drag (with Alt for break-mirror).
-  const startHandleDrag = (layerId: string, anchorIdx: number, which: 'in' | 'out') => (e: React.MouseEvent) => {
+  const startHandleDrag = (space: Space, layerId: string, anchorIdx: number, which: 'in' | 'out') => (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     onSelectPath?.(layerId);
     setGesture({
       kind: 'dragging-handle',
+      space,
       layerId,
       anchorIdx,
       which,
@@ -170,12 +218,12 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
 
   // Right-click anchor — toggle smooth ⇄ corner. Same heuristic as the
   // Pen tool's right-click gesture.
-  const toggleSmoothCorner = (layerId: string, anchorIdx: number) => (e: React.MouseEvent) => {
+  const toggleSmoothCorner = (space: Space, layerId: string, anchorIdx: number) => (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const layer = composition.layers.find(l => l.id === layerId);
     if (!layer) return;
-    const anchors = ((layer.properties as Record<string, unknown>).anchors as PathAnchor[] | undefined) ?? [];
+    const anchors = readCompAnchors(layer, space);
     const next = anchors.map((a, i) => {
       if (i !== anchorIdx) return a;
       if (a.in || a.out) {
@@ -197,13 +245,91 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
       const uy = (ty / len) * reach;
       return { ...a, in: { x: -ux, y: -uy }, out: { x: ux, y: uy } };
     });
-    onUpdatePath(layerId, next);
+    writeCompAnchors(layer, space, next);
   };
 
-  // Suppress this overlay entirely if no path layers exist (saves DOM).
-  if (pathLayers.length === 0) return null;
+  // The SELECTED image layer's committed mask, if any — its anchors render as
+  // draggable points so a mask can be refined after commit without redrawing.
+  const maskLayer: Layer | null = (() => {
+    if (!onUpdateMask || !selectedLayerId) return null;
+    const sel = composition.layers.find((l) => l.id === selectedLayerId);
+    if (!sel || sel.type !== 'image') return null;
+    const mask = (sel.properties as Record<string, unknown>).mask as PathMask | undefined;
+    return mask?.anchors && mask.anchors.length >= 3 ? sel : null;
+  })();
+
+  // Suppress this overlay entirely if there's nothing to edit (saves DOM).
+  if (pathLayers.length === 0 && !maskLayer) return null;
   // void hitRadiusSvg; // kept available if we add a path-stroke hit test later
   hitRadiusSvg;
+
+  // One group of handle-lines + handle-squares + anchor dots, shared by path
+  // layers and the selected image's mask. `accent` distinguishes the mask
+  // (scissors pink) from paths (amber) at a glance.
+  const renderAnchorGroup = (space: Space, layer: Layer, anchors: PathAnchor[], isSel: boolean, accent: string) => (
+    <g key={`${space}-${layer.id}`} style={{ opacity: !selectedLayerId || isSel ? 1 : 0.45 }}>
+      {/* Handle lines */}
+      {anchors.map((a, i) => (
+        <React.Fragment key={`h-${layer.id}-${i}`}>
+          {a.in && (
+            <line
+              x1={a.x} y1={a.y} x2={a.x + a.in.x} y2={a.y + a.in.y}
+              stroke="#94a3b8" strokeWidth={1} vectorEffect="non-scaling-stroke"
+            />
+          )}
+          {a.out && (
+            <line
+              x1={a.x} y1={a.y} x2={a.x + a.out.x} y2={a.y + a.out.y}
+              stroke="#94a3b8" strokeWidth={1} vectorEffect="non-scaling-stroke"
+            />
+          )}
+        </React.Fragment>
+      ))}
+      {/* Handle endpoints (clickable squares) */}
+      {anchors.map((a, i) => (
+        <React.Fragment key={`he-${layer.id}-${i}`}>
+          {a.in && (
+            <rect
+              x={a.x + a.in.x - 6} y={a.y + a.in.y - 6}
+              width={12} height={12}
+              fill={accent} stroke="#0f172a" strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
+              style={{ pointerEvents: 'auto', cursor: 'grab' }}
+              onMouseDown={startHandleDrag(space, layer.id, i, 'in')}
+            />
+          )}
+          {a.out && (
+            <rect
+              x={a.x + a.out.x - 6} y={a.y + a.out.y - 6}
+              width={12} height={12}
+              fill={accent} stroke="#0f172a" strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
+              style={{ pointerEvents: 'auto', cursor: 'grab' }}
+              onMouseDown={startHandleDrag(space, layer.id, i, 'out')}
+            />
+          )}
+        </React.Fragment>
+      ))}
+      {/* Anchor dots (clickable). Smooth = filled, corner = outlined. */}
+      {anchors.map((a, i) => {
+        const smooth = !!(a.in || a.out);
+        const isStart = i === 0;
+        return (
+          <circle
+            key={`a-${layer.id}-${i}`}
+            cx={a.x} cy={a.y} r={isSel ? 10 : 8}
+            fill={smooth ? (isStart ? '#22c55e' : accent) : '#0f172a'}
+            stroke={isSel ? '#38bdf8' : (isStart ? '#22c55e' : accent)}
+            strokeWidth={isSel ? 3 : 2}
+            vectorEffect="non-scaling-stroke"
+            style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+            onMouseDown={startAnchorDrag(space, layer.id, i, a)}
+            onContextMenu={toggleSmoothCorner(space, layer.id, i)}
+          />
+        );
+      })}
+    </g>
+  );
 
   return (
     <svg
@@ -213,74 +339,10 @@ export const PathEditOverlay: React.FC<PathEditOverlayProps> = ({ composition, c
       preserveAspectRatio="none"
       style={{ pointerEvents: 'none' }} // empty areas pass through to canvas
     >
-      {pathLayers.map(layer => {
-        const anchors = ((layer.properties as Record<string, unknown>).anchors as PathAnchor[] | undefined) ?? [];
-        const isSel = layer.id === selectedLayerId;
-        return (
-          <g key={layer.id} style={{ opacity: !selectedLayerId || isSel ? 1 : 0.45 }}>
-            {/* Handle lines */}
-            {anchors.map((a, i) => (
-              <React.Fragment key={`h-${layer.id}-${i}`}>
-                {a.in && (
-                  <line
-                    x1={a.x} y1={a.y} x2={a.x + a.in.x} y2={a.y + a.in.y}
-                    stroke="#94a3b8" strokeWidth={1} vectorEffect="non-scaling-stroke"
-                  />
-                )}
-                {a.out && (
-                  <line
-                    x1={a.x} y1={a.y} x2={a.x + a.out.x} y2={a.y + a.out.y}
-                    stroke="#94a3b8" strokeWidth={1} vectorEffect="non-scaling-stroke"
-                  />
-                )}
-              </React.Fragment>
-            ))}
-            {/* Handle endpoints (clickable squares) */}
-            {anchors.map((a, i) => (
-              <React.Fragment key={`he-${layer.id}-${i}`}>
-                {a.in && (
-                  <rect
-                    x={a.x + a.in.x - 6} y={a.y + a.in.y - 6}
-                    width={12} height={12}
-                    fill="#fbbf24" stroke="#0f172a" strokeWidth={1.5}
-                    vectorEffect="non-scaling-stroke"
-                    style={{ pointerEvents: 'auto', cursor: 'grab' }}
-                    onMouseDown={startHandleDrag(layer.id, i, 'in')}
-                  />
-                )}
-                {a.out && (
-                  <rect
-                    x={a.x + a.out.x - 6} y={a.y + a.out.y - 6}
-                    width={12} height={12}
-                    fill="#fbbf24" stroke="#0f172a" strokeWidth={1.5}
-                    vectorEffect="non-scaling-stroke"
-                    style={{ pointerEvents: 'auto', cursor: 'grab' }}
-                    onMouseDown={startHandleDrag(layer.id, i, 'out')}
-                  />
-                )}
-              </React.Fragment>
-            ))}
-            {/* Anchor dots (clickable). Smooth = filled, corner = outlined. */}
-            {anchors.map((a, i) => {
-              const smooth = !!(a.in || a.out);
-              const isStart = i === 0;
-              return (
-                <circle
-                  key={`a-${layer.id}-${i}`}
-                  cx={a.x} cy={a.y} r={isSel ? 10 : 8}
-                  fill={smooth ? (isStart ? '#22c55e' : '#fbbf24') : '#0f172a'}
-                  stroke={isSel ? '#38bdf8' : (isStart ? '#22c55e' : '#fbbf24')}
-                  strokeWidth={isSel ? 3 : 2}
-                  vectorEffect="non-scaling-stroke"
-                  style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-                  onMouseDown={startAnchorDrag(layer.id, i, a)}
-                  onContextMenu={toggleSmoothCorner(layer.id, i)}
-                />
-              );
-            })}
-          </g>
-        );
-      })}
+      {pathLayers.map(layer =>
+        renderAnchorGroup('path', layer, readCompAnchors(layer, 'path'), layer.id === selectedLayerId, '#fbbf24'),
+      )}
+      {maskLayer && renderAnchorGroup('mask', maskLayer, readCompAnchors(maskLayer, 'mask'), true, '#f472b6')}
     </svg>
   );
 };

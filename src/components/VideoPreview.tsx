@@ -1126,6 +1126,13 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
                 selectedLayerId={selectedLayerId}
                 onSelectPath={setSelectedLayerId}
                 onUpdatePath={onUpdatePathAnchors}
+                onUpdateMask={onUpdateLayerMask ? (layerId, anchors) => {
+                  // Replace only the anchors on the layer's existing mask —
+                  // feather / invert survive the drag (Lesson 21).
+                  const layer = composition.layers.find((l) => l.id === layerId);
+                  const mask = layer && (layer.properties as Record<string, unknown>).mask as PathMask | undefined;
+                  if (mask) onUpdateLayerMask(layerId, { ...mask, anchors });
+                } : undefined}
               />
             )}
             {onSetLayerVolume && (() => {
@@ -1203,8 +1210,9 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
         />
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center gap-3">
+      {/* Controls — flex-wrap so mask tools (Feather / Invert / Patch) wrap to a
+          second row instead of overflowing off-screen when an image is selected */}
+      <div className="flex flex-wrap items-center gap-3">
         {isPlaying ? (
           <button
             onClick={handlePause}

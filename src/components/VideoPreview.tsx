@@ -1059,7 +1059,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               {penAnchorCount === 0
                 ? (maskTargetId ? 'Click around the part of the image to keep (drag to set curve)' : 'Click to start path (drag to set curve)')
                 : `${penAnchorCount} anchor${penAnchorCount === 1 ? '' : 's'}`}
-              {' · drag handles to reshape · right-click anchor to toggle smooth/corner · Enter to finish · Esc to cancel · Backspace to undo'}
+              {' · drag handles to reshape · right-click anchor to toggle smooth/corner · Enter to finish · Esc to cancel · Backspace or Ctrl+Z to undo last point'}
             </span>
           </div>
         )}

@@ -372,9 +372,10 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
     setAnchors([]);
   }, [anchors, compositionWidth, compositionHeight, onFinish, minAnchors, isMask]);
 
-  // Keyboard: Enter / Esc / Backspace.
+  // Keyboard: Enter / Esc / Backspace / Ctrl+Z (Cmd+Z on mac).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const isUndo = e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey;
       if (e.key === 'Enter') {
         e.preventDefault();
         finish();
@@ -382,7 +383,7 @@ export const PenToolOverlay: React.FC<PenToolOverlayProps> = ({
         e.preventDefault();
         setAnchors([]);
         onCancel();
-      } else if (e.key === 'Backspace' && anchors.length > 0) {
+      } else if ((e.key === 'Backspace' || isUndo) && anchors.length > 0) {
         e.preventDefault();
         setAnchors(prev => prev.slice(0, -1));
       }

@@ -1,4 +1,4 @@
-import type { Layer, Animation } from './api';
+import type { Layer, Animation, LayerGroup } from './api';
 
 // ── Built-in animated elements ──────────────────────────────────────────────
 //
@@ -47,6 +47,8 @@ export interface RippleOpts {
   start: number;
   /** How long the cluster keeps emitting, in seconds. */
   duration: number;
+  /** Group id stamped on every layer so the cluster moves/recolours as one. */
+  groupId?: string;
 }
 
 const RIPPLE_DEFAULTS: Omit<RippleOpts, 'center'> = {
@@ -88,6 +90,7 @@ export function buildRipple(input: Partial<RippleOpts> & { center: { x: number; 
   const start = Math.max(0, o.start);
   const duration = Math.max(ringLife, o.duration);
   const halfPhase = ringLife / ringCount;
+  const groupId = o.groupId;
 
   const layers: Layer[] = [];
 
@@ -97,6 +100,7 @@ export function buildRipple(input: Partial<RippleOpts> & { center: { x: number; 
     id: elId('ripple-drop'),
     type: 'shape',
     name: 'Ripple source',
+    groupId,
     position: { x: Math.round(o.center.x - dotSize / 2), y: Math.round(o.center.y - dotSize / 2) },
     size: { width: dotSize, height: dotSize },
     startTime: +start.toFixed(2),
@@ -119,6 +123,7 @@ export function buildRipple(input: Partial<RippleOpts> & { center: { x: number; 
       id: elId(`ripple-ring-${j}`),
       type: 'shape',
       name: j === 0 ? 'Ripple ring' : `Ripple ring ${j + 1}`,
+      groupId,
       position: { x: Math.round(o.center.x - size / 2), y: Math.round(o.center.y - size / 2) },
       size: { width: size, height: size },
       startTime: st,
@@ -151,13 +156,20 @@ export function buildRipple(input: Partial<RippleOpts> & { center: { x: number; 
 
 // ── Registry ────────────────────────────────────────────────────────────────
 
+export interface ElementCluster {
+  /** The layers to append to the composition. Every layer shares `group.id`. */
+  layers: Layer[];
+  /** The group that wraps the cluster so it moves + recolours as one. */
+  group: LayerGroup;
+}
+
 export interface AnimatedElement {
   id: ElementId;
   label: string;
   description: string;
   /** Emoji/badge shown on the card. */
   badge: string;
-  build: (ctx: ElementContext) => Layer[];
+  build: (ctx: ElementContext) => ElementCluster;
 }
 
 export const ANIMATED_ELEMENTS: AnimatedElement[] = [
@@ -166,11 +178,15 @@ export const ANIMATED_ELEMENTS: AnimatedElement[] = [
     label: 'Water drop',
     description: 'A point that expands into rings, like a drop in water. Loops for the clip.',
     badge: '💧',
-    build: (ctx) =>
-      buildRipple({
+    build: (ctx) => {
+      const groupId = elId('grp-ripple');
+      const layers = buildRipple({
         center: { x: Math.round(ctx.compositionWidth / 2), y: Math.round(ctx.compositionHeight / 2) },
         start: ctx.startTime ?? 0,
         duration: Math.max(RIPPLE_DEFAULTS.ringLife, ctx.compositionDuration - (ctx.startTime ?? 0)),
-      }),
+        groupId,
+      });
+      return { layers, group: { id: groupId, name: 'Water drop', collapsed: false, visible: true } };
+    },
   },
 ];

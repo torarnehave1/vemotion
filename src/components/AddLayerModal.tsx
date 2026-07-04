@@ -9,7 +9,7 @@ import { KnittingChartForm } from './KnittingChartForm';
 import { ANIMATED_ELEMENTS } from '../lib/animatedElements';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off, Check } from 'lucide-react';
-import type { AudioTrack, Layer, MotionScene, PathMask, PathAnchor, PathMeasurements } from '../lib/api';
+import type { AudioTrack, Layer, LayerGroup, MotionScene, PathMask, PathAnchor, PathMeasurements } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
@@ -117,6 +117,11 @@ interface AddLayerModalProps {
    * onAdd when absent.
    */
   onAddLayers?: (layers: Layer[]) => void;
+  /**
+   * Optional — insert an animated-element cluster plus the group that wraps it,
+   * in one composition update. Falls back to onAddLayers (group dropped) when absent.
+   */
+  onAddElement?: (layers: Layer[], group: LayerGroup) => void;
   /**
    * Optional — forwarded to AudioLayerForm. When provided, adding an audio
    * layer triggers Web-Audio amplitude analysis on the audio file; the
@@ -363,7 +368,7 @@ function parseMotionScenes(json: string): MotionScene[] | undefined {
 }
 
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
-  onAdd, onAddLayers, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
+  onAdd, onAddLayers, onAddElement, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
   onSetCompositionDuration, onSetCompositionScale, compositionScale,
 }) => {
   const isEditing  = !!editingLayer;
@@ -2213,8 +2218,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                   <button
                     key={el.id}
                     onClick={() => {
-                      const layers = el.build({ compositionWidth, compositionHeight, compositionDuration, startTime: 0 });
-                      if (onAddLayers) onAddLayers(layers);
+                      const { layers, group } = el.build({ compositionWidth, compositionHeight, compositionDuration, startTime: 0 });
+                      if (onAddElement) onAddElement(layers, group);
+                      else if (onAddLayers) onAddLayers(layers);
                       else layers.forEach(onAdd);
                       onClose();
                     }}

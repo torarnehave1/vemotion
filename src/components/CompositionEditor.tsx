@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { CompositionData, Layer } from '../lib/api';
+import type { CompositionData, Layer, LayerGroup } from '../lib/api';
 import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, GraduationCap, ChevronUp, ChevronDown, ListVideo } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
@@ -132,6 +132,16 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
 
   const addLayers = (layers: Layer[]) => {
     onChange({ ...composition, layers: [...composition.layers, ...layers] });
+  };
+
+  // Insert an animated-element cluster: append its layers AND register the group
+  // that wraps them, so the whole element moves + recolours as one unit.
+  const addElement = (layers: Layer[], group: LayerGroup) => {
+    onChange({
+      ...composition,
+      groups: [...(composition.groups ?? []), group],
+      layers: [...composition.layers, ...layers],
+    });
   };
 
   const removeLayer = (id: string) => {
@@ -397,6 +407,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           <AddLayerModal
             onAdd={addLayer}
             onAddLayers={addLayers}
+            onAddElement={addElement}
             onSetCompositionDuration={(seconds) => onChange({ ...composition, duration: Math.max(composition.duration, seconds) })}
             onUpdateMeta={(patch) => {
               // Merge the audio amp track into composition.meta. Used by

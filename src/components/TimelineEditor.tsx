@@ -539,6 +539,26 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     });
   };
 
+  // Recolour every member of a group at once — sets `color` and/or `strokeColor`
+  // on each member layer that already carries them (shapes recolour fully; a
+  // stroke-only ripple ring recolours its outline). Layers without those keys are
+  // untouched. Lets a clustered element (e.g. a water-drop ripple) be recoloured
+  // from a single swatch on the group header.
+  const recolorGroup = (groupId: string, color: string) => {
+    onChange({
+      ...composition,
+      layers: composition.layers.map((layer) => {
+        if (layer.groupId !== groupId) return layer;
+        const p = layer.properties as Record<string, unknown>;
+        if (!('color' in p) && !('strokeColor' in p)) return layer;
+        const next: Record<string, unknown> = { ...p };
+        if ('color' in p) next.color = color;
+        if ('strokeColor' in p) next.strokeColor = color;
+        return { ...layer, properties: next };
+      }),
+    });
+  };
+
   const groupSelectedLayers = () => {
     const ids = [...selectedLayerIds];
     if (ids.length < 2) return;
@@ -711,6 +731,22 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
             {row.group.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
           <span className="font-medium truncate flex-1">{row.group.name}</span>
+          {(() => {
+            const colorMember = members.find((m) => 'color' in (m.properties as Record<string, unknown>) || 'strokeColor' in (m.properties as Record<string, unknown>));
+            if (!colorMember) return null;
+            const current = getLayerColor(colorMember);
+            return (
+              <input
+                data-no-marquee="true"
+                type="color"
+                value={current}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => recolorGroup(row.group.id, e.target.value)}
+                title="Group colour — recolours every shape in the group"
+                className="w-5 h-5 flex-shrink-0 rounded cursor-pointer bg-transparent border border-slate-300 dark:border-slate-600 p-0"
+              />
+            );
+          })()}
           <button data-no-marquee="true" className="text-slate-500 dark:text-slate-400 hover:text-sky-400 transition p-0.5" onClick={(e) => { e.stopPropagation(); toggleGroupVisibility(row.group.id); }} title={anyHidden ? 'Show group' : 'Hide group'}>
             {anyHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>

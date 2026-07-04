@@ -21,7 +21,7 @@ export interface ElementContext {
   startTime?: number;
 }
 
-export type ElementId = 'ripple';
+export type ElementId = 'ripple' | 'pulse' | 'orbit';
 
 let elCounter = 0;
 function elId(prefix: string): string {
@@ -80,6 +80,155 @@ function cyclicKeyframes(from: number, to: number, ringLife: number, dur: number
     kfs.push({ time: +(tEnd - EPS).toFixed(3), value: to });
   }
   return kfs;
+}
+
+/**
+ * Keyframes for a value that beats base → peak → base every `period` seconds
+ * across `dur`. Unlike cyclicKeyframes the reset needs no epsilon: the trough
+ * value is identical at each cycle boundary, so consecutive cycles share it.
+ */
+function pulseKeyframes(base: number, peak: number, period: number, dur: number): { time: number; value: number }[] {
+  const kfs: { time: number; value: number }[] = [];
+  for (let t = 0; t < dur - 1e-6; t += period) {
+    kfs.push({ time: +t.toFixed(3), value: base });
+    kfs.push({ time: +Math.min(t + period / 2, dur).toFixed(3), value: peak });
+  }
+  kfs.push({ time: +dur.toFixed(3), value: base });
+  return kfs;
+}
+
+// ── Pulse / beacon ──────────────────────────────────────────────────────────
+
+export interface PulseOpts {
+  center: { x: number; y: number };
+  color: string;
+  /** Core dot diameter in px (the ring sits ~1.6× larger). */
+  coreDiameter: number;
+  /** Seconds per beat. */
+  period: number;
+  start: number;
+  duration: number;
+  groupId?: string;
+}
+
+const PULSE_DEFAULTS: Omit<PulseOpts, 'center'> = {
+  color: '#f43f5e',
+  coreDiameter: 60,
+  period: 1.1,
+  start: 0,
+  duration: 6,
+};
+
+export function buildPulse(input: Partial<PulseOpts> & { center: { x: number; y: number } }): Layer[] {
+  const o: PulseOpts = { ...PULSE_DEFAULTS, ...input };
+  const period = Math.max(0.2, o.period);
+  const core = Math.max(8, o.coreDiameter);
+  const ring = Math.round(core * 1.7);
+  const start = Math.max(0, o.start);
+  const duration = Math.max(period, o.duration);
+  const groupId = o.groupId;
+  const at = (size: number) => ({ x: Math.round(o.center.x - size / 2), y: Math.round(o.center.y - size / 2) });
+
+  return [
+    // Outer ring — beats a touch larger + fades, giving the "sonar" halo.
+    {
+      id: elId('pulse-ring'), type: 'shape', name: 'Pulse halo', groupId,
+      position: at(ring), size: { width: ring, height: ring },
+      startTime: +start.toFixed(2), layerDuration: +duration.toFixed(2),
+      properties: { shape: 'circle', filled: false, color: o.color, strokeColor: o.color, strokeWidth: 3, opacity: 0.55 },
+      animation: { property: 'scale', easing: 'easeInOut', keyframes: pulseKeyframes(0.9, 1.25, period, duration) } as Animation,
+      animations: [{ property: 'opacity', easing: 'easeInOut', keyframes: pulseKeyframes(0.55, 0.15, period, duration) } as Animation],
+    },
+    // Core dot — the beacon itself.
+    {
+      id: elId('pulse-core'), type: 'shape', name: 'Pulse core', groupId,
+      position: at(core), size: { width: core, height: core },
+      startTime: +start.toFixed(2), layerDuration: +duration.toFixed(2),
+      properties: { shape: 'circle', color: o.color, opacity: 1 },
+      animation: { property: 'scale', easing: 'easeInOut', keyframes: pulseKeyframes(1, 1.28, period, duration) } as Animation,
+    },
+  ];
+}
+
+// ── Orbit ───────────────────────────────────────────────────────────────────
+
+export interface OrbitOpts {
+  center: { x: number; y: number };
+  color: string;
+  /** Orbit radius in px. */
+  radius: number;
+  /** Number of dots evenly spaced around the orbit. */
+  dotCount: number;
+  /** Dot diameter in px. */
+  dotDiameter: number;
+  /** Seconds for one full revolution. */
+  period: number;
+  /** Draw the faint orbit track ring. */
+  showTrack: boolean;
+  start: number;
+  duration: number;
+  groupId?: string;
+}
+
+const ORBIT_DEFAULTS: Omit<OrbitOpts, 'center'> = {
+  color: '#a78bfa',
+  radius: 130,
+  dotCount: 3,
+  dotDiameter: 26,
+  period: 3,
+  showTrack: true,
+  start: 0,
+  duration: 6,
+};
+
+export function buildOrbit(input: Partial<OrbitOpts> & { center: { x: number; y: number } }): Layer[] {
+  const o: OrbitOpts = { ...ORBIT_DEFAULTS, ...input };
+  const R = Math.max(20, o.radius);
+  const dotCount = Math.max(1, Math.min(12, Math.round(o.dotCount)));
+  const dot = Math.max(6, o.dotDiameter);
+  const W = (2 * Math.PI) / Math.max(0.3, o.period); // angular speed, rad/s
+  const start = Math.max(0, o.start);
+  const duration = Math.max(0.5, o.duration);
+  const groupId = o.groupId;
+  const layers: Layer[] = [];
+
+  // Orbit track — a faint static stroke-only ring the dots ride on.
+  if (o.showTrack) {
+    const track = R * 2;
+    layers.push({
+      id: elId('orbit-track'), type: 'shape', name: 'Orbit track', groupId,
+      position: { x: Math.round(o.center.x - R), y: Math.round(o.center.y - R) },
+      size: { width: track, height: track },
+      startTime: +start.toFixed(2), layerDuration: +duration.toFixed(2),
+      properties: { shape: 'circle', filled: false, color: o.color, strokeColor: o.color, strokeWidth: 2, opacity: 0.35 },
+    });
+  }
+
+  // Dots — each follows a circle via x/y formulas (renderer evaluates sin/cos on
+  // layer-local `time`). Phase is baked into the formula so all share one scene.
+  for (let j = 0; j < dotCount; j += 1) {
+    const phase = ((2 * Math.PI) / dotCount) * j;
+    const x0 = Math.round(o.center.x - dot / 2);
+    const y0 = Math.round(o.center.y - dot / 2);
+    const w = W.toFixed(4);
+    const ph = phase.toFixed(4);
+    layers.push({
+      id: elId(`orbit-dot-${j}`), type: 'shape', name: j === 0 ? 'Orbit dot' : `Orbit dot ${j + 1}`, groupId,
+      position: { x: x0, y: y0 },
+      size: { width: dot, height: dot },
+      startTime: +start.toFixed(2), layerDuration: +duration.toFixed(2),
+      properties: {
+        shape: 'circle', color: o.color, opacity: 1,
+        motionScenes: [{
+          start: 0, end: +duration.toFixed(2),
+          xFormula: `x0 + ${R} * cos(time * ${w} + ${ph})`,
+          yFormula: `y0 + ${R} * sin(time * ${w} + ${ph})`,
+        }],
+      },
+    });
+  }
+
+  return layers;
 }
 
 export function buildRipple(input: Partial<RippleOpts> & { center: { x: number; y: number } }): Layer[] {
@@ -187,6 +336,38 @@ export const ANIMATED_ELEMENTS: AnimatedElement[] = [
         groupId,
       });
       return { layers, group: { id: groupId, name: 'Water drop', collapsed: false, visible: true } };
+    },
+  },
+  {
+    id: 'pulse',
+    label: 'Pulse',
+    description: 'A beacon dot that beats — pulses larger and back on a loop.',
+    badge: '💓',
+    build: (ctx) => {
+      const groupId = elId('grp-pulse');
+      const layers = buildPulse({
+        center: { x: Math.round(ctx.compositionWidth / 2), y: Math.round(ctx.compositionHeight / 2) },
+        start: ctx.startTime ?? 0,
+        duration: Math.max(PULSE_DEFAULTS.period, ctx.compositionDuration - (ctx.startTime ?? 0)),
+        groupId,
+      });
+      return { layers, group: { id: groupId, name: 'Pulse', collapsed: false, visible: true } };
+    },
+  },
+  {
+    id: 'orbit',
+    label: 'Orbit',
+    description: 'Dots circling a centre point on a faint track. Loops for the clip.',
+    badge: '🪐',
+    build: (ctx) => {
+      const groupId = elId('grp-orbit');
+      const layers = buildOrbit({
+        center: { x: Math.round(ctx.compositionWidth / 2), y: Math.round(ctx.compositionHeight / 2) },
+        start: ctx.startTime ?? 0,
+        duration: Math.max(1, ctx.compositionDuration - (ctx.startTime ?? 0)),
+        groupId,
+      });
+      return { layers, group: { id: groupId, name: 'Orbit', collapsed: false, visible: true } };
     },
   },
 ];

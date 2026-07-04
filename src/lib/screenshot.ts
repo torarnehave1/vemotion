@@ -33,6 +33,56 @@ export async function exportFramePng(
 }
 
 /**
+ * Export one PNG per carousel slide. `slideTimes` are capture times in
+ * seconds (see CompositionMeta.carousel); each is rendered through the same
+ * full-resolution path as exportFramePng and downloaded as
+ * `<fileBase>-01.png`, `<fileBase>-02.png`, …
+ *
+ * Downloads run sequentially with a short gap — browsers throttle or block
+ * bursts of programmatic anchor clicks, and the renderer setup per capture
+ * is not free anyway.
+ */
+export async function exportSlidesPng(
+  composition: CompositionData,
+  slideTimes: number[],
+  fileBase = 'slide',
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  if (!composition || composition.width <= 0 || composition.height <= 0) {
+    throw new Error('Invalid composition dimensions');
+  }
+  if (slideTimes.length === 0) throw new Error('No slide times to export');
+
+  for (let i = 0; i < slideTimes.length; i++) {
+    const frame = Math.max(0, Math.round(slideTimes[i] * composition.fps));
+    const blob = await captureFramePngBlob(composition, frame);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${fileBase}-${String(i + 1).padStart(2, '0')}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+    onProgress?.(i + 1, slideTimes.length);
+    if (i < slideTimes.length - 1) {
+      await new Promise((r) => setTimeout(r, 350));
+    }
+  }
+}
+
+/**
+ * The capture times for a composition's slides: the explicit
+ * `meta.carousel.slideTimes` when present, otherwise one slide per whole
+ * second of duration captured at the mid-second (0.5, 1.5, …) so entry
+ * animations have settled.
+ */
+export function carouselSlideTimes(composition: CompositionData): number[] {
+  const explicit = composition.meta?.carousel?.slideTimes;
+  if (Array.isArray(explicit) && explicit.length > 0) return explicit;
+  const n = Math.max(1, Math.floor(composition.duration));
+  return Array.from({ length: n }, (_, k) => k + 0.5);
+}
+
+/**
  * Render one frame to a PNG Blob (no download). Same rendering path as
  * exportFramePng — used to save a screenshot to the photo album.
  */

@@ -7,7 +7,7 @@ import { RefitCompositionModal } from './RefitCompositionModal';
 import TrainingVideosModal from './TrainingVideosModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 import { saveAsTrainingVideo } from '../lib/trainingVideo';
-import { exportFramePng, captureFramePngBlob } from '../lib/screenshot';
+import { exportFramePng, captureFramePngBlob, exportSlidesPng, carouselSlideTimes } from '../lib/screenshot';
 import { uploadImageToAlbum, VEMOTION_ALBUM } from '../lib/photoAlbum';
 
 const FONT_PRESETS = [
@@ -101,6 +101,33 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
       console.error('PNG export failed:', err);
     } finally {
       setExportingPng(false);
+    }
+  };
+
+  // Carousel export: one PNG per slide (meta.carousel.slideTimes, or one per
+  // whole second when the marker is absent). Sequential downloads.
+  const [exportingSlides, setExportingSlides] = useState(false);
+  const [slidesProgress, setSlidesProgress] = useState('');
+  const [slidesError, setSlidesError] = useState<string | null>(null);
+  const handleExportSlides = async () => {
+    if (exportingSlides) return;
+    setExportingSlides(true);
+    setSlidesError(null);
+    try {
+      const times = carouselSlideTimes(composition);
+      setSlidesProgress(`0/${times.length}`);
+      await exportSlidesPng(
+        composition,
+        times,
+        composition.meta?.carousel?.fileBase ?? 'slide',
+        (done, total) => setSlidesProgress(`${done}/${total}`),
+      );
+    } catch (err) {
+      console.error('Slide export failed:', err);
+      setSlidesError('Slide export failed. See console.');
+    } finally {
+      setExportingSlides(false);
+      setSlidesProgress('');
     }
   };
 
@@ -506,6 +533,19 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
           : <><ImageIcon className="w-4 h-4" /> Export PNG (screenshot)</>
         }
       </button>
+
+      <button
+        onClick={handleExportSlides}
+        disabled={exportingSlides}
+        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        title="Export one PNG per slide — an Instagram-carousel image set. Uses meta.carousel.slideTimes when set, otherwise one slide per whole second."
+      >
+        {exportingSlides
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting slides… {slidesProgress}</>
+          : <><ImageIcon className="w-4 h-4" /> Export slides (PNG set)</>
+        }
+      </button>
+      {slidesError && <p className="text-xs text-red-400">{slidesError}</p>}
 
       <button
         onClick={handleSavePngToAlbum}

@@ -54,6 +54,21 @@ export type CompositionMeta = {
    */
   projectGraphId?: string;
   /**
+   * Marks the composition as an image-carousel source (e.g. an Instagram
+   * carousel). Each entry in `slideTimes` is a capture time in seconds; the
+   * editor's "Export slides" button renders one full-resolution PNG per entry
+   * through the normal frame renderer. Authoring convention: slide k's layers
+   * occupy the [k, k+1) second window and slideTimes[k] = k + 0.5, so each
+   * capture lands mid-window with entry animations settled. Written by agents
+   * (Agent-Builder carousel tool) or by hand; absent on ordinary compositions.
+   */
+  carousel?: {
+    /** Capture times in seconds, one per slide, in slide order. */
+    slideTimes: number[];
+    /** Base for downloaded filenames: `<fileBase>-01.png`, … Default 'slide'. */
+    fileBase?: string;
+  };
+  /**
    * Pre-baked amplitude track for audio-reactive layer formulas.
    * Produced client-side from the composition's first audio layer when added
    * via AudioLayerForm (or constructed manually for smoke testing). Three

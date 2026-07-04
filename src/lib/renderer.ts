@@ -1517,7 +1517,17 @@ export class CanvasRenderer {
       if (a.kind === 'char-stagger') charAnims.push(a);
     }
 
-    if (charAnims.length === 0) {
+    // Char-scramble: characters show deterministic random glyphs (from the
+    // target text's own letters) until each settles on its real letter. The
+    // per-glyph path below handles it alongside any char-stagger transforms.
+    let scrambleAnim: Animation | undefined;
+    if (layer.animation && layer.animation.kind === 'char-scramble') scrambleAnim = layer.animation;
+    if (!scrambleAnim) scrambleAnim = layer.animations?.find(a => a.kind === 'char-scramble');
+    const scramblePool = scrambleAnim
+      ? Array.from(new Set(text.split('').filter(c => c.trim() !== '')))
+      : [];
+
+    if (charAnims.length === 0 && !scrambleAnim) {
       // Fast path: line-by-line fillText with native alignment.
       let x = layerLeft;
       if (align === 'center') x = layerLeft + maxWidth / 2;
@@ -1529,7 +1539,7 @@ export class CanvasRenderer {
       return;
     }
 
-    // Per-glyph path (char-stagger).
+    // Per-glyph path (char-stagger and/or char-scramble).
     ctx.textAlign = 'left';
     const baseAlpha = ctx.globalAlpha;
     let globalCharIdx = 0;
@@ -1542,7 +1552,26 @@ export class CanvasRenderer {
 
       for (let i = 0; i < line.length; i++) {
         const ch = line[i];
+        // Advance by the REAL glyph width so the word's footprint stays put
+        // while scrambling (letters don't jitter horizontally).
         const charWidth = ctx.measureText(ch).width;
+
+        // Scramble substitution: before this position settles, draw a
+        // deterministic random letter from the pool. Deterministic in
+        // (charIndex, quantised time) — no Math.random — so the preview and the
+        // ffmpeg export render identical frames.
+        let displayCh = ch;
+        if (scrambleAnim && scramblePool.length > 0 && ch.trim() !== '') {
+          const stagger = scrambleAnim.stagger ?? 0.06;
+          const settleDuration = scrambleAnim.settleDuration ?? 0.8;
+          const settleTime = globalCharIdx * stagger + settleDuration;
+          if (time < settleTime) {
+            const FLIP_RATE = 16; // glyph changes per second
+            const flipIndex = Math.floor(Math.max(0, time) * FLIP_RATE);
+            const h = (((globalCharIdx + 1) * 73856093) ^ ((flipIndex + 1) * 19349663)) >>> 0;
+            displayCh = scramblePool[h % scramblePool.length];
+          }
+        }
 
         let charOpacity = 1;
         let charOffsetX = 0;
@@ -1569,7 +1598,7 @@ export class CanvasRenderer {
           ctx.scale(charScale, charScale);
           ctx.translate(-cx, -cy);
         }
-        ctx.fillText(ch, cursorX + charOffsetX, lineY + charOffsetY);
+        ctx.fillText(displayCh, cursorX + charOffsetX, lineY + charOffsetY);
         ctx.restore();
 
         cursorX += charWidth;

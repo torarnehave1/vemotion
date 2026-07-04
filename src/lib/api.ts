@@ -204,14 +204,21 @@ export type Animation = {
    *   painted cells in the layer's `properties.drawOrder` (the recorded paint
    *   sequence), drawing the rest as background — a pixel-by-pixel "drawing".
    *   `property` is unused for this kind.
+   * - 'char-scramble': only valid on text layers. Each character position shows
+   *   deterministic random glyphs (drawn from the target text's own letters)
+   *   until it "settles" on its real letter. Character i settles at
+   *   `i * stagger + settleDuration` (left-to-right decode). `property`/`keyframes`
+   *   are unused; `keyframes` may be an empty array.
    */
-  kind?: 'layer' | 'char-stagger' | 'mask-wipe' | 'pixel-reveal';
+  kind?: 'layer' | 'char-stagger' | 'mask-wipe' | 'pixel-reveal' | 'char-scramble';
   /** Layer property name to animate. Required for kind 'layer' and 'char-stagger'; unused for 'mask-wipe'. */
   property?: string;
   keyframes: Keyframe[];
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
-  /** Seconds of delay between successive characters. Used only when kind === 'char-stagger'. */
+  /** Seconds of delay between successive characters. Used by kind 'char-stagger' and 'char-scramble'. */
   stagger?: number;
+  /** Seconds a character keeps scrambling before it settles. Used only when kind === 'char-scramble'. */
+  settleDuration?: number;
   /** Wipe direction. Required when kind === 'mask-wipe'. */
   direction?: 'ltr' | 'rtl' | 'ttb' | 'btt' | 'radial';
 };

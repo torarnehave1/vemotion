@@ -21,7 +21,7 @@ export interface ElementContext {
   startTime?: number;
 }
 
-export type ElementId = 'ripple' | 'pulse' | 'orbit';
+export type ElementId = 'ripple' | 'pulse' | 'orbit' | 'scramble';
 
 let elCounter = 0;
 function elId(prefix: string): string {
@@ -303,6 +303,48 @@ export function buildRipple(input: Partial<RippleOpts> & { center: { x: number; 
   return layers;
 }
 
+// ── Word scramble / decode ──────────────────────────────────────────────────
+
+export interface ScrambleOpts {
+  center: { x: number; y: number };
+  compositionWidth: number;
+  text: string;
+  color: string;
+  fontSize: number;
+  /** Seconds between successive characters settling (left-to-right decode). */
+  stagger: number;
+  /** Seconds a character keeps scrambling before it settles. */
+  settleDuration: number;
+  start: number;
+  duration: number;
+  groupId?: string;
+}
+
+const SCRAMBLE_DEFAULTS: Omit<ScrambleOpts, 'center' | 'compositionWidth'> = {
+  text: 'REVEAL',
+  color: '#e2e8f0',
+  fontSize: 96,
+  stagger: 0.09,
+  settleDuration: 0.7,
+  start: 0,
+  duration: 5,
+};
+
+export function buildScramble(input: Partial<ScrambleOpts> & { center: { x: number; y: number }; compositionWidth: number }): Layer[] {
+  const o: ScrambleOpts = { ...SCRAMBLE_DEFAULTS, ...input };
+  const band = Math.round(o.fontSize * 1.6);
+  return [{
+    id: elId('scramble'), type: 'text', name: `Scramble "${o.text}"`, groupId: o.groupId,
+    position: { x: 0, y: Math.round(o.center.y - band / 2) },
+    size: { width: o.compositionWidth, height: band },
+    startTime: +o.start.toFixed(2), layerDuration: +Math.max(o.settleDuration + 0.5, o.duration).toFixed(2),
+    properties: { text: o.text, fontSize: o.fontSize, color: o.color, align: 'center', fontWeight: '700' },
+    // char-scramble: each position shows random letters from the word's own
+    // letters, then settles left-to-right. keyframes unused (empty array).
+    animation: { kind: 'char-scramble', stagger: o.stagger, settleDuration: o.settleDuration, keyframes: [] } as Animation,
+  }];
+}
+
 // ── Registry ────────────────────────────────────────────────────────────────
 
 export interface ElementCluster {
@@ -368,6 +410,23 @@ export const ANIMATED_ELEMENTS: AnimatedElement[] = [
         groupId,
       });
       return { layers, group: { id: groupId, name: 'Orbit', collapsed: false, visible: true } };
+    },
+  },
+  {
+    id: 'scramble',
+    label: 'Word scramble',
+    description: 'A word decodes from a jumble of its own letters, settling left to right.',
+    badge: '🔤',
+    build: (ctx) => {
+      const groupId = elId('grp-scramble');
+      const layers = buildScramble({
+        center: { x: Math.round(ctx.compositionWidth / 2), y: Math.round(ctx.compositionHeight / 2) },
+        compositionWidth: ctx.compositionWidth,
+        start: ctx.startTime ?? 0,
+        duration: Math.max(SCRAMBLE_DEFAULTS.settleDuration + 0.5, ctx.compositionDuration - (ctx.startTime ?? 0)),
+        groupId,
+      });
+      return { layers, group: { id: groupId, name: 'Word scramble', collapsed: false, visible: true } };
     },
   },
 ];

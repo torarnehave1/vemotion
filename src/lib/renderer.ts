@@ -1457,7 +1457,11 @@ export class CanvasRenderer {
     this.ctx.beginPath();
     this.ctx.rect(layerLeft, layerTop, maxWidth, layer.size.height);
     this.ctx.clip();
-    applyTextStyle(this.ctx, true);
+    // `shadow: false` opts a text layer out of the default drop shadow —
+    // flat designs (e.g. carousel slides) need clean glyph edges. Default
+    // (property absent) keeps the shadow, so existing compositions render
+    // identically.
+    applyTextStyle(this.ctx, values.shadow !== false);
     this.renderTextGlyphs(this.ctx, layer, values, time, layerLeft, layerTop);
     // Reset shadow so subsequent layers' draw calls don't inherit it.
     this.ctx.shadowColor = 'transparent';

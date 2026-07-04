@@ -6,6 +6,7 @@ import { AiImagePrompt } from './AiImagePrompt';
 import { StockImagePicker } from './StockImagePicker';
 import { importImageUrlToAlbum, trackUnsplashDownload, type StockImage } from '../lib/photoAlbum';
 import { KnittingChartForm } from './KnittingChartForm';
+import { ANIMATED_ELEMENTS } from '../lib/animatedElements';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off, Check } from 'lucide-react';
 import type { AudioTrack, Layer, MotionScene, PathMask, PathAnchor, PathMeasurements } from '../lib/api';
@@ -2204,7 +2205,28 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             />
           ) : tab === 'animations' ? (
             <>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Pick an animation from the library. It will be applied to the selected layer, or you can add a new text/shape layer with it.</p>
+              {/* Ready-made animated elements — one click drops the whole cluster
+                  straight onto the composition (no manual step). */}
+              <p className="text-xs text-slate-600 dark:text-slate-300 mb-2 font-semibold">Elements — click to drop onto the canvas</p>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {ANIMATED_ELEMENTS.map(el => (
+                  <button
+                    key={el.id}
+                    onClick={() => {
+                      const layers = el.build({ compositionWidth, compositionHeight, compositionDuration, startTime: 0 });
+                      if (onAddLayers) onAddLayers(layers);
+                      else layers.forEach(onAdd);
+                      onClose();
+                    }}
+                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-sky-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition group text-left"
+                  >
+                    <div className="w-full h-16 rounded-lg flex items-center justify-center text-3xl bg-sky-500/10 border-2 border-sky-500/40">{el.badge}</div>
+                    <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white font-medium text-center">{el.label}</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 text-center leading-snug">{el.description}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Or pick an animation preset from the library — applied to the selected layer, or a new text/shape layer.</p>
               {kgAnims.length === 0 && <div className="text-xs text-slate-500 text-center py-6">Loading animations...</div>}
               <div className="grid grid-cols-2 gap-4">
                 {kgAnims.map(anim => (

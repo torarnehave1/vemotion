@@ -1648,13 +1648,17 @@ export class CanvasRenderer {
       : null;
     const strokeWidth = typeof values.strokeWidth === 'number' ? values.strokeWidth as number : 0;
     const willStroke = strokeColor !== null && strokeWidth > 0;
+    // Fill is opt-out: `filled: false` or `fillMode: 'none'` renders a stroke-only
+    // outline (a hollow ring / frame). Default (flag absent) still fills, so every
+    // existing shape renders identically. Used by the ripple animated element.
+    const filled = values.filled !== false && values.fillMode !== 'none';
 
     this.ctx.fillStyle = color;
 
     if (shape === 'circle') {
       this.ctx.beginPath();
       this.ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-      this.ctx.fill();
+      if (filled) this.ctx.fill();
       if (willStroke) {
         this.ctx.strokeStyle = strokeColor!;
         this.ctx.lineWidth = strokeWidth;
@@ -1662,14 +1666,14 @@ export class CanvasRenderer {
       }
     } else if (borderRadius > 0) {
       this.roundedRect(x, y, w, h, borderRadius);
-      this.ctx.fill();
+      if (filled) this.ctx.fill();
       if (willStroke) {
         this.ctx.strokeStyle = strokeColor!;
         this.ctx.lineWidth = strokeWidth;
         this.ctx.stroke();
       }
     } else {
-      this.ctx.fillRect(x, y, w, h);
+      if (filled) this.ctx.fillRect(x, y, w, h);
       if (willStroke) {
         this.ctx.strokeStyle = strokeColor!;
         this.ctx.lineWidth = strokeWidth;

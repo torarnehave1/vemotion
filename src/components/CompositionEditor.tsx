@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer, LayerGroup } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, GraduationCap, ChevronUp, ChevronDown, ListVideo } from 'lucide-react';
+import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, GraduationCap, ChevronUp, ChevronDown, ListVideo, Instagram } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
+import { PostCarouselModal } from './PostCarouselModal';
 import TrainingVideosModal from './TrainingVideosModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 import { saveAsTrainingVideo } from '../lib/trainingVideo';
@@ -44,6 +45,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
   const [showModal, setShowModal] = useState(false);
   const [showAnimModal, setShowAnimModal] = useState(false);
   const [showRefitModal, setShowRefitModal] = useState(false);
+  const [showPostCarousel, setShowPostCarousel] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const set = (patch: Partial<CompositionData>) => onChange({ ...composition, ...patch });
@@ -470,6 +472,12 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
             onClose={() => setShowRefitModal(false)}
           />
         )}
+        {showPostCarousel && (
+          <PostCarouselModal
+            composition={composition}
+            onClose={() => setShowPostCarousel(false)}
+          />
+        )}
       </div>
 
       {exportProgress && (
@@ -546,6 +554,14 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         }
       </button>
       {slidesError && <p className="text-xs text-red-400">{slidesError}</p>}
+
+      <button
+        onClick={() => setShowPostCarousel(true)}
+        className="w-full bg-gradient-to-r from-fuchsia-600 to-orange-500 hover:from-fuchsia-500 hover:to-orange-400 text-white font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        title="Render the slides, upload them, and publish them as one Instagram carousel via Blotato."
+      >
+        <Instagram className="w-4 h-4" /> Post as Instagram carousel
+      </button>
 
       <button
         onClick={handleSavePngToAlbum}

@@ -1,16 +1,9 @@
 import React, { useState } from 'react';
 import type { CompositionData, Layer, LayerGroup } from '../lib/api';
-import { Plus, Trash2, Download, Loader2, Sparkles, Eye, EyeOff, Maximize2, Copy, Image as ImageIcon, GraduationCap, ChevronUp, ChevronDown, ListVideo, Instagram } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Eye, EyeOff, Maximize2, Copy, ChevronUp, ChevronDown } from 'lucide-react';
 import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
-import { PostCarouselModal } from './PostCarouselModal';
-import { PostVideoModal } from './PostVideoModal';
-import TrainingVideosModal from './TrainingVideosModal';
-import { exportToMp4, type ExportProgress } from '../lib/exporter';
-import { saveAsTrainingVideo } from '../lib/trainingVideo';
-import { exportFramePng, captureFramePngBlob, exportSlidesPng, carouselSlideTimes } from '../lib/screenshot';
-import { uploadImageToAlbum, VEMOTION_ALBUM } from '../lib/photoAlbum';
 
 const FONT_PRESETS = [
   { label: 'Inter — neutral default',        value: 'Inter' },
@@ -38,124 +31,13 @@ const SIZE_PRESETS = [
 interface CompositionEditorProps {
   composition: CompositionData;
   onChange: (c: CompositionData) => void;
-  /** Playhead position, so "Export PNG" captures the frame on screen, not frame 0. */
-  currentFrame?: number;
 }
 
-export const CompositionEditor: React.FC<CompositionEditorProps> = ({ composition, onChange, currentFrame = 0 }) => {
+export const CompositionEditor: React.FC<CompositionEditorProps> = ({ composition, onChange }) => {
   const [showModal, setShowModal] = useState(false);
   const [showAnimModal, setShowAnimModal] = useState(false);
   const [showRefitModal, setShowRefitModal] = useState(false);
-  const [showPostCarousel, setShowPostCarousel] = useState(false);
-  const [showPostVideo, setShowPostVideo] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const set = (patch: Partial<CompositionData>) => onChange({ ...composition, ...patch });
-
-  const handleExport = async () => {
-    if (exporting) return;
-    setExporting(true);
-    setExportProgress(null);
-    try {
-      await exportToMp4(composition, (p) => setExportProgress(p));
-    } catch (err) {
-      console.error('Export failed:', err);
-      setExportProgress({ stage: 'done', percent: 0, message: 'Export failed. See console for details.' });
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Save as training video: render to MP4 (no download), then publish to the Academy
-  // (recordings/academy/) so it shows in the MyPage Learn tab. Superadmin only (the upload
-  // endpoint is Superadmin-gated).
-  const [savingTraining, setSavingTraining] = useState(false);
-  const [trainingUrl, setTrainingUrl] = useState<string | null>(null);
-  const [trainingError, setTrainingError] = useState<string | null>(null);
-  const [trainingProgress, setTrainingProgress] = useState('');
-  const [showTrainingManager, setShowTrainingManager] = useState(false);
-  const handleSaveAsTraining = async () => {
-    if (savingTraining || exporting) return;
-    const title = window.prompt('Title for this training video:', 'Vemotion training video');
-    if (!title || !title.trim()) return;
-    setSavingTraining(true);
-    setTrainingUrl(null);
-    setTrainingError(null);
-    setTrainingProgress('Rendering…');
-    try {
-      const blob = await exportToMp4(composition, (p) => setTrainingProgress(p.message), { download: false });
-      const result = await saveAsTrainingVideo(blob, title.trim(), (p) => setTrainingProgress(p.message));
-      setTrainingUrl(result.playUrl);
-    } catch (err) {
-      console.error('Save as training video failed:', err);
-      setTrainingError(err instanceof Error ? err.message : 'Failed to save training video.');
-    } finally {
-      setSavingTraining(false);
-      setTrainingProgress('');
-    }
-  };
-
-  const [exportingPng, setExportingPng] = useState(false);
-  const handleExportPng = async () => {
-    if (exportingPng) return;
-    setExportingPng(true);
-    try {
-      await exportFramePng(composition, Math.max(0, Math.round(currentFrame)));
-    } catch (err) {
-      console.error('PNG export failed:', err);
-    } finally {
-      setExportingPng(false);
-    }
-  };
-
-  // Carousel export: one PNG per slide (meta.carousel.slideTimes, or one per
-  // whole second when the marker is absent). Sequential downloads.
-  const [exportingSlides, setExportingSlides] = useState(false);
-  const [slidesProgress, setSlidesProgress] = useState('');
-  const [slidesError, setSlidesError] = useState<string | null>(null);
-  const handleExportSlides = async () => {
-    if (exportingSlides) return;
-    setExportingSlides(true);
-    setSlidesError(null);
-    try {
-      const times = carouselSlideTimes(composition);
-      setSlidesProgress(`0/${times.length}`);
-      await exportSlidesPng(
-        composition,
-        times,
-        composition.meta?.carousel?.fileBase ?? 'slide',
-        (done, total) => setSlidesProgress(`${done}/${total}`),
-      );
-    } catch (err) {
-      console.error('Slide export failed:', err);
-      setSlidesError('Slide export failed. See console.');
-    } finally {
-      setExportingSlides(false);
-      setSlidesProgress('');
-    }
-  };
-
-  const [savingPng, setSavingPng] = useState(false);
-  const [pngAlbumUrl, setPngAlbumUrl] = useState<string | null>(null);
-  const [pngAlbumError, setPngAlbumError] = useState<string | null>(null);
-  const handleSavePngToAlbum = async () => {
-    if (savingPng) return;
-    setSavingPng(true);
-    setPngAlbumUrl(null);
-    setPngAlbumError(null);
-    try {
-      const frame = Math.max(0, Math.round(currentFrame));
-      const blob = await captureFramePngBlob(composition, frame);
-      const file = new File([blob], `vemotion-frame-${frame}.png`, { type: 'image/png' });
-      const url = await uploadImageToAlbum(file);
-      setPngAlbumUrl(url);
-    } catch (err) {
-      console.error('Save PNG to album failed:', err);
-      setPngAlbumError('Save failed. See console.');
-    } finally {
-      setSavingPng(false);
-    }
-  };
 
   const addLayer = (layer: Layer) => {
     onChange({ ...composition, layers: [...composition.layers, layer] });
@@ -474,129 +356,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
             onClose={() => setShowRefitModal(false)}
           />
         )}
-        {showPostCarousel && (
-          <PostCarouselModal
-            composition={composition}
-            onClose={() => setShowPostCarousel(false)}
-          />
-        )}
-        {showPostVideo && (
-          <PostVideoModal
-            composition={composition}
-            onClose={() => setShowPostVideo(false)}
-          />
-        )}
       </div>
-
-      {exportProgress && (
-        <div className="space-y-1">
-          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-            <div
-              className="bg-green-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${exportProgress.percent}%` }}
-            />
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 text-center">{exportProgress.message}</p>
-        </div>
-      )}
-
-      <button
-        onClick={handleExport}
-        disabled={exporting}
-        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-white font-semibold rounded-lg py-3 transition flex items-center justify-center gap-2"
-      >
-        {exporting
-          ? <><Loader2 className="w-4 h-4 animate-spin" /> {exportProgress?.message ?? 'Preparing...'}</>
-          : <><Download className="w-4 h-4" /> Export MP4</>
-        }
-      </button>
-
-      <button
-        onClick={handleSaveAsTraining}
-        disabled={savingTraining || exporting}
-        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-        title="Render this composition and save it to the Academy as a DRAFT training video. Publish + set its audience from Manage training videos. Superadmin only."
-      >
-        {savingTraining
-          ? <><Loader2 className="w-4 h-4 animate-spin" /> {trainingProgress || 'Saving…'}</>
-          : <><GraduationCap className="w-4 h-4" /> Save as training video</>
-        }
-      </button>
-      {trainingUrl && (
-        <p className="text-xs text-emerald-400">
-          Saved to Academy as a draft. Publish it from Manage training videos.{' '}
-          <a href={trainingUrl} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">View video</a>
-        </p>
-      )}
-      {trainingError && <p className="text-xs text-red-400">{trainingError}</p>}
-
-      <button
-        onClick={() => setShowTrainingManager(true)}
-        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-        title="Filter by draft/published, set who can see each training video, schedule release/end dates, unpublish, or delete."
-      >
-        <ListVideo className="w-4 h-4" /> Manage training videos
-      </button>
-      {showTrainingManager && <TrainingVideosModal onClose={() => setShowTrainingManager(false)} />}
-
-      <button
-        onClick={handleExportPng}
-        disabled={exportingPng}
-        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-      >
-        {exportingPng
-          ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting…</>
-          : <><ImageIcon className="w-4 h-4" /> Export PNG (screenshot)</>
-        }
-      </button>
-
-      <button
-        onClick={handleExportSlides}
-        disabled={exportingSlides}
-        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-        title="Export one PNG per slide — an Instagram-carousel image set. Uses meta.carousel.slideTimes when set, otherwise one slide per whole second."
-      >
-        {exportingSlides
-          ? <><Loader2 className="w-4 h-4 animate-spin" /> Exporting slides… {slidesProgress}</>
-          : <><ImageIcon className="w-4 h-4" /> Export slides (PNG set)</>
-        }
-      </button>
-      {slidesError && <p className="text-xs text-red-400">{slidesError}</p>}
-
-      <button
-        onClick={() => setShowPostCarousel(true)}
-        className="w-full bg-gradient-to-r from-fuchsia-600 to-orange-500 hover:from-fuchsia-500 hover:to-orange-400 text-white font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-        title="Render the slides, upload them, and publish them as one Instagram carousel via Blotato."
-      >
-        <Instagram className="w-4 h-4" /> Post as Instagram carousel
-      </button>
-
-      <button
-        onClick={() => setShowPostVideo(true)}
-        className="w-full bg-gradient-to-r from-fuchsia-600 to-orange-500 hover:from-fuchsia-500 hover:to-orange-400 text-white font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-        title="Render the composition to MP4, upload it, and publish it as an Instagram Reel via Blotato."
-      >
-        <Instagram className="w-4 h-4" /> Post as Instagram video (Reel)
-      </button>
-
-      <button
-        onClick={handleSavePngToAlbum}
-        disabled={savingPng}
-        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-500 text-slate-900 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
-        title={`Save the current frame to your "${VEMOTION_ALBUM}" photo album`}
-      >
-        {savingPng
-          ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving to album…</>
-          : <><ImageIcon className="w-4 h-4" /> Save PNG to {VEMOTION_ALBUM} album</>
-        }
-      </button>
-      {pngAlbumUrl && (
-        <p className="text-xs text-emerald-400">
-          Saved to {VEMOTION_ALBUM}.{' '}
-          <a href={pngAlbumUrl} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">View image</a>
-        </p>
-      )}
-      {pngAlbumError && <p className="text-xs text-red-400">{pngAlbumError}</p>}
     </div>
   );
 };

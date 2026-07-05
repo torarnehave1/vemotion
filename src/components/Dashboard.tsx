@@ -5,6 +5,7 @@ import { CompositionEditor } from './CompositionEditor';
 import { VideoPreview } from './VideoPreview';
 import { TimelineEditor } from './TimelineEditor';
 import { FileMenu } from './FileMenu';
+import { ExportShareMenu } from './ExportShareMenu';
 import { AppearanceModal } from './AppearanceModal';
 import { useAuth } from '../App';
 import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeCompositionIdToUrl, writeLastCompositionRef } from '../lib/cloud-compositions';
@@ -469,11 +470,11 @@ export const Dashboard: React.FC = () => {
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-200 flex-shrink-0">Vemotion</h1>
         {/* Build marker — visual confirmation of latest deploy. Bump the label on each push. */}
         <span
-          aria-label="Build marker WB"
-          title="Build marker WB — visual confirmation of latest deploy"
+          aria-label="Build marker WC"
+          title="Build marker WC — visual confirmation of latest deploy"
           className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-slate-900 dark:text-white text-[10px] font-bold tracking-wider flex-shrink-0"
         >
-          WB
+          WC
         </span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview
@@ -534,6 +535,8 @@ export const Dashboard: React.FC = () => {
             setComposition(prev => ({ ...prev, layers: [...prev.layers, layer] }));
           }}
         />
+
+        <ExportShareMenu composition={composition} currentFrame={currentFrame} />
 
         {/* Build-up replay: rebuilds the live composition one layer per interval
             in the real editor, for screen recording. Autosave pauses while it runs. */}
@@ -615,7 +618,7 @@ export const Dashboard: React.FC = () => {
           style={{ width: sidebarWidth }}
         >
           <div className="p-4" style={{ width: sidebarWidth }}>
-            <CompositionEditor composition={composition} onChange={setComposition} currentFrame={currentFrame} />
+            <CompositionEditor composition={composition} onChange={setComposition} />
           </div>
         </aside>
 

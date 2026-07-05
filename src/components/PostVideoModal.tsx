@@ -57,6 +57,10 @@ export const PostVideoModal: React.FC<PostVideoModalProps> = ({ composition, onC
   const [posted, setPosted] = useState(false);
 
   const urlRef = useRef<string>('');
+  // True only when a mouse press STARTED on the backdrop itself — so a
+  // textarea-resize drag that happens to release over the backdrop doesn't
+  // close the modal (the click target is the backdrop, but the press wasn't).
+  const backdropPressRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +124,8 @@ export const PostVideoModal: React.FC<PostVideoModalProps> = ({ composition, onC
   return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={busy ? undefined : onClose}
+      onMouseDown={(e) => { backdropPressRef.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (!busy && e.target === e.currentTarget && backdropPressRef.current) onClose(); }}
     >
       <div
         className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden"

@@ -61,6 +61,10 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
   const [posted, setPosted] = useState(false);
 
   const urlsRef = useRef<string[]>([]);
+  // True only when a mouse press STARTED on the backdrop itself — so a
+  // textarea-resize drag that happens to release over the backdrop doesn't
+  // close the modal (the click target is the backdrop, but the press wasn't).
+  const backdropPressRef = useRef(false);
 
   // Render every slide to a PNG on open — this is the review material AND the
   // exact bytes that get uploaded at publish. Object URLs revoked on unmount.
@@ -128,7 +132,8 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
   return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={busy ? undefined : onClose}
+      onMouseDown={(e) => { backdropPressRef.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (!busy && e.target === e.currentTarget && backdropPressRef.current) onClose(); }}
     >
       <div
         className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden"

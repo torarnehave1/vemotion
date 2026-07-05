@@ -47,27 +47,42 @@ export async function listInstagramAccounts(): Promise<BlotatoAccount[]> {
 }
 
 /**
- * Render each carousel slide to a PNG and upload it to the VEmotion album,
- * returning the public image URLs in slide order (the order Instagram shows
- * them in the carousel). Sequential so `onProgress` reads sensibly and the
- * photos worker isn't hammered.
- *
- * `slideTimes` are capture times in seconds (see `carouselSlideTimes`).
+ * Render each carousel slide to a PNG Blob in slide order — used by the
+ * review step so the user sees the actual slides before anything is uploaded
+ * or posted. `slideTimes` are capture times in seconds (see
+ * `carouselSlideTimes`). Sequential so `onProgress` reads sensibly.
  */
-export async function uploadSlidesForCarousel(
+export async function renderSlideBlobs(
   composition: CompositionData,
   slideTimes: number[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Blob[]> {
+  if (slideTimes.length === 0) throw new Error('No slides to render');
+  const blobs: Blob[] = [];
+  for (let i = 0; i < slideTimes.length; i++) {
+    const frame = Math.max(0, Math.round(slideTimes[i] * composition.fps));
+    blobs.push(await captureFramePngBlob(composition, frame));
+    onProgress?.(i + 1, slideTimes.length);
+  }
+  return blobs;
+}
+
+/**
+ * Upload already-rendered slide Blobs to the VEmotion album, returning the
+ * public image URLs in order (the order Instagram shows them in the carousel).
+ * Split from rendering so the publish step doesn't re-render what the review
+ * step already produced.
+ */
+export async function uploadCarouselBlobs(
+  blobs: Blob[],
   fileBase = 'slide',
   onProgress?: (done: number, total: number) => void,
 ): Promise<string[]> {
-  if (slideTimes.length === 0) throw new Error('No slides to post');
   const urls: string[] = [];
-  for (let i = 0; i < slideTimes.length; i++) {
-    const frame = Math.max(0, Math.round(slideTimes[i] * composition.fps));
-    const blob = await captureFramePngBlob(composition, frame);
-    const file = new File([blob], `${fileBase}-${String(i + 1).padStart(2, '0')}.png`, { type: 'image/png' });
+  for (let i = 0; i < blobs.length; i++) {
+    const file = new File([blobs[i]], `${fileBase}-${String(i + 1).padStart(2, '0')}.png`, { type: 'image/png' });
     urls.push(await uploadImageToAlbum(file));
-    onProgress?.(i + 1, slideTimes.length);
+    onProgress?.(i + 1, blobs.length);
   }
   return urls;
 }
@@ -148,16 +163,22 @@ export function postInstagramVideo(
 }
 
 /**
- * Render the composition to MP4 (client-side, ffmpeg.wasm — no download) and
- * upload it to the public, Range-capable vemotion-video host, returning the
- * public URL to hand Blotato. `onProgress` forwards the export stages.
+ * Render the composition to an MP4 Blob (client-side, ffmpeg.wasm — no
+ * download). Used by the video review step so the user can watch the exact
+ * clip before it uploads or posts. `onProgress` forwards the export stages.
  */
-export async function renderAndUploadVideo(
+export function renderVideoBlob(
   composition: CompositionData,
-  fileBase = 'vemotion',
   onProgress?: (p: ExportProgress) => void,
-): Promise<string> {
-  const blob = await exportToMp4(composition, onProgress, { download: false });
+): Promise<Blob> {
+  return exportToMp4(composition, onProgress, { download: false });
+}
+
+/**
+ * Upload an already-rendered MP4 Blob to the public, Range-capable
+ * vemotion-video host, returning the public URL to hand Blotato.
+ */
+export async function uploadVideoBlob(blob: Blob, fileBase = 'vemotion'): Promise<string> {
   const file = new File([blob], `${fileBase}.mp4`, { type: 'video/mp4' });
   const { url } = await uploadVideoFile(file);
   return url;

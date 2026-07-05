@@ -18,6 +18,8 @@
 import type { CompositionData } from './api';
 import { captureFramePngBlob } from './screenshot';
 import { uploadImageToAlbum } from './photoAlbum';
+import { exportToMp4, type ExportProgress } from './exporter';
+import { uploadVideoFile } from './videoUpload';
 
 const BLOTATO_API = 'https://api.vegvisr.org/blotato';
 
@@ -78,19 +80,22 @@ export interface CarouselPostResult {
 }
 
 /**
- * Publish a set of image URLs as one Instagram carousel post via the
- * blotato-worker. Two or more `mediaUrls` = a carousel; one = a single image.
+ * Publish media to Instagram via the blotato-worker. Shared by the carousel
+ * (images) and video (Reel) posters — the only differences are the number of
+ * `mediaUrls` and whether `target.mediaType: 'reel'` is set (Blotato requires
+ * that flag for Instagram video, verified against its docs).
  *
  * NOTE: this publishes immediately and publicly to the chosen account. The
  * caller is responsible for confirming intent before invoking it.
  */
-export async function postInstagramCarousel(
+async function postToInstagram(
   accountId: string,
   mediaUrls: string[],
   caption: string,
+  opts: { mediaType?: 'reel' } = {},
 ): Promise<CarouselPostResult> {
   if (!accountId) throw new Error('No Instagram account selected');
-  if (mediaUrls.length === 0) throw new Error('No images to post');
+  if (mediaUrls.length === 0) throw new Error('No media to post');
   const payload = {
     post: {
       accountId,
@@ -99,7 +104,10 @@ export async function postInstagramCarousel(
         mediaUrls,
         platform: 'instagram',
       },
-      target: { targetType: 'instagram' },
+      target: {
+        targetType: 'instagram',
+        ...(opts.mediaType ? { mediaType: opts.mediaType } : {}),
+      },
     },
   };
   const res = await fetch(`${BLOTATO_API}/post`, {
@@ -113,4 +121,44 @@ export async function postInstagramCarousel(
     throw new Error(`Blotato post failed (HTTP ${body.status ?? res.status}): ${String(detail).slice(0, 300)}`);
   }
   return { success: true, status: body.status ?? res.status, data: body.data };
+}
+
+/**
+ * Publish a set of image URLs as one Instagram carousel post. Two or more
+ * `mediaUrls` = a carousel; one = a single image.
+ */
+export function postInstagramCarousel(
+  accountId: string,
+  mediaUrls: string[],
+  caption: string,
+): Promise<CarouselPostResult> {
+  return postToInstagram(accountId, mediaUrls, caption);
+}
+
+/**
+ * Publish a single video URL as an Instagram Reel. `target.mediaType: 'reel'`
+ * is required by Blotato for Instagram video.
+ */
+export function postInstagramVideo(
+  accountId: string,
+  videoUrl: string,
+  caption: string,
+): Promise<CarouselPostResult> {
+  return postToInstagram(accountId, [videoUrl], caption, { mediaType: 'reel' });
+}
+
+/**
+ * Render the composition to MP4 (client-side, ffmpeg.wasm — no download) and
+ * upload it to the public, Range-capable vemotion-video host, returning the
+ * public URL to hand Blotato. `onProgress` forwards the export stages.
+ */
+export async function renderAndUploadVideo(
+  composition: CompositionData,
+  fileBase = 'vemotion',
+  onProgress?: (p: ExportProgress) => void,
+): Promise<string> {
+  const blob = await exportToMp4(composition, onProgress, { download: false });
+  const file = new File([blob], `${fileBase}.mp4`, { type: 'video/mp4' });
+  const { url } = await uploadVideoFile(file);
+  return url;
 }

@@ -5,6 +5,7 @@ import { AddLayerModal } from './AddLayerModal';
 import { AnimationPortfolioModal } from './AnimationPortfolioModal';
 import { RefitCompositionModal } from './RefitCompositionModal';
 import { PostCarouselModal } from './PostCarouselModal';
+import { PostVideoModal } from './PostVideoModal';
 import TrainingVideosModal from './TrainingVideosModal';
 import { exportToMp4, type ExportProgress } from '../lib/exporter';
 import { saveAsTrainingVideo } from '../lib/trainingVideo';
@@ -46,6 +47,7 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
   const [showAnimModal, setShowAnimModal] = useState(false);
   const [showRefitModal, setShowRefitModal] = useState(false);
   const [showPostCarousel, setShowPostCarousel] = useState(false);
+  const [showPostVideo, setShowPostVideo] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const set = (patch: Partial<CompositionData>) => onChange({ ...composition, ...patch });
@@ -478,6 +480,12 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
             onClose={() => setShowPostCarousel(false)}
           />
         )}
+        {showPostVideo && (
+          <PostVideoModal
+            composition={composition}
+            onClose={() => setShowPostVideo(false)}
+          />
+        )}
       </div>
 
       {exportProgress && (
@@ -561,6 +569,14 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
         title="Render the slides, upload them, and publish them as one Instagram carousel via Blotato."
       >
         <Instagram className="w-4 h-4" /> Post as Instagram carousel
+      </button>
+
+      <button
+        onClick={() => setShowPostVideo(true)}
+        className="w-full bg-gradient-to-r from-fuchsia-600 to-orange-500 hover:from-fuchsia-500 hover:to-orange-400 text-white font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-2"
+        title="Render the composition to MP4, upload it, and publish it as an Instagram Reel via Blotato."
+      >
+        <Instagram className="w-4 h-4" /> Post as Instagram video (Reel)
       </button>
 
       <button

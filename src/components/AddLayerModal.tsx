@@ -468,6 +468,25 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const isGenericEdit = isEditing && !isImgLayer && !isVideoLayer && !isKgShape && !isKgCard && !isPixelGrid
     && !(editingLayer && ['text', 'shape', 'math-shape'].includes(editingLayer.type));
 
+  // Editing a 'Word scramble' element: a text layer whose animation is
+  // char-scramble. It gets a dedicated compact form (Word / size / colour) whose
+  // save PRESERVES the char-scramble animation — the generic text form would
+  // rebuild `animation` from the preset dropdown and destroy it (L21/L38).
+  const isScrambleEdit = isEditing && editingLayer?.type === 'text'
+    && (editingLayer.animation?.kind === 'char-scramble'
+      || (editingLayer.animations ?? []).some((a) => a.kind === 'char-scramble'));
+
+  // Save the scramble edit: spread the original layer, override only the fields
+  // the compact form exposes. Preserves animation, group, timing, everything else.
+  const handleSaveScramble = () => {
+    if (!editingLayer) return;
+    onAdd({
+      ...editingLayer,
+      properties: { ...editingLayer.properties, text, fontSize, color },
+    });
+    onClose();
+  };
+
   // Path layer measurements calibration state (only active when editingLayer.type === 'path').
   const pathAnchors: PathAnchor[] = editingLayer?.type === 'path'
     ? ((editingLayer.properties.anchors as PathAnchor[] | undefined) ?? [])
@@ -1711,6 +1730,51 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               onAdd={(layer) => { onAdd(layer); onClose(); }}
               onSetCompositionDuration={onSetCompositionDuration}
             />
+          ) : isScrambleEdit ? (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Word scramble — the word decodes from a jumble of its own letters.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Word</label>
+                <input
+                  type="text"
+                  value={text}
+                  autoFocus
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveScramble(); }}
+                  placeholder="REVEAL"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Font size</label>
+                  <input
+                    type="number"
+                    value={fontSize}
+                    min={8}
+                    onChange={(e) => setFontSize(Number(e.target.value) || fontSize)}
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Colour</label>
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    className="h-[38px] w-14 rounded-lg cursor-pointer bg-transparent border border-slate-300 dark:border-slate-700 p-0.5"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleSaveScramble}
+                className="w-full bg-sky-600 hover:bg-sky-500 text-white rounded-lg px-4 py-2.5 text-sm font-medium transition"
+              >
+                Save
+              </button>
+            </div>
           ) : isGenericEdit ? (
             <>
               <p className="text-xs text-slate-500 dark:text-slate-400">

@@ -80,8 +80,8 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
       const { url } = await uploadVideoFile(file);
       setSrc(url);
       setName(file.name);
-    } catch {
-      setError('Upload failed.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

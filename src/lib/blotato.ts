@@ -13,15 +13,31 @@
  *
  * The account id is resolved LIVE from `/blotato/accounts` (Lesson 42:
  * authoritative registry over a hard-coded/guessed id) — the caller picks
- * which connected Instagram account to post as.
+ * which connected Instagram accounts to post as. MORE THAN ONE may be picked:
+ * Blotato's `/v2/posts` takes a single `accountId`, so a multi-account publish
+ * is N sequential posts of the SAME media, reported per account.
+ *
+ * Both worker endpoints require the user's `X-API-Token`
+ * (`emailVerificationToken`) — the worker resolves the caller against the D1
+ * `config` table and uses that row's `blotato_api_key`. Sending no token is a
+ * 401, so every call here must carry it (Lesson 36: match the auth the target
+ * service actually validates).
  */
 import type { CompositionData } from './api';
+import { readStoredUser } from './auth';
 import { captureFramePngBlob } from './screenshot';
 import { uploadImageToAlbum } from './photoAlbum';
 import { exportToMp4, type ExportProgress } from './exporter';
 import { uploadVideoFile } from './videoUpload';
 
 const BLOTATO_API = 'https://api.vegvisr.org/blotato';
+
+/** The worker authenticates every non-health call against the config table. */
+function authHeaders(): Record<string, string> {
+  const token = readStoredUser()?.emailVerificationToken;
+  if (!token) throw new Error('Not authenticated — sign in to post to Instagram');
+  return { 'X-API-Token': token };
+}
 
 /** One social account connected to Blotato, as returned by `/blotato/accounts`. */
 export interface BlotatoAccount {
@@ -38,7 +54,7 @@ export interface BlotatoAccount {
  * handle), so the caller can present a picker.
  */
 export async function listInstagramAccounts(): Promise<BlotatoAccount[]> {
-  const res = await fetch(`${BLOTATO_API}/accounts`);
+  const res = await fetch(`${BLOTATO_API}/accounts`, { headers: authHeaders() });
   if (!res.ok) throw new Error(`Could not load accounts: HTTP ${res.status}`);
   const body = await res.json() as { success?: boolean; error?: string; data?: { items?: BlotatoAccount[] } };
   if (!body.success) throw new Error(body.error || 'Blotato accounts request failed');
@@ -94,6 +110,32 @@ export interface CarouselPostResult {
   data: unknown;
 }
 
+/** Outcome of ONE account in a multi-account publish. */
+export interface AccountPostResult {
+  accountId: string;
+  /** `@username` when known — the UI reports per handle, not per id. */
+  username?: string;
+  ok: boolean;
+  /** Permalink when Blotato returned one. */
+  url: string | null;
+  error?: string;
+}
+
+/**
+ * Pull a permalink out of Blotato's response. Shape varies by platform, so we
+ * probe the keys it is known to use. Shared by both post modals.
+ */
+export function extractPostUrl(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  for (const key of ['url', 'permalink', 'postUrl', 'link']) {
+    if (typeof d[key] === 'string') return d[key] as string;
+  }
+  const submission = d.submission as Record<string, unknown> | undefined;
+  if (submission && typeof submission.url === 'string') return submission.url;
+  return null;
+}
+
 /**
  * Publish media to Instagram via the blotato-worker. Shared by the carousel
  * (images) and video (Reel) posters — the only differences are the number of
@@ -127,7 +169,7 @@ async function postToInstagram(
   };
   const res = await fetch(`${BLOTATO_API}/post`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
   });
   const body = await res.json().catch(() => ({})) as { success?: boolean; status?: number; data?: unknown; error?: string };
@@ -139,27 +181,67 @@ async function postToInstagram(
 }
 
 /**
- * Publish a set of image URLs as one Instagram carousel post. Two or more
- * `mediaUrls` = a carousel; one = a single image.
+ * Post the SAME media to every selected account, sequentially. Blotato has no
+ * multi-account endpoint — `post.accountId` is singular — so this is N calls.
+ * One account failing does NOT abort the rest: each account gets its own
+ * result row so the UI can report "2 of 3 published" honestly rather than
+ * throwing away the successes.
+ *
+ * `onProgress` fires as each account is attempted, for the publish spinner.
  */
-export function postInstagramCarousel(
-  accountId: string,
+async function postToAccounts(
+  accounts: Array<{ id: string; username?: string }>,
   mediaUrls: string[],
   caption: string,
-): Promise<CarouselPostResult> {
-  return postToInstagram(accountId, mediaUrls, caption);
+  opts: { mediaType?: 'reel' } = {},
+  onProgress?: (done: number, total: number, username?: string) => void,
+): Promise<AccountPostResult[]> {
+  if (accounts.length === 0) throw new Error('No Instagram account selected');
+  const results: AccountPostResult[] = [];
+  for (let i = 0; i < accounts.length; i++) {
+    const acc = accounts[i];
+    onProgress?.(i, accounts.length, acc.username);
+    try {
+      const r = await postToInstagram(acc.id, mediaUrls, caption, opts);
+      results.push({ accountId: acc.id, username: acc.username, ok: true, url: extractPostUrl(r.data) });
+    } catch (e) {
+      results.push({
+        accountId: acc.id,
+        username: acc.username,
+        ok: false,
+        url: null,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+    onProgress?.(i + 1, accounts.length, acc.username);
+  }
+  return results;
 }
 
 /**
- * Publish a single video URL as an Instagram Reel. `target.mediaType: 'reel'`
- * is required by Blotato for Instagram video.
+ * Publish a set of image URLs as one Instagram carousel post, to each selected
+ * account. Two or more `mediaUrls` = a carousel; one = a single image.
+ */
+export function postInstagramCarousel(
+  accounts: Array<{ id: string; username?: string }>,
+  mediaUrls: string[],
+  caption: string,
+  onProgress?: (done: number, total: number, username?: string) => void,
+): Promise<AccountPostResult[]> {
+  return postToAccounts(accounts, mediaUrls, caption, {}, onProgress);
+}
+
+/**
+ * Publish a single video URL as an Instagram Reel to each selected account.
+ * `target.mediaType: 'reel'` is required by Blotato for Instagram video.
  */
 export function postInstagramVideo(
-  accountId: string,
+  accounts: Array<{ id: string; username?: string }>,
   videoUrl: string,
   caption: string,
-): Promise<CarouselPostResult> {
-  return postToInstagram(accountId, [videoUrl], caption, { mediaType: 'reel' });
+  onProgress?: (done: number, total: number, username?: string) => void,
+): Promise<AccountPostResult[]> {
+  return postToAccounts(accounts, [videoUrl], caption, { mediaType: 'reel' }, onProgress);
 }
 
 /**

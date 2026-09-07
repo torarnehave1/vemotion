@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Instagram, ExternalLink, AlertTriangle, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { X, Loader2, Instagram, AlertTriangle, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { carouselSlideTimes } from '../lib/screenshot';
 import {
-  listInstagramAccounts,
   renderSlideBlobs,
   uploadCarouselBlobs,
   postInstagramCarousel,
-  type BlotatoAccount,
+  type AccountPostResult,
 } from '../lib/blotato';
+import { useInstagramAccounts, InstagramAccountPicker, PostResultList } from './InstagramAccountPicker';
 
 interface PostCarouselModalProps {
   composition: CompositionData;
@@ -18,23 +18,13 @@ interface PostCarouselModalProps {
 
 const IG_CAPTION_MAX = 2200;
 
-function extractPostUrl(data: unknown): string | null {
-  if (!data || typeof data !== 'object') return null;
-  const d = data as Record<string, unknown>;
-  for (const key of ['url', 'permalink', 'postUrl', 'link']) {
-    if (typeof d[key] === 'string') return d[key] as string;
-  }
-  const submission = d.submission as Record<string, unknown> | undefined;
-  if (submission && typeof submission.url === 'string') return submission.url;
-  return null;
-}
-
 /**
  * "Post as Instagram carousel" — a two-step flow mirroring Instagram's own
  * composer: STEP 1 review every slide (swipe through the real rendered PNGs),
  * STEP 2 write the caption + pick the account, then Share. Slides are rendered
  * once on open (for the review), and those same blobs are uploaded at publish
- * time — no re-render.
+ * time — no re-render. Several accounts may be selected: the slides upload
+ * once, then post to each selected handle in turn.
  *
  * Publishing is immediate and public; Share on step 2 is the only trigger.
  */
@@ -49,16 +39,13 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
   const [renderError, setRenderError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
 
-  const [accounts, setAccounts] = useState<BlotatoAccount[] | null>(null);
-  const [accountsError, setAccountsError] = useState<string | null>(null);
-  const [accountId, setAccountId] = useState<string>('');
+  const { accounts, accountsError, selectedIds, toggle, selectedAccounts } = useInstagramAccounts();
   const [caption, setCaption] = useState<string>(composition.meta?.description ?? '');
 
   const [phase, setPhase] = useState<'idle' | 'uploading' | 'posting'>('idle');
   const [publishProgress, setPublishProgress] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
-  const [posted, setPosted] = useState(false);
+  const [results, setResults] = useState<AccountPostResult[] | null>(null);
 
   const urlsRef = useRef<string[]>([]);
   // True only when a mouse press STARTED on the backdrop itself — so a
@@ -87,20 +74,8 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
     };
   }, [composition, slideTimes]);
 
-  useEffect(() => {
-    let cancelled = false;
-    listInstagramAccounts()
-      .then((list) => {
-        if (cancelled) return;
-        setAccounts(list);
-        const preferred = list.find((a) => a.username === 'tor.arne.have') ?? list[0];
-        if (preferred) setAccountId(preferred.id);
-      })
-      .catch((e) => { if (!cancelled) setAccountsError(e instanceof Error ? e.message : String(e)); });
-    return () => { cancelled = true; };
-  }, []);
-
   const busy = phase !== 'idle';
+  const posted = results !== null;
   const rendering = blobs === null && !renderError;
 
   const go = (d: number) => setIndex((i) => (i + d + slideTimes.length) % slideTimes.length);
@@ -113,10 +88,11 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
       setPublishProgress(`Uploading slide 0/${blobs.length}`);
       const urls = await uploadCarouselBlobs(blobs, fileBase, (done, total) => setPublishProgress(`Uploading slide ${done}/${total}`));
       setPhase('posting');
-      setPublishProgress('Publishing carousel to Instagram…');
-      const result = await postInstagramCarousel(accountId, urls, caption);
-      setResultUrl(extractPostUrl(result.data));
-      setPosted(true);
+      // The slides upload ONCE; each selected account then gets its own post.
+      const rs = await postInstagramCarousel(selectedAccounts, urls, caption, (done, total, username) =>
+        setPublishProgress(`Publishing to @${username ?? ''} (${Math.min(done + 1, total)}/${total})…`),
+      );
+      setResults(rs);
       setPhase('idle');
       setPublishProgress('');
     } catch (e) {
@@ -126,7 +102,6 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
     }
   };
 
-  const selectedAccount = accounts?.find((a) => a.id === accountId);
   const title = posted ? 'Shared' : step === 1 ? 'Review your slides' : 'Caption and share';
 
   return createPortal(
@@ -156,19 +131,8 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
 
         {/* Body */}
         <div className="p-4 space-y-4">
-          {posted ? (
-            <div className="space-y-3">
-              <p className="text-sm text-emerald-500 font-medium">
-                Carousel published to {selectedAccount ? `@${selectedAccount.username}` : 'Instagram'}.
-              </p>
-              {resultUrl ? (
-                <a href={resultUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-sky-500 hover:text-sky-400 underline">
-                  View on Instagram <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              ) : (
-                <p className="text-xs text-slate-500">Blotato accepted the post. It may take a moment to appear on your profile.</p>
-              )}
-            </div>
+          {posted && results ? (
+            <PostResultList results={results} pendingNote="accepted — may take a moment to appear" />
           ) : step === 1 ? (
             <>
               {/* Slide carousel — the real rendered slides */}
@@ -228,24 +192,18 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Instagram account</label>
-                {accountsError ? (
-                  <p className="text-xs text-red-400">{accountsError}</p>
-                ) : accounts === null ? (
-                  <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Loading accounts…</div>
-                ) : accounts.length === 0 ? (
-                  <p className="text-xs text-amber-500">No Instagram account is connected in Blotato.</p>
-                ) : (
-                  <select value={accountId} onChange={(e) => setAccountId(e.target.value)} disabled={busy} className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
-                    {accounts.map((a) => <option key={a.id} value={a.id}>@{a.username}{a.fullname ? ` — ${a.fullname}` : ''}</option>)}
-                  </select>
-                )}
-              </div>
+              <InstagramAccountPicker
+                accounts={accounts}
+                error={accountsError}
+                selectedIds={selectedIds}
+                onToggle={toggle}
+                disabled={busy}
+              />
 
               <p className="flex items-start gap-1.5 text-[11px] text-amber-500">
                 <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                Publishing is immediate and public. Slides upload to your VEmotion album, then post as one carousel.
+                Publishing is immediate and public. Slides upload to your VEmotion album, then post as one carousel
+                {selectedIds.length > 1 ? ` to each of the ${selectedIds.length} selected accounts.` : '.'}
               </p>
 
               {error && <p className="text-xs text-red-400 break-words">{error}</p>}
@@ -270,10 +228,12 @@ export const PostCarouselModal: React.FC<PostCarouselModalProps> = ({ compositio
                 <button onClick={() => setStep(1)} disabled={busy} className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg disabled:opacity-40">Back</button>
                 <button
                   onClick={handlePublish}
-                  disabled={busy || !accountId || !blobs || caption.length > IG_CAPTION_MAX}
+                  disabled={busy || selectedIds.length === 0 || !blobs || caption.length > IG_CAPTION_MAX}
                   className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-fuchsia-600 to-orange-500 hover:from-fuchsia-500 hover:to-orange-400 disabled:from-slate-200 disabled:to-slate-200 dark:disabled:from-slate-700 dark:disabled:to-slate-700 disabled:text-slate-500 text-white flex items-center gap-1.5"
                 >
-                  {busy ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Publishing…</> : <><Instagram className="w-3.5 h-3.5" /> Share carousel</>}
+                  {busy
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Publishing…</>
+                    : <><Instagram className="w-3.5 h-3.5" /> Share carousel{selectedIds.length > 1 ? ` ×${selectedIds.length}` : ''}</>}
                 </button>
               </>
             )}

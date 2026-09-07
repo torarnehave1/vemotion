@@ -192,6 +192,45 @@ export const assistComposition = async ({
   return data as AssistResponse;
 };
 
+export type SuggestedCaption = {
+  caption: string;
+  /** How many hashtags survived the cap. */
+  hashtagsKept: number;
+  /** Hashtags the worker removed to honour Blotato's 5-hashtag ceiling. */
+  hashtagsDropped: string[];
+};
+
+/**
+ * Ask the worker to draft an Instagram caption for a composition, using Claude
+ * Haiku 4.5 (via the anthropic-worker service binding). The model writes in the
+ * composition's own language and is told to stay at 5 hashtags or fewer —
+ * Blotato's Instagram limit — and the worker TRIMS any extras, so the cap holds
+ * even when the model overshoots.
+ *
+ * `direction` is optional free text from the author ("make it punchier").
+ */
+export const suggestCaption = async (
+  composition: CompositionData,
+  direction?: string,
+): Promise<SuggestedCaption> => {
+  const token = getToken();
+  if (!token) throw new Error('Sign in to suggest a caption.');
+  const res = await fetch(`${VEMOTION_API}/suggest-caption`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+    body: JSON.stringify({ composition, ...(direction ? { direction } : {}) }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Caption suggestion failed.');
+  return {
+    caption: typeof data.caption === 'string' ? data.caption : '',
+    hashtagsKept: typeof data.hashtagsKept === 'number' ? data.hashtagsKept : 0,
+    hashtagsDropped: Array.isArray(data.hashtagsDropped)
+      ? data.hashtagsDropped.filter((t: unknown) => typeof t === 'string')
+      : [],
+  };
+};
+
 export type SuggestedMeta = {
   description: string;
   category: string;

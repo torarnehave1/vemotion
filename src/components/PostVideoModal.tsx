@@ -9,6 +9,7 @@ import {
   type AccountPostResult,
 } from '../lib/blotato';
 import { useInstagramAccounts, InstagramAccountPicker, PostResultList } from './InstagramAccountPicker';
+import { CaptionField } from './CaptionField';
 
 interface PostVideoModalProps {
   composition: CompositionData;
@@ -156,20 +157,7 @@ export const PostVideoModal: React.FC<PostVideoModalProps> = ({ composition, onC
                 <div className="w-16 rounded-md overflow-hidden bg-slate-950 flex-shrink-0 flex items-center justify-center" style={{ aspectRatio: `${composition.width} / ${composition.height}` }}>
                   {previewUrl && <video src={previewUrl} muted className="w-full h-full object-contain" />}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-slate-500 dark:text-slate-400">Caption</label>
-                    <span className={`text-[10px] ${caption.length > IG_CAPTION_MAX ? 'text-red-400' : 'text-slate-400'}`}>{caption.length}/{IG_CAPTION_MAX}</span>
-                  </div>
-                  <textarea
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    disabled={busy}
-                    rows={4}
-                    placeholder="Write your Instagram caption…"
-                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-y"
-                  />
-                </div>
+                <CaptionField composition={composition} value={caption} onChange={setCaption} disabled={busy} />
               </div>
 
               <InstagramAccountPicker

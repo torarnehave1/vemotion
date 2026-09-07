@@ -47,6 +47,9 @@ const COLOR_COMPREF = '#0ea5e9';
 // Superadmin to match its fallback.
 const userRole = (): string => readStoredUser()?.role || 'Superadmin';
 
+/** Email of the logged-in user — the owner stamped onto projects they create. */
+const currentUserEmail = (): string | null => readStoredUser()?.email ?? null;
+
 // ── Raw KG shapes (only the fields we touch) ────────────────────────────────
 type KgNode = {
   id: string;
@@ -59,7 +62,7 @@ type KgNode = {
   [k: string]: unknown;
 };
 type KgEdge = { id?: string; source: string; target: string; label?: string };
-type KgMetadata = { title: string; metaArea?: string; createdBy?: string; description?: string; [k: string]: unknown };
+type KgMetadata = { title: string; metaArea?: string; createdBy?: string; ownerEmail?: string; description?: string; [k: string]: unknown };
 type KgGraph = { metadata?: KgMetadata; nodes: KgNode[]; edges: KgEdge[] };
 
 // ── Parsed project shapes (what the UI consumes) ────────────────────────────
@@ -129,18 +132,33 @@ const saveGraph = async (graphId: string, graph: KgGraph): Promise<void> => {
 };
 
 /**
- * List all Vemotion project graphs (those marked `createdBy === PROJECT_MARKER`).
- * Reads /getknowgraphsummaries (which includes metadata) and filters client-side.
+ * List the logged-in user's Vemotion project graphs.
+ *
+ * Projects are SCOPED PER USER by `metadata.ownerEmail`. Two-phase because the
+ * KG list endpoint can't do the filtering for us:
+ *   1. Scan /getknowgraphsummaries (role-authed, paginated — the canonical
+ *      GraphPortfolio.vue listing) for graphs marked `createdBy === PROJECT_MARKER`.
+ *      This yields candidate ids/titles, but NOT ownership: the summaries endpoint
+ *      projects only a FIXED column set and silently DROPS custom metadata like
+ *      `ownerEmail` (verified live 2026-06-16 — see lessons_learned Lesson 35).
+ *   2. Read each candidate's FULL graph by id (where `ownerEmail` does persist)
+ *      and keep only those owned by the current user.
+ *
+ * Legacy projects with no `ownerEmail` belong to nobody and show for nobody —
+ * they must be backfilled with an owner to reappear.
  */
 export const listProjects = async (): Promise<ProjectSummary[]> => {
-  // Role-authed, paginated scan of all graphs — the canonical GraphPortfolio.vue
-  // listing. With the role header this returns the full set (incl. graphs just
-  // created); filter to those marked as Vemotion projects. Follow hasMore/offset
-  // (the server caps each page at 250).
+  const me = currentUserEmail();
+  // No identified user → cannot attribute ownership. Show nothing rather than
+  // leak every user's projects (the cross-user leak this scoping closes).
+  if (!me) return [];
+
   const headers = { 'x-user-role': userRole() };
-  const out: ProjectSummary[] = [];
-  const seen = new Set<string>();
   const LIMIT = 250;
+
+  // Phase 1 — collect Vemotion-project candidates from the summaries index.
+  const candidates: ProjectSummary[] = [];
+  const seen = new Set<string>();
   let offset = 0;
   for (let page = 0; page < 40; page += 1) {
     const res = await fetch(`${KG_BASE}/getknowgraphsummaries?limit=${LIMIT}&offset=${offset}`, { headers });
@@ -159,7 +177,7 @@ export const listProjects = async (): Promise<ProjectSummary[]> => {
     for (const g of results) {
       if (g?.metadata?.createdBy === PROJECT_MARKER && typeof g.id === 'string' && !seen.has(g.id)) {
         seen.add(g.id);
-        out.push({
+        candidates.push({
           graphId: g.id,
           metaArea: g.metadata?.metaArea ?? g.metadata?.title ?? '',
           title: g.metadata?.title ?? g.metadata?.metaArea ?? '(untitled project)',
@@ -169,7 +187,19 @@ export const listProjects = async (): Promise<ProjectSummary[]> => {
     if (!data.hasMore) break;
     offset += LIMIT;
   }
-  return out;
+
+  // Phase 2 — read each candidate's full graph (where ownerEmail persists) and
+  // keep only the current user's. Unreadable graphs are skipped, not surfaced.
+  const mine: ProjectSummary[] = [];
+  for (const c of candidates) {
+    try {
+      const g = await fetchGraph(c.graphId);
+      if (g.metadata?.ownerEmail === me) mine.push(c);
+    } catch {
+      // Skip — a graph we can't read can't be attributed to this user.
+    }
+  }
+  return mine;
 };
 
 /** Load one project graph and parse it into chapters → composition refs. */
@@ -223,6 +253,9 @@ export const createProject = async ({ metaArea, title }: { metaArea: string; tit
       title: projectTitle,
       metaArea: area,
       createdBy: PROJECT_MARKER,
+      // Scopes the project to its creator. listProjects filters on this so one
+      // user never sees another's projects. Persists by-id (not in summaries).
+      ownerEmail: currentUserEmail() ?? undefined,
       description: 'Vemotion project. Chapters and composition references.',
     },
     nodes: [

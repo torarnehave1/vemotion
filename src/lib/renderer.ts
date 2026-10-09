@@ -568,6 +568,22 @@ export class CanvasRenderer {
   }
 
   /**
+   * Release every cached video element: stop it and drop its source so the browser
+   * aborts the download. For one-shot renderers (portfolio thumbnails) — a discarded
+   * renderer would otherwise leave each clip buffering until garbage collection.
+   */
+  disposeVideos(): void {
+    for (const v of this.videoCache.values()) {
+      try {
+        v.pause();
+        v.removeAttribute('src');
+        v.load();
+      } catch { /* already gone */ }
+    }
+    this.videoCache.clear();
+  }
+
+  /**
    * Seek every active video layer to the source time matching the given
    * composition time, and resolve once each pending seek has completed. The
    * exporter awaits this before rendering each frame so the canvas draws the

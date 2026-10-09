@@ -16,11 +16,20 @@ import { CanvasRenderer } from './renderer';
  * renderer's existing `preloadImages` path before rendering, so they appear in
  * the thumbnail (subject to CORS — failed loads silently render as empty).
  *
+ * Video layers are preloaded too, with a time limit: a video layer is drawn from a
+ * <video> element, and without this the element was only created during the render
+ * and had no frame yet, so every composition with a full-canvas clip came out black.
+ * A clip that cannot load in time is left out rather than holding the card on its
+ * spinner. The elements are released afterwards so the clips stop downloading.
+ *
  * Known limitation: `kg-shape` and `card` layers fetch SVG paths from the KG
  * worker inside their draw functions; those network calls are NOT awaited
  * here, so those layers render empty in the thumbnail on the first portfolio
  * open. Acceptable for v1.
  */
+/** How long a thumbnail waits for its video layers before rendering without them. */
+const VIDEO_PRELOAD_LIMIT_MS = 8000;
+
 export async function renderThumbnail(
   composition: CompositionData,
   thumbnailWidth = 320,
@@ -40,7 +49,15 @@ export async function renderThumbnail(
 
   await renderer.preloadImages(composition);
   await renderer.preloadFonts(composition);
-  renderer.renderFrame(composition, 0);
+  try {
+    await Promise.race([
+      renderer.preloadVideos(composition).then(() => renderer.seekVideos(composition, 0)),
+      new Promise<void>((resolve) => setTimeout(resolve, VIDEO_PRELOAD_LIMIT_MS)),
+    ]);
+    renderer.renderFrame(composition, 0);
+  } finally {
+    renderer.disposeVideos();
+  }
 
   // Downscale to thumbnail.
   const thumbCanvas = document.createElement('canvas');

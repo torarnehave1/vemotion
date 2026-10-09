@@ -4,7 +4,8 @@ import { VideoLayerForm } from './VideoLayerForm';
 import { PixelGridEditForm } from './PixelGridEditForm';
 import { AiImagePrompt } from './AiImagePrompt';
 import { StockImagePicker } from './StockImagePicker';
-import { importImageUrlToAlbum, trackUnsplashDownload, type StockImage } from '../lib/photoAlbum';
+import { importImageUrlToAlbum, trackUnsplashDownload, uploadImageToAlbum, type StockImage } from '../lib/photoAlbum';
+import { GooglePhotosCancelled, openGooglePhotosWindow, pickFromGooglePhotos, type GooglePhotosProgress } from '../lib/googlePhotos';
 import { KnittingChartForm } from './KnittingChartForm';
 import { ANIMATED_ELEMENTS } from '../lib/animatedElements';
 import { createPortal } from 'react-dom';
@@ -916,6 +917,61 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     }
   };
 
+  // Google Photos import — picked photos are copied into the selected album, then show
+  // up in the grid below like any other album image.
+  const [googleProgress, setGoogleProgress] = useState<GooglePhotosProgress | null>(null);
+  const [googleUploading, setGoogleUploading] = useState('');
+  const [googleNote, setGoogleNote] = useState('');
+  const googleCancelledRef = useRef(false);
+  useEffect(() => {
+    googleCancelledRef.current = false;
+    return () => { googleCancelledRef.current = true; };
+  }, []);
+  const googleBusy = googleProgress !== null || googleUploading !== '';
+
+  const handleGooglePhotos = async () => {
+    // Opened synchronously inside the click, before any await (popup blocker).
+    const popup = openGooglePhotosWindow();
+    if (!popup) {
+      setImagesError('The browser blocked the Google window. Allow pop-ups for this site and try again.');
+      return;
+    }
+    const album = albumName;
+    setImagesError('');
+    setGoogleNote('');
+    try {
+      const { files, skipped } = await pickFromGooglePhotos(
+        popup, setGoogleProgress, () => googleCancelledRef.current,
+      );
+      setGoogleProgress(null);
+      let stored = 0;
+      const failed = [...skipped];
+      for (const [index, file] of files.entries()) {
+        setGoogleUploading(`Uploading ${index + 1} / ${files.length} to "${album}"...`);
+        try {
+          await uploadImageToAlbum(file, album);
+          stored += 1;
+        } catch (err) {
+          failed.push(`${file.name}: ${err instanceof Error ? err.message : 'upload failed'}`);
+        }
+      }
+      setGoogleNote(
+        `Added ${stored} from Google Photos to "${album}".` +
+        (failed.length ? ` Skipped ${failed.length}: ${failed.join('; ')}` : ''),
+      );
+      if (stored > 0) {
+        fetchAlbum(album);
+        fetchAlbumList();
+      }
+    } catch (err) {
+      if (err instanceof GooglePhotosCancelled) return;
+      setImagesError(err instanceof Error ? err.message : 'Google Photos import failed.');
+    } finally {
+      setGoogleProgress(null);
+      setGoogleUploading('');
+    }
+  };
+
   // AI prompt
   const [prompt, setPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -1227,7 +1283,35 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
           Upload
         </button>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+        <button
+          onClick={handleGooglePhotos}
+          disabled={googleBusy}
+          className="flex items-center gap-1 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-sm transition whitespace-nowrap"
+          title={`Pick photos in Google Photos and copy them into album "${albumName}"`}
+        >
+          {googleBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+          Google Photos
+        </button>
       </div>
+
+      {googleBusy && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {googleUploading
+            || (googleProgress?.phase === 'connecting' && 'Sign in to Google in the window that opened.')
+            || (googleProgress?.phase === 'choosing' && 'Choose your photos in the Google Photos window, then press Done there.')
+            || (googleProgress?.phase === 'downloading' && `Fetching from Google Photos... ${googleProgress.done ?? 0} / ${googleProgress.total ?? 0}`)
+            || 'Opening Google Photos...'}
+          {googleProgress?.phase === 'choosing' && googleProgress.pickerUri && (
+            <>
+              {' '}Window did not open?{' '}
+              <a href={googleProgress.pickerUri} target="_blank" rel="noopener noreferrer" className="text-sky-400 underline">
+                Open the Google Photos picker
+              </a>
+            </>
+          )}
+        </p>
+      )}
+      {googleNote && <p className="text-xs text-slate-500 dark:text-slate-400">{googleNote}</p>}
 
       {imagesLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-500 dark:text-slate-400" /></div>}
       {imagesError && <p className="text-red-400 text-sm">{imagesError}</p>}

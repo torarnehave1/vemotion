@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Google Photos — Vemotion</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        text-align: center;
+      }
+      main {
+        padding: 24px;
+        max-width: 420px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      p {
+        font-size: 14px;
+        margin: 0;
+        color: #94a3b8;
+      }
+      .error {
+        color: #fda4af;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="title">Connecting Google Photos…</h1>
+      <p id="detail"></p>
+    </main>
+    <script>
+      // Landing page for auth.vegvisr.org/picker/callback when the Google sign-in was started
+      // from this app in a popup. It reports the outcome to the app over a
+      // BroadcastChannel (same origin, so it works even when Google's pages have cut the
+      // window.opener link), then waits to be sent on to the Google Photos picker.
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var success = params.get('picker_auth_success') === 'true';
+        var error = params.get('picker_auth_error') || '';
+        var email = params.get('user_email') || '';
+        var title = document.getElementById('title');
+        var detail = document.getElementById('detail');
+
+        // Keep the email out of the address bar and history.
+        window.history.replaceState(null, '', window.location.pathname);
+
+        var channel = null;
+        try {
+          channel = new BroadcastChannel('vegvisr-picker-auth');
+        } catch (e) {
+          channel = null;
+        }
+
+        var isGoogleUrl = function (value) {
+          try {
+            var u = new URL(value);
+            return u.protocol === 'https:' && (u.hostname === 'google.com' || u.hostname.endsWith('.google.com'));
+          } catch (e) {
+            return false;
+          }
+        };
+
+        if (!success) {
+          title.textContent = 'Google Photos was not connected';
+          detail.textContent = (error || 'No result was returned') + '. You can close this window.';
+          detail.className = 'error';
+        } else {
+          title.textContent = 'Google Photos connected';
+          detail.textContent = 'Opening the Google Photos picker…';
+          window.setTimeout(function () {
+            detail.textContent = 'You can close this window and continue in Vemotion.';
+          }, 20000);
+        }
+
+        if (channel) {
+          channel.onmessage = function (event) {
+            var data = event.data || {};
+            if (data.type === 'picker-navigate' && isGoogleUrl(data.url)) {
+              window.location.replace(data.url);
+            } else if (data.type === 'picker-close') {
+              detail.textContent = data.message || 'You can close this window.';
+              if (data.error) detail.className = 'error';
+              window.close();
+            }
+          };
+          channel.postMessage({ type: 'picker-auth', success: success, email: email, error: error });
+        }
+      })();
+    </script>
+  </body>
+</html>

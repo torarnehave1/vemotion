@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { Upload, Loader2, Link2, Film } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Upload, Loader2, Link2, Film, Image as ImageIcon } from 'lucide-react';
 import type { Layer } from '../lib/api';
 import { uploadVideoFile } from '../lib/videoUpload';
+import { GooglePhotosCancelled, openGooglePhotosWindow, pickFromGooglePhotos, type GooglePhotosProgress } from '../lib/googlePhotos';
 
 interface VideoLayerFormProps {
   onAdd: (layer: Layer) => void;
@@ -88,6 +89,43 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
     }
   };
 
+  // Google Photos: pick one clip in Google's picker, then store it in the same
+  // vemotion-video R2 the file upload uses, so the layer gets the same kind of URL.
+  const [googleProgress, setGoogleProgress] = useState<GooglePhotosProgress | null>(null);
+  const googleCancelledRef = useRef(false);
+  useEffect(() => {
+    googleCancelledRef.current = false;
+    return () => { googleCancelledRef.current = true; };
+  }, []);
+
+  const handleGooglePhotos = async () => {
+    // Opened synchronously inside the click, before any await (popup blocker).
+    const popup = openGooglePhotosWindow();
+    if (!popup) {
+      setError('The browser blocked the Google window. Allow pop-ups for this site and try again.');
+      return;
+    }
+    setError('');
+    try {
+      const { files, skipped } = await pickFromGooglePhotos(
+        popup, setGoogleProgress, () => googleCancelledRef.current, 'video',
+      );
+      setGoogleProgress(null);
+      const file = files[0];
+      if (!file) throw new Error(skipped[0] || 'No video was selected in Google Photos.');
+      setUploading(true);
+      const { url } = await uploadVideoFile(file);
+      setSrc(url);
+      setName(file.name);
+    } catch (err) {
+      if (err instanceof GooglePhotosCancelled) return;
+      setError(err instanceof Error ? err.message : 'Google Photos import failed.');
+    } finally {
+      setGoogleProgress(null);
+      setUploading(false);
+    }
+  };
+
   const useUrl = () => {
     const trimmed = urlInput.trim();
     if (!trimmed) return;
@@ -169,8 +207,32 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
             >
               <Upload className="w-4 h-4" /> Choose video file
             </button>
-            {uploading && <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />}
+            <button
+              onClick={handleGooglePhotos}
+              disabled={uploading || googleProgress !== null}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-sm font-medium transition"
+              title="Pick a video in Google Photos and store it with your uploads"
+            >
+              <ImageIcon className="w-4 h-4" /> Google Photos
+            </button>
+            {(uploading || googleProgress !== null) && <Loader2 className="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" />}
           </div>
+          {googleProgress !== null && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {(googleProgress.phase === 'connecting' && 'Sign in to Google in the window that opened.')
+                || (googleProgress.phase === 'choosing' && 'Choose one video in the Google Photos window, then press Done there.')
+                || (googleProgress.phase === 'downloading' && 'Fetching the video from Google Photos...')
+                || 'Opening Google Photos...'}
+              {googleProgress.phase === 'choosing' && googleProgress.pickerUri && (
+                <>
+                  {' '}Window did not open?{' '}
+                  <a href={googleProgress.pickerUri} target="_blank" rel="noopener noreferrer" className="text-sky-400 underline">
+                    Open the Google Photos picker
+                  </a>
+                </>
+              )}
+            </p>
+          )}
           <p className="text-xs text-slate-500">Uploaded to your R2 store. MP4 / WebM work best.</p>
         </div>
       ) : (

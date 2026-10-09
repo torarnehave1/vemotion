@@ -79,15 +79,20 @@ const replaceExtension = (filename: string, extension: string) =>
 export const openGooglePhotosWindow = (): Window | null =>
   window.open('', POPUP_NAME, 'width=1000,height=760');
 
+/** What the caller can use. Google's picker cannot filter by type, so the other kind is skipped. */
+export type GooglePhotosKind = 'photos' | 'video';
+
 /**
  * Runs sign-in (only when needed), the Google picker, and the download of the picked
- * photos. Videos are skipped — a video layer has its own upload path.
+ * items. `kind: 'photos'` (default) returns photos and skips videos; `kind: 'video'`
+ * limits the picker to ONE item and returns it as an MP4, skipping photos.
  * Throws GooglePhotosCancelled when `isCancelled()` turns true.
  */
 export async function pickFromGooglePhotos(
   popup: Window,
   onProgress: (progress: GooglePhotosProgress) => void,
   isCancelled: () => boolean,
+  kind: GooglePhotosKind = 'photos',
 ): Promise<GooglePhotosResult> {
   const user = readStoredUser();
   const apiToken = user?.emailVerificationToken;
@@ -167,7 +172,8 @@ export async function pickFromGooglePhotos(
     const res = await fetch(`${PICKER_API_BASE}/sessions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: '{}',
+      // A video layer takes one clip, so the picker stops at one (int64 travels as a string).
+      body: JSON.stringify(kind === 'video' ? { pickingConfig: { maxItemCount: '1' } } : {}),
     });
     if (res.status === 401) throw new GoogleAuthExpired('Google session expired.');
     if (!res.ok) throw new Error(`Google Photos refused to open a picker session (${res.status}).`);
@@ -176,18 +182,26 @@ export async function pickFromGooglePhotos(
     return session;
   };
 
-  /** Downloads one picked photo at original quality and wraps it as an uploadable File. */
+  /** Downloads one picked item at original quality and wraps it as an uploadable File. */
   const downloadItem = async (item: PickedMediaItem, index: number): Promise<File> => {
     const media = item.mediaFile;
     if (!media?.baseUrl) throw new Error('no download link');
     const mimeType = media.mimeType || '';
-    if (item.type === 'VIDEO' || mimeType.startsWith('video/')) {
+    const isVideo = item.type === 'VIDEO' || mimeType.startsWith('video/');
+    if (isVideo && kind === 'photos') {
       throw new Error('videos are not imported here — add a video from the Video tab');
     }
+    if (!isVideo && kind === 'video') {
+      throw new Error('that is a photo — add photos from the Images tab');
+    }
     const isHeic = /image\/hei[cf]/i.test(mimeType);
-    let filename = media.filename || `google-photos-${Date.now()}-${index + 1}.jpg`;
+    let filename = media.filename || `google-photos-${Date.now()}-${index + 1}.${isVideo ? 'mp4' : 'jpg'}`;
     let suffix = '=d';
-    if (isHeic) {
+    if (isVideo) {
+      // =dv is Google's transcoded MP4, whatever container the original was in.
+      suffix = '=dv';
+      filename = replaceExtension(filename, 'mp4');
+    } else if (isHeic) {
       // Browsers cannot display HEIC. A sized request makes Google serve a JPEG instead.
       const width = Math.min(media.mediaFileMetadata?.width || MAX_GOOGLE_DIMENSION, MAX_GOOGLE_DIMENSION);
       const height = Math.min(media.mediaFileMetadata?.height || MAX_GOOGLE_DIMENSION, MAX_GOOGLE_DIMENSION);
@@ -205,7 +219,8 @@ export async function pickFromGooglePhotos(
     }
     const blob = await res.blob();
     if (blob.size === 0) throw new Error('empty file');
-    return new File([blob], filename, { type: isHeic ? 'image/jpeg' : blob.type || mimeType || 'image/jpeg' });
+    const type = isVideo ? 'video/mp4' : isHeic ? 'image/jpeg' : blob.type || mimeType || 'image/jpeg';
+    return new File([blob], filename, { type });
   };
 
   let sessionId = '';

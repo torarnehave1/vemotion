@@ -898,7 +898,6 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
             duration: Math.max(composition.duration, opts?.minCompositionDuration ?? 0),
             layers: composition.layers.map((l) => l.id === updated.id ? updated : l),
           })}
-          onSetCompositionDuration={(seconds) => onChange({ ...composition, duration: Math.max(composition.duration, seconds) })}
           onUpdateMeta={(patch) => {
             // Editing an audio layer can swap the r2Url — re-analysis flows
             // back through here. Same merge as the add path.

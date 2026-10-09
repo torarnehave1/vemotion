@@ -113,7 +113,7 @@ interface AlbumImage {
 interface AddLayerModalProps {
   /**
    * `opts.minCompositionDuration` grows the composition in the SAME state update as the
-   * layer change. Calling onSetCompositionDuration separately would be overwritten: both
+   * layer change. A separate duration callback would be overwritten: both
    * parents build the next composition from the same render's value, so the last call wins.
    */
   onAdd: (layer: Layer, opts?: { minCompositionDuration?: number }) => void;
@@ -141,12 +141,6 @@ interface AddLayerModalProps {
   compositionWidth: number;
   compositionHeight: number;
   editingLayer?: Layer;
-  /**
-   * Optional — grow the composition's total duration to fit a layer that needs
-   * more time than the composition currently has (e.g. a long pixel-reveal).
-   * Forwarded to PixelGridEditForm. Parent clamps with Math.max (never shrinks).
-   */
-  onSetCompositionDuration?: (seconds: number) => void;
   /** Promote path calibration to the global composition scale. */
   onSetCompositionScale?: (mmPerPx: number) => void;
   /** Current global mmPerPx from composition.meta.scale — shown in the measurements panel. */
@@ -375,7 +369,7 @@ function parseMotionScenes(json: string): MotionScene[] | undefined {
 
 export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   onAdd, onAddLayers, onAddElement, onUpdateMeta, onClose, compositionDuration, compositionWidth, compositionHeight, editingLayer,
-  onSetCompositionDuration, onSetCompositionScale, compositionScale,
+  onSetCompositionScale, compositionScale,
 }) => {
   const isEditing  = !!editingLayer;
   const isKgShape  = editingLayer?.type === 'kg-shape';
@@ -1816,8 +1810,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             <PixelGridEditForm
               editingLayer={editingLayer!}
               compositionDuration={compositionDuration}
-              onAdd={(layer) => { onAdd(layer); onClose(); }}
-              onSetCompositionDuration={onSetCompositionDuration}
+              onAdd={(layer, opts) => { onAdd(layer, opts); onClose(); }}
             />
           ) : isScrambleEdit ? (
             <div className="space-y-4">

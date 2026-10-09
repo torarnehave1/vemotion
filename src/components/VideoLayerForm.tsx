@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Upload, Loader2, Link2, Film, Image as ImageIcon } from 'lucide-react';
+import { Upload, Loader2, Link2, Film, Image as ImageIcon, Volume2 } from 'lucide-react';
 import type { Layer } from '../lib/api';
 import { uploadVideoFile } from '../lib/videoUpload';
 import { GooglePhotosCancelled, openGooglePhotosWindow, pickFromGooglePhotos, type GooglePhotosProgress } from '../lib/googlePhotos';
@@ -40,6 +40,13 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
   const [name, setName] = useState<string>((editingLayer?.properties.name as string) ?? '');
   const [urlInput, setUrlInput] = useState('');
   const [fit, setFit] = useState<Fit>(((editingLayer?.properties.fit as Fit) ?? 'cover'));
+  // The video's own sound in preview + export. On for a new layer; an existing
+  // layer keeps what it has (layers from before this switch have it off, so
+  // nothing already built changes how it sounds).
+  const [audioEnabled, setAudioEnabled] = useState<boolean>(
+    editingLayer ? editingLayer.properties.audioEnabled === true : true);
+  const [volume, setVolume] = useState<number>(
+    typeof editingLayer?.properties.volume === 'number' ? editingLayer.properties.volume as number : 1);
   const [startTime, setStartTime] = useState<number>(editingLayer?.startTime ?? 0);
   const [layerDuration, setLayerDuration] = useState<number>(editingLayer?.layerDuration ?? compositionDuration);
 
@@ -170,6 +177,8 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
         src,
         fit,
         name: name || 'video',
+        audioEnabled,
+        volume,
       },
     };
     onAdd(layer, minCompositionDuration ? { minCompositionDuration } : undefined);
@@ -285,6 +294,33 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
               <option value="fill">Fill (stretch to the box)</option>
             </select>
           </div>
+
+          {/* The video's own sound */}
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={audioEnabled}
+              onChange={(e) => setAudioEnabled(e.target.checked)}
+              className="accent-sky-500"
+            />
+            Include the video&apos;s sound
+          </label>
+          {audioEnabled && (
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                <Volume2 className="w-3 h-3" /> Volume: {Math.round(volume * 100)}%
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-full accent-sky-500"
+              />
+            </div>
+          )}
 
           {/* Size / position of the layer box */}
           <div className="flex items-center justify-between gap-2">

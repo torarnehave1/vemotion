@@ -9,14 +9,12 @@ import { AiImagePrompt } from './AiImagePrompt';
 interface PixelGridEditFormProps {
   editingLayer: Layer;
   compositionDuration: number;
-  onAdd: (layer: Layer) => void;
   /**
-   * Grow the composition's total duration to at least this many seconds.
-   * Called on save when a pixel-reveal animation needs more time than the
-   * composition currently has (so the whole drawing actually plays). The parent
-   * clamps with Math.max — this never shrinks the composition.
+   * `opts.minCompositionDuration` grows the composition to at least that many seconds
+   * in the same update as the layer — used on save when a pixel-reveal animation needs
+   * more time than the composition has. The parent clamps with Math.max (never shrinks).
    */
-  onSetCompositionDuration?: (seconds: number) => void;
+  onAdd: (layer: Layer, opts?: { minCompositionDuration?: number }) => void;
 }
 
 /**
@@ -37,7 +35,6 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   editingLayer,
   compositionDuration,
   onAdd,
-  onSetCompositionDuration,
 }) => {
   const props = editingLayer.properties;
   const background = (props.background as string) || '#ffffff';
@@ -284,7 +281,9 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     // be long enough to actually play it. Grow both to fit (never shrink).
     const animating = animateDrawing && drawOrder.length > 0;
     const effLayerDuration = animating ? Math.max(layerDuration, totalReveal) : layerDuration;
-    if (animating) onSetCompositionDuration?.(startTime + totalReveal);
+    // Passed WITH the layer: a separate duration callback would be built from
+    // the same render's composition as onAdd, so the later call overwrote the growth.
+    const growTo = animating ? { minCompositionDuration: startTime + totalReveal } : undefined;
 
     onAdd({
       ...editingLayer, // preserve everything else (Lesson 21)
@@ -307,7 +306,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
         drawOrder,
         ...(sourceUrl ? { sourceImage: sourceUrl } : {}),
       },
-    });
+    }, growTo);
   };
 
   const num = 'w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';

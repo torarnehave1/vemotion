@@ -423,6 +423,9 @@ export class CanvasRenderer {
   // currentTime is seeked to the matching source time before each frame is
   // drawn (frame-accurate in export via seekVideos; best-effort in preview).
   private videoCache = new Map<string, HTMLVideoElement>();
+  // Video elements whose play-with-sound the browser refused (autoplay policy). They
+  // stay muted until playback is next paused, so a refusal cannot flap every frame.
+  private videoSoundBlocked = new WeakSet<HTMLVideoElement>();
 
   /**
    * Id of the layer currently selected in the editor. When non-null,
@@ -634,9 +637,19 @@ export class CanvasRenderer {
       const startTime = l.startTime ?? 0;
       const dur = l.layerDuration ?? (composition.duration - startTime);
       const active = l.visible !== false && time >= startTime && time <= startTime + dur;
+      if (!isPlaying) this.videoSoundBlocked.delete(v);
       if (!active) {
         if (!v.paused) v.pause();
         continue;
+      }
+      // The video's own sound, preview only: export never calls syncVideos, so its
+      // elements stay muted and the sound goes through the ffmpeg mux instead.
+      const wantsSound = l.properties.audioEnabled === true && !this.videoSoundBlocked.has(v);
+      if (v.muted === wantsSound) v.muted = !wantsSound;
+      if (wantsSound) {
+        const volRaw = l.properties.volume;
+        const vol = typeof volRaw === 'number' ? Math.max(0, Math.min(1, volRaw)) : 1;
+        if (Math.abs(v.volume - vol) > 0.001) v.volume = vol;
       }
       let sourceTime = time - startTime;
       if (Number.isFinite(v.duration) && v.duration > 0 && sourceTime > v.duration) {
@@ -646,7 +659,16 @@ export class CanvasRenderer {
         if (Math.abs(v.currentTime - sourceTime) > 0.3) {
           try { v.currentTime = sourceTime; } catch { /* not seekable yet */ }
         }
-        if (v.paused) { void v.play().catch(() => { /* autoplay blocked — muted should allow it */ }); }
+        if (v.paused) {
+          void v.play().catch(() => {
+            // Refused with sound on (Safari wants the gesture on the element): keep the
+            // picture moving muted rather than freezing the layer.
+            if (v.muted) return;
+            this.videoSoundBlocked.add(v);
+            v.muted = true;
+            void v.play().catch(() => { /* nothing more to try */ });
+          });
+        }
       } else {
         if (!v.paused) v.pause();
         if (v.readyState >= 1 && Math.abs(v.currentTime - sourceTime) > 0.04) {

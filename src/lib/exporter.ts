@@ -92,8 +92,9 @@ export async function exportToMp4(
 
   // Preload video layers into off-DOM <video> elements. Frames are drawn onto
   // the canvas (see the per-frame seekVideos below), so each video bakes into
-  // the PNG sequence and respects layer z-order. The video's own audio is NOT
-  // muxed here — audio comes from dedicated audio layers, matching the model.
+  // the PNG sequence and respects layer z-order. The elements stay muted; a
+  // video's own sound reaches the export through the audio mux below, and only
+  // for layers that have "Include the video's sound" switched on.
   await renderer.preloadVideos(composition);
 
   // ── Audio layers: fetch each one into the ffmpeg vFS up front so the
@@ -133,6 +134,49 @@ export async function exportToMp4(
       } catch {
         /* fail-soft — that layer is silent in the export */
       }
+    }
+  }
+
+  // ── Video layers with their own sound switched on: pull the audio track out
+  //     of each source once (-vn, so the picture is never decoded) and treat it
+  //     as one more audio input with the layer's start, length and volume.
+  //     Fail-soft like the audio layers: a source that cannot be fetched, or
+  //     that has no audio stream (ffmpeg exits non-zero and writes nothing), is
+  //     simply silent in the export.
+  const soundLayers = composition.layers.filter(l =>
+    l.type === 'video' && l.visible !== false &&
+    l.properties.audioEnabled === true && typeof l.properties.src === 'string' && l.properties.src);
+  if (soundLayers.length > 0) {
+    onProgress?.({ stage: 'loading', percent: 18, message: `Reading sound from ${soundLayers.length} video layer(s)...` });
+    const extracted = new Map<string, string | null>(); // src → vFS name, null = no usable audio
+    for (const layer of soundLayers) {
+      const src = layer.properties.src as string;
+      if (!extracted.has(src)) {
+        const n = extracted.size;
+        const videoName = `vsrc_${n}.mp4`;
+        const audioName = `vaudio_${n}.m4a`;
+        let ok = false;
+        try {
+          await ffmpeg.writeFile(videoName, new Uint8Array(await fetchAudioArrayBuffer(src)));
+          const code = await ffmpeg.exec(['-i', videoName, '-vn', '-c:a', 'aac', '-b:a', '192k', audioName]);
+          ok = code === 0;
+        } catch {
+          ok = false;
+        }
+        // The source can be ~100 MB; drop it as soon as the audio is out.
+        try { await ffmpeg.deleteFile(videoName); } catch { /* ignore */ }
+        if (!ok) { try { await ffmpeg.deleteFile(audioName); } catch { /* ignore */ } }
+        extracted.set(src, ok ? audioName : null);
+      }
+      const inputName = extracted.get(src);
+      if (!inputName) continue;
+      const volRaw = layer.properties.volume;
+      audioInputs.push({
+        inputName,
+        startSec: layer.startTime ?? 0,
+        durationSec: layer.layerDuration ?? (composition.duration - (layer.startTime ?? 0)),
+        volume: typeof volRaw === 'number' ? Math.max(0, Math.min(1, volRaw)) : 1,
+      });
     }
   }
 

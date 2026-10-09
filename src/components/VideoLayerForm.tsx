@@ -5,7 +5,8 @@ import { uploadVideoFile } from '../lib/videoUpload';
 import { GooglePhotosCancelled, openGooglePhotosWindow, pickFromGooglePhotos, type GooglePhotosProgress } from '../lib/googlePhotos';
 
 interface VideoLayerFormProps {
-  onAdd: (layer: Layer) => void;
+  /** `minCompositionDuration` asks the parent to grow the composition so the clip fits. */
+  onAdd: (layer: Layer, opts?: { minCompositionDuration?: number }) => void;
   compositionWidth: number;
   compositionHeight: number;
   compositionDuration: number;
@@ -141,10 +142,16 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
     const { duration } = await probe(src);
 
     // Autofill the layer window to the clip length the first time (only when
-    // it still equals the composition default), clamped to the composition.
+    // it still equals the composition default). A clip longer than the
+    // composition used to be cut to the composition's length; now the layer
+    // takes the whole clip and the composition grows to hold it (never shrinks).
     let dur = layerDuration;
+    let minCompositionDuration: number | undefined;
     if (duration > 0 && layerDuration === compositionDuration) {
-      dur = Math.min(duration, compositionDuration - startTime);
+      dur = duration;
+      if (startTime + duration > compositionDuration) {
+        minCompositionDuration = Math.ceil((startTime + duration) * 10) / 10;
+      }
     }
 
     const layer: Layer = {
@@ -165,7 +172,7 @@ export const VideoLayerForm: React.FC<VideoLayerFormProps> = ({
         name: name || 'video',
       },
     };
-    onAdd(layer);
+    onAdd(layer, minCompositionDuration ? { minCompositionDuration } : undefined);
   };
 
   return (

@@ -39,8 +39,12 @@ export const CompositionEditor: React.FC<CompositionEditorProps> = ({ compositio
   const [showRefitModal, setShowRefitModal] = useState(false);
   const set = (patch: Partial<CompositionData>) => onChange({ ...composition, ...patch });
 
-  const addLayer = (layer: Layer) => {
-    onChange({ ...composition, layers: [...composition.layers, layer] });
+  const addLayer = (layer: Layer, opts?: { minCompositionDuration?: number }) => {
+    onChange({
+      ...composition,
+      duration: Math.max(composition.duration, opts?.minCompositionDuration ?? 0),
+      layers: [...composition.layers, layer],
+    });
   };
 
   const addLayers = (layers: Layer[]) => {

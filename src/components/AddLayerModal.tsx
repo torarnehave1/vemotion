@@ -111,7 +111,12 @@ interface AlbumImage {
 }
 
 interface AddLayerModalProps {
-  onAdd: (layer: Layer) => void;
+  /**
+   * `opts.minCompositionDuration` grows the composition in the SAME state update as the
+   * layer change. Calling onSetCompositionDuration separately would be overwritten: both
+   * parents build the next composition from the same render's value, so the last call wins.
+   */
+  onAdd: (layer: Layer, opts?: { minCompositionDuration?: number }) => void;
   /**
    * Optional — batch insert. Used by the Images tab to add several image
    * layers in one composition update (multi-select). Falls back to repeated
@@ -880,7 +885,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         };
       });
       if (onAddLayers) onAddLayers(layers);
-      else layers.forEach(onAdd);
+      else layers.forEach((layer) => onAdd(layer));
       onClose();
     } finally {
       setInserting(false);
@@ -1468,7 +1473,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               compositionHeight={compositionHeight}
               compositionDuration={compositionDuration}
               editingLayer={editingLayer}
-              onAdd={(layer) => { onAdd(layer); onClose(); }}
+              onAdd={(layer, opts) => { onAdd(layer, opts); onClose(); }}
             />
           ) : isImgLayer ? (
             replacingImage ? (
@@ -2348,7 +2353,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               compositionWidth={compositionWidth}
               compositionHeight={compositionHeight}
               compositionDuration={compositionDuration}
-              onAdd={(layer) => { onAdd(layer); onClose(); }}
+              onAdd={(layer, opts) => { onAdd(layer, opts); onClose(); }}
             />
           ) : tab === 'knitting' ? (
             <KnittingChartForm
@@ -2369,7 +2374,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                       const { layers, group } = el.build({ compositionWidth, compositionHeight, compositionDuration, startTime: 0 });
                       if (onAddElement) onAddElement(layers, group);
                       else if (onAddLayers) onAddLayers(layers);
-                      else layers.forEach(onAdd);
+                      else layers.forEach((layer) => onAdd(layer));
                       onClose();
                     }}
                     className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-sky-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition group text-left"

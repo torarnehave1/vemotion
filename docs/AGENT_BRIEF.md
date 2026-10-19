@@ -18,7 +18,7 @@ There is **one** unified `CompositionData` shape — no separate templates. Vari
 
 Layer `type` discriminators (the agent must use one of these):
 
-- `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`. **Image-fill (letters become a window onto an image): see §11.**
+- `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`, `lineHeight`, and `letterSpacing` **in em** (a fraction of `fontSize`: `0.05` = 5% of the font size between letters; `0` = the font's own spacing; range −0.2 to 1; never pixels — `8` would mean eight font-sizes). `letterSpacing` is animatable: `{ property: "letterSpacing", keyframes: [{ time: 0, value: 0.4 }, { time: 1.2, value: 0.02 }] }` is a tracking-in. **Image-fill (letters become a window onto an image): see §11.**
 - `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`. Optional `strokeColor` + `strokeWidth` for an outline (both required; stroke is drawn on top of fill). Optional `borderRadius` on rect for rounded corners. Any layer (including this one) can carry `motionScenes` to follow a formula-driven path over time — see §13.
 - `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 (the `x0`/`y0` convention — required) and §13 (authoring patterns + worked example).**
 - `path` — hand-authored polyline or cubic-Bezier curve, drawn as a stroke + usable as a motion source by other layers. **See §18.** Authored via the Pen tool in the editor; programmatic via `properties.anchors[]`. Coexists with `math-shape` (formula curves) and `motionScenes` formulas — pick the tool that fits.

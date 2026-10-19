@@ -178,6 +178,8 @@ export type Layer = {
   layerDuration?: number;
   animation?: Animation;
   animations?: Animation[];
+  /** Type-specific, read by renderer.ts. Text: text, fontSize, fontFamily, fontWeight, color, align,
+   *  lineHeight, shadow, letterSpacing (in em — a fraction of fontSize, animatable; 2026-10-19), … */
   properties: Record<string, unknown>;
 };
 

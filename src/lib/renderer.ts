@@ -1531,6 +1531,13 @@ export class CanvasRenderer {
     const lineHeightMultiplier = (values.lineHeight as number) ?? 1.25;
     const maxWidth = layer.size.width;
     const lineHeight = fontSize * lineHeightMultiplier;
+    // letterSpacing is in em — a fraction of fontSize (decided 2026-10-19), so it scales with the
+    // font and needs no refit. Added by hand rather than through ctx.letterSpacing, which not every
+    // browser that exports has; it counts in wrapping and centring, with no trailing space.
+    const letterSpacingEm = Number(values.letterSpacing ?? 0) || 0;
+    const spacingPx = fontSize * letterSpacingEm;
+    const measure = (s: string) =>
+      ctx.measureText(s).width + (s.length > 1 ? spacingPx * (s.length - 1) : 0);
 
     // ── Word-wrap ───────────────────────────────────────────────────────────
     const words = text.split(' ');
@@ -1538,7 +1545,7 @@ export class CanvasRenderer {
     let current = '';
     for (const word of words) {
       const test = current ? `${current} ${word}` : word;
-      if (ctx.measureText(test).width <= maxWidth) {
+      if (measure(test) <= maxWidth) {
         current = test;
       } else {
         if (current) lines.push(current);
@@ -1569,7 +1576,7 @@ export class CanvasRenderer {
       ? Array.from(new Set(text.split('').filter(c => c.trim() !== '')))
       : [];
 
-    if (charAnims.length === 0 && !scrambleAnim) {
+    if (charAnims.length === 0 && !scrambleAnim && spacingPx === 0) {
       // Fast path: line-by-line fillText with native alignment.
       let x = layerLeft;
       if (align === 'center') x = layerLeft + maxWidth / 2;
@@ -1581,13 +1588,13 @@ export class CanvasRenderer {
       return;
     }
 
-    // Per-glyph path (char-stagger and/or char-scramble).
+    // Per-glyph path (char-stagger, char-scramble and/or letterSpacing).
     ctx.textAlign = 'left';
     const baseAlpha = ctx.globalAlpha;
     let globalCharIdx = 0;
     lines.forEach((line, lineIdx) => {
       const lineY = startY + lineIdx * lineHeight;
-      const lineWidth = ctx.measureText(line).width;
+      const lineWidth = measure(line);
       let cursorX = layerLeft;
       if (align === 'center') cursorX = layerLeft + (maxWidth - lineWidth) / 2;
       else if (align === 'right') cursorX = layerLeft + (maxWidth - lineWidth);
@@ -1643,7 +1650,7 @@ export class CanvasRenderer {
         ctx.fillText(displayCh, cursorX + charOffsetX, lineY + charOffsetY);
         ctx.restore();
 
-        cursorX += charWidth;
+        cursorX += charWidth + spacingPx;
         globalCharIdx++;
       }
     });

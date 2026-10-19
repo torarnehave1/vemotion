@@ -442,6 +442,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [drawStartTime, setDrawStartTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[0]?.time ?? 0 : 0);
   const [drawEndTime, setDrawEndTime] = useState(() => editingLayer?.animation?.property === 'drawProgress' ? editingLayer.animation.keyframes[editingLayer.animation.keyframes.length - 1]?.time ?? Math.min(3, compositionDuration) : Math.min(3, compositionDuration));
   const [fontSize, setFontSize] = useState((editingLayer?.properties.fontSize as number) ?? 48);
+  // In em (a fraction of fontSize) — decided 2026-10-19. 0 = the font's own spacing.
+  const [letterSpacing, setLetterSpacing] = useState((editingLayer?.properties.letterSpacing as number) ?? 0);
   const [layerRotation, setLayerRotation] = useState((editingLayer?.properties.rotation as number) ?? 0);
   // "Set scale" from layer size — shared across image/kg-shape/generic edit forms.
   const [scaleRefMm, setScaleRefMm] = useState('');
@@ -1074,7 +1076,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         ? {
             // fontWeight has no field here: a new layer gets '600', an edited one keeps its own.
             ...(isEditing ? {} : { fontWeight: '600' }),
-            ...kept(['text', 'fontSize', 'color', 'align', 'opacity', 'rotation', 'fontFamily', 'motionScenes', 'fillMode', 'fillSource']),
+            ...kept(['text', 'fontSize', 'color', 'align', 'opacity', 'rotation', 'fontFamily', 'motionScenes', 'fillMode', 'fillSource', 'letterSpacing']),
             text,
             fontSize,
             color,
@@ -1082,6 +1084,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             opacity: opacityValue,
             rotation: layerRotation,
             ...(fontFamily ? { fontFamily } : {}),
+            ...(letterSpacing ? { letterSpacing } : {}),
             ...(motionScenes ? { motionScenes } : {}),
             ...(fillMode === 'image' && fillSource.trim()
               ? { fillMode: 'image', fillSource: fillSource.trim() }
@@ -2144,6 +2147,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     <div>
                       <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Font Size</label>
                       <input type="number" value={fontSize} onChange={e => setFontSize(parseInt(e.target.value))}
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block" title="A fraction of the font size: 0.05 = 5% of it between letters. 0 = the font's own spacing.">Letter spacing (em)</label>
+                      <input type="number" step={0.01} min={-0.2} max={1} value={letterSpacing}
+                        onChange={e => setLetterSpacing(Number.isFinite(parseFloat(e.target.value)) ? parseFloat(e.target.value) : 0)}
                         className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                     <div>

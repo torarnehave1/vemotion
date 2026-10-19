@@ -36,46 +36,27 @@ const FONT_OPTIONS = [
   { label: 'Tiro Devanagari Sanskrit (देवनागरी)', value: 'Tiro Devanagari Sanskrit' },
 ];
 
-const MATH_SHAPE_PRESETS = {
-  circle: {
-    label: 'Circle',
-    samples: 180,
-    tStart: 0,
-    tEnd: Math.PI * 2,
-    xFormula: 'x0 + w/2 + min(w,h)*0.35*cos(t)',
-    yFormula: 'y0 + h/2 + min(w,h)*0.35*sin(t)',
-    closePath: true,
-  },
-  ellipse: {
-    label: 'Ellipse',
-    samples: 180,
-    tStart: 0,
-    tEnd: Math.PI * 2,
-    xFormula: 'x0 + w/2 + w*0.35*cos(t)',
-    yFormula: 'y0 + h/2 + h*0.22*sin(t)',
-    closePath: true,
-  },
-  sine: {
-    label: 'Sine wave',
-    samples: 220,
-    tStart: 0,
-    tEnd: 1,
-    xFormula: 'x0 + p*w',
-    yFormula: 'y0 + h/2 + sin(p*pi*4)*h*0.25',
-    closePath: false,
-  },
-  spiral: {
-    label: 'Spiral',
-    samples: 240,
-    tStart: 0,
-    tEnd: Math.PI * 6,
-    xFormula: 'x0 + w/2 + (t/(pi*6))*min(w,h)*0.4*cos(t)',
-    yFormula: 'y0 + h/2 + (t/(pi*6))*min(w,h)*0.4*sin(t)',
-    closePath: false,
-  },
-} as const;
+// Math-Shape presets come from the graph `vemotion-curves` — one node per curve, its definition in
+// `metadata.curve`. Claude reads the same graph through the MCP tool list_vemotion_library
+// { kind: "curves" }, so adding a curve is adding a node (decided 2026-10-19; the four presets that
+// lived here are in the graph).
+const KG_CURVES_GRAPH = 'fa779347-85f1-4bac-8e4b-26e26e97ad9f'; // vemotion-curves
 
-type MathShapePresetKey = keyof typeof MATH_SHAPE_PRESETS;
+interface KgCurveNode {
+  id: string;
+  label: string;
+  curve: {
+    order: number;
+    family: string;
+    summary?: string;
+    samples: number;
+    tStart: number;
+    tEnd: number;
+    xFormula: string;
+    yFormula: string;
+    closePath: boolean;
+  };
+}
 
 interface KgShapeNode {
   id: string;
@@ -427,7 +408,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [color, setColor] = useState((editingLayer?.properties.color as string) ?? '#ffffff');
   const [shape, setShape] = useState<'rect' | 'circle'>((editingLayer?.properties.shape as 'rect' | 'circle') ?? 'rect');
   const [mathKind] = useState<'parametric'>('parametric');
-  const [mathPreset, setMathPreset] = useState<MathShapePresetKey>('circle');
+  // '' = the formula currently in the fields (a new layer starts with a circle).
+  const [mathPreset, setMathPreset] = useState('');
+  const [kgCurves, setKgCurves] = useState<KgCurveNode[]>([]);
+  const [kgCurvesError, setKgCurvesError] = useState('');
   const [samples, setSamples] = useState(Number(editingLayer?.properties.samples) || 180);
   const [strokeWidth, setStrokeWidth] = useState(Number(editingLayer?.properties.strokeWidth) || 3);
   const [tStart, setTStart] = useState(Number(editingLayer?.properties.tStart) || 0);
@@ -457,6 +441,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
     return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 1;
   });
   const [preset, setPreset] = useState<AnimationPreset>(() => detectPresetFromAnimation(editingLayer?.animation) || 'fade-in');
+  // The animation fields as they were when the form opened (text/shape preset, math-shape draw).
+  // An edit that leaves them alone keeps the layer's own `animation` — a preset rebuild replaced
+  // custom keyframe times, easing and anything the dropdown cannot name (found 2026-10-19).
+  const animInitial = useRef(JSON.stringify([preset, drawOverTime, drawStartTime, drawEndTime]));
   const [shapePreset, setShapePreset] = useState<AnimationPreset>('fade-in');
 
   // Generic-edit timing state (for layer types without a dedicated edit form).
@@ -539,6 +527,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [kgWidth, setKgWidth] = useState(editingLayer?.size.width ?? 200);
   const [kgHeight, setKgHeight] = useState(editingLayer?.size.height ?? 200);
   const [kgPreset, setKgPreset] = useState<AnimationPreset>('fade-in');
+  // Unchanged preset on edit = keep the layer's own animation (same rule as the text/shape form).
+  const kgPresetInitial = useRef(kgPreset);
 
   // Image layer edit state
   const [imgPosX,   setImgPosX]   = useState(editingLayer?.position.x ?? 0);
@@ -611,6 +601,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [animEndTime,   setAnimEndTime]   = useState(() =>
     _ea ? _ea.keyframes[_ea.keyframes.length - 1].time : Math.min(2, compositionDuration)
   );
+  // The image form's animation fields as they were when the form opened. Saving without touching
+  // them keeps the layer's own `animation` and `animations[]` — the form can only express a few
+  // presets, so rebuilding from it replaced a scale/Ken Burns or custom timing (found 2026-10-19).
+  const imgAnimInitial = useRef(JSON.stringify([imgAnimType, animStartX, animStartY, animEndX, animEndY, animStartTime, animEndTime]));
 
   // Existing clip mask on the image being edited (if any) + its feather, so the
   // form can offer a soft-edge control (Slice 5, control C — the number field).
@@ -657,12 +651,24 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
         animation = { property: 'offsetY', keyframes: [{ time: st, value: animStartY - imgPosY }, { time: et, value: animEndY - imgPosY }] };
       }
     }
+    const imgAnimEdited = JSON.stringify([imgAnimType, animStartX, animStartY, animEndX, animEndY, animStartTime, animEndTime]) !== imgAnimInitial.current;
+    if (imgAnimEdited) {
+      // Keep the stacked animations the form does not manage. Drop the ones on the axes the new
+      // animation now drives, and the companion axis of an old diagonal slide.
+      const replaced = new Set([animation, ...(extraAnimations ?? [])].map((a) => a?.property).filter(Boolean));
+      if (editingLayer.animation?.property === 'offsetX' || editingLayer.animation?.property === 'offsetY') {
+        replaced.add('offsetX'); replaced.add('offsetY');
+      }
+      const others = (editingLayer.animations ?? []).filter((a) => !(a.property && replaced.has(a.property)));
+      extraAnimations = [...(extraAnimations ?? []), ...others];
+      if (extraAnimations.length === 0) extraAnimations = undefined;
+    }
     onAdd({
       ...editingLayer,
       position: { x: imgPosX, y: imgPosY },
       size: { width: imgWidth, height: imgHeight },
-      animation,
-      animations: extraAnimations,
+      animation: imgAnimEdited ? animation : editingLayer.animation,
+      animations: imgAnimEdited ? extraAnimations : editingLayer.animations,
       properties: {
         ...editingLayer.properties,
         src: imgSrc,
@@ -704,18 +710,36 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [cardWidth,    setCardWidth]    = useState(editingLayer?.size.width ?? 470);
   const [cardHeight,   setCardHeight]   = useState(editingLayer?.size.height ?? 250);
   const [cardPreset,   setCardPreset]   = useState<AnimationPreset>('fade-in');
+  const cardPresetInitial = useRef(cardPreset);
   const [cardPickPreset, setCardPickPreset] = useState<AnimationPreset>('fade-in');
 
-  const applyMathShapePreset = (presetKey: MathShapePresetKey) => {
-    const preset = MATH_SHAPE_PRESETS[presetKey];
-    setMathPreset(presetKey);
-    setSamples(preset.samples);
-    setTStart(preset.tStart);
-    setTEnd(preset.tEnd);
-    setXFormula(preset.xFormula);
-    setYFormula(preset.yFormula);
-    setClosePath(preset.closePath);
+  const applyMathShapePreset = (curveId: string) => {
+    setMathPreset(curveId);
+    const curve = kgCurves.find((c) => c.id === curveId)?.curve;
+    if (!curve) return;
+    setSamples(curve.samples);
+    setTStart(curve.tStart);
+    setTEnd(curve.tEnd);
+    setXFormula(curve.xFormula);
+    setYFormula(curve.yFormula);
+    setClosePath(curve.closePath);
   };
+
+  useEffect(() => {
+    if (layerType !== 'math-shape' || kgCurves.length > 0) return;
+    fetch(`${KG_BASE}/getknowgraph?id=${KG_CURVES_GRAPH}`)
+      .then(r => r.json())
+      .then(data => {
+        const curves: KgCurveNode[] = (data.nodes ?? [])
+          .filter((n: { metadata?: { curve?: { xFormula?: unknown; yFormula?: unknown } } }) =>
+            typeof n.metadata?.curve?.xFormula === 'string' && typeof n.metadata?.curve?.yFormula === 'string')
+          .map((n: { id: string; label: string; metadata: { curve: KgCurveNode['curve'] } }) => ({ id: n.id, label: n.label, curve: n.metadata.curve }))
+          .sort((x: KgCurveNode, y: KgCurveNode) => (x.curve.order ?? 999) - (y.curve.order ?? 999));
+        setKgCurves(curves);
+        if (curves.length === 0) setKgCurvesError('No curves in the vemotion-curves graph.');
+      })
+      .catch(() => setKgCurvesError('Failed to load curves from graph.'));
+  }, [layerType]);
 
   // Image assets
   const [albumName, setAlbumName] = useState(DEFAULT_ALBUM);
@@ -988,7 +1012,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
       return;
     }
-    const animation = buildAnimation(kgPreset, compositionDuration, compositionWidth, compositionHeight, kgWidth, kgHeight);
+    const animation = kgPreset === kgPresetInitial.current
+      ? editingLayer.animation
+      : buildAnimation(kgPreset, compositionDuration, compositionWidth, compositionHeight, kgWidth, kgHeight);
     onAdd({
       ...editingLayer,
       position: { x: kgPosX, y: kgPosY },
@@ -1015,7 +1041,9 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       setMotionScenesError(error instanceof Error ? error.message : 'Invalid motion scenes JSON.');
       return;
     }
-    const animation = buildAnimation(cardPreset, compositionDuration, compositionWidth, compositionHeight, cardWidth, cardHeight);
+    const animation = cardPreset === cardPresetInitial.current
+      ? editingLayer.animation
+      : buildAnimation(cardPreset, compositionDuration, compositionWidth, compositionHeight, cardWidth, cardHeight);
     onAdd({
       ...editingLayer,
       position: { x: cardPosX, y: cardPosY },
@@ -1064,14 +1092,21 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       return Object.fromEntries(Object.entries(props).filter(([k]) => !managed.includes(k)));
     };
 
+    // The same holds for the layer itself: an edit starts from the stored layer, so `animations[]`
+    // (stacked animations — the form edits only the single `animation`), `name`, `groupId`,
+    // `visible` and every other field survive. Rebuilding the layer dropped them (found 2026-10-19).
+    const animationEdited = !isEditing || layerType !== editingLayer.type
+      || JSON.stringify([preset, drawOverTime, drawStartTime, drawEndTime]) !== animInitial.current;
+
     const layer: Layer = {
+      ...(isEditing ? editingLayer : {}),
       id: isEditing ? editingLayer.id : generateId(),
       type: layerType,
       position: { x: posX, y: posY },
       size: { width, height },
       startTime: isEditing ? editingLayer.startTime : undefined,
       layerDuration: isEditing ? editingLayer.layerDuration : undefined,
-      animation,
+      animation: animationEdited ? animation : editingLayer.animation,
       properties: layerType === 'text'
         ? {
             // fontWeight has no field here: a new layer gets '600', an edited one keeps its own.
@@ -2231,17 +2266,25 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-slate-500">
-                    Parametric curve. Use <code>t</code> from <code>tStart</code> to <code>tEnd</code>. Available vars: <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>sin</code>, <code>cos</code>, <code>min</code>, <code>max</code>, <code>pi</code>.
+                    Parametric curve. Use <code>t</code> from <code>tStart</code> to <code>tEnd</code>. Available vars: <code>x0</code>, <code>y0</code>, <code>w</code>, <code>h</code>, <code>p</code>, <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>abs</code>, <code>min</code>, <code>max</code>, <code>pow</code>, <code>sqrt</code>, <code>pi</code> — no <code>^</code> (use <code>pow</code>).
                   </p>
                   <div>
                     <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Preset</label>
                     <select
                       value={mathPreset}
-                      onChange={e => applyMathShapePreset(e.target.value as MathShapePresetKey)}
+                      onChange={e => applyMathShapePreset(e.target.value)}
                       className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
-                      {Object.entries(MATH_SHAPE_PRESETS).map(([key, preset]) => (
-                        <option key={key} value={key}>{preset.label}</option>
+                      <option value="">{kgCurves.length ? 'Current formula — pick a curve…' : (kgCurvesError || 'Loading curves…')}</option>
+                      {Object.entries(kgCurves.reduce<Record<string, KgCurveNode[]>>((groups, c) => {
+                        (groups[c.curve.family] ??= []).push(c);
+                        return groups;
+                      }, {})).map(([family, curves]) => (
+                        <optgroup key={family} label={family}>
+                          {curves.map((c) => (
+                            <option key={c.id} value={c.id} title={c.curve.summary}>{c.label}</option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>

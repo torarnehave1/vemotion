@@ -5,7 +5,7 @@ import { readStoredUser } from '../lib/auth';
 import { renderSlideBlobs, renderVideoBlob } from '../lib/blotato';
 import { uploadImageToAlbum } from '../lib/photoAlbum';
 import { analyseAudioFromUrl, missingAudioTrackSource } from '../lib/audioAnalysis';
-import { buildKnittingChart } from '../lib/knitting';
+import { buildKnittingChart, renderKnittingChart } from '../lib/knitting';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -143,7 +143,22 @@ export function RenderJobView({ jobId }: { jobId: string }) {
     });
     setMessage(`Pixelating into ${spec.cols} columns, ${spec.colors} colours…`);
     const chart = buildKnittingChart(img, spec.cols, spec.colors);
-    await updateJob(jobId, { status: 'done', result: { cols: chart.cols, rows: chart.rows, palette: chart.palette, cells: chart.cells } });
+    // Draw it the way a knitting-chart layer draws (grid, numbers, legend) and upload that picture,
+    // so the person sees the grid here and Claude gets it back as an image from get_vemotion_render.
+    setPhase('uploading');
+    setMessage('Drawing and uploading the grid…');
+    await updateJob(jobId, { status: 'uploading', progress: 60 });
+    const cell = Math.max(6, Math.min(20, Math.floor(960 / Math.max(chart.cols, chart.rows))));
+    const canvas = document.createElement('canvas');
+    canvas.width = chart.cols * cell;
+    canvas.height = Math.round(chart.rows * cell * 1.12);
+    renderKnittingChart(canvas.getContext('2d')!, 0, 0, canvas.width, canvas.height, chart, {
+      showGrid: true, showNumbers: true, showLegend: true, background: '#ffffff', gridColor: '#999999',
+    });
+    const png = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the grid picture'))), 'image/png'));
+    const previewUrl = await uploadImageToAlbum(new File([png], `pixel-grid-${chart.cols}x${chart.rows}.png`, { type: 'image/png' }), 'vemotion-previews');
+    setFrameUrls([previewUrl]);
+    await updateJob(jobId, { status: 'done', result: { cols: chart.cols, rows: chart.rows, palette: chart.palette, cells: chart.cells }, outputUrls: [previewUrl] });
     setPixelResult(`${chart.cols} × ${chart.rows} stitches, ${chart.palette.length} colours`);
     setPhase('done');
     setMessage('Grid made.');
@@ -226,6 +241,7 @@ export function RenderJobView({ jobId }: { jobId: string }) {
         setJob(data);
 
         if (data.status === 'done' && data.kind === 'pixel-grid' && data.result) {
+          setFrameUrls(data.outputUrls ?? []);
           setPixelResult(`${data.result.cols} × ${data.result.rows} stitches, ${data.result.palette.length} colours`);
           setPhase('done');
           setMessage('This grid is already made.');
@@ -323,7 +339,13 @@ export function RenderJobView({ jobId }: { jobId: string }) {
           <p className="text-xs text-slate-500 dark:text-slate-400">Keep this tab open until the upload is done.</p>
         )}
 
-        {frameUrls.length > 0 && (
+        {isPixel && frameUrls[0] && (
+          <a href={frameUrls[0]} target="_blank" rel="noreferrer" className="block">
+            <img src={frameUrls[0]} alt="The pixel grid" className="w-full rounded-md border border-slate-200 dark:border-slate-700" />
+          </a>
+        )}
+
+        {!isPixel && frameUrls.length > 0 && (
           <div className="grid grid-cols-3 gap-2">
             {frameUrls.map((u, i) => (
               <a key={u} href={u} target="_blank" rel="noreferrer" className="block">

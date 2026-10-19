@@ -257,11 +257,23 @@ export function renderVideoBlob(
 }
 
 /**
- * Upload an already-rendered MP4 Blob to the public, Range-capable
- * vemotion-video host, returning the public URL to hand Blotato.
+ * The photos album an Instagram account's reels are kept in: `ig-reels-<username>`. Same rule as
+ * dev-worker's albumForInstagram (media-upload-service.js), so the app, create_media_upload and a
+ * render job queued from the MCP server all put an account's reels in one place.
  */
-export async function uploadVideoBlob(blob: Blob, fileBase = 'vemotion'): Promise<string> {
+export function reelsAlbumFor(account: Pick<BlotatoAccount, 'id' | 'username'>): string {
+  const safe = String(account.username || '').toLowerCase().replace(/[^a-z0-9._]+/g, '').slice(0, 30);
+  return safe ? `ig-reels-${safe}` : `ig-reels-${account.id}`;
+}
+
+/**
+ * Upload an already-rendered MP4 Blob and return the public URL to hand Blotato. With `album`
+ * (decided 2026-10-19: an Instagram export goes to the account's reels album) it goes to the photos
+ * app; without, to the vemotion-video host as before.
+ */
+export async function uploadVideoBlob(blob: Blob, fileBase = 'vemotion', album?: string): Promise<string> {
   const file = new File([blob], `${fileBase}.mp4`, { type: 'video/mp4' });
+  if (album) return uploadImageToAlbum(file, album);
   const { url } = await uploadVideoFile(file);
   return url;
 }

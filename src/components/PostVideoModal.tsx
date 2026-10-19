@@ -5,6 +5,7 @@ import type { CompositionData } from '../lib/api';
 import {
   renderVideoBlob,
   uploadVideoBlob,
+  reelsAlbumFor,
   postInstagramVideo,
   type AccountPostResult,
 } from '../lib/blotato';
@@ -80,7 +81,8 @@ export const PostVideoModal: React.FC<PostVideoModalProps> = ({ composition, onC
       setPhase('uploading');
       setPublishProgress('Uploading video…');
       const fileBase = slugify(composition.meta?.carousel?.fileBase ?? caption.slice(0, 30));
-      const videoUrl = await uploadVideoBlob(blob, fileBase);
+      // One upload, into the first selected account's reels album; each account then posts it.
+      const videoUrl = await uploadVideoBlob(blob, fileBase, reelsAlbumFor(selectedAccounts[0]));
       setPhase('posting');
       // The MP4 uploads ONCE; each selected account then gets its own Reel.
       const rs = await postInstagramVideo(selectedAccounts, videoUrl, caption, (done, total, username) =>

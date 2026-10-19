@@ -5,6 +5,7 @@ import ImpersonationBar from './components/ImpersonationBar';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { EmbedView } from './components/EmbedView';
+import { RenderJobView } from './components/RenderJobView';
 
 const MAGIC_BASE = 'https://cookie.vegvisr.org';
 const DASHBOARD_BASE = 'https://dashboard.vegvisr.org';
@@ -20,6 +21,13 @@ function App() {
   const isEmbed = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('embed') === '1';
+  }, []);
+
+  // `?renderJob=<jobId>`: render a job queued from the MCP server instead of opening the editor.
+  const renderJobId = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const id = new URLSearchParams(window.location.search).get('renderJob');
+    return id && /^render_[a-z0-9_]+$/i.test(id) ? id : null;
   }, []);
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -202,7 +210,7 @@ function App() {
             Renders nothing for non-owners (403 from /admin/users). */}
         <ImpersonationBar />
         <main className="flex-1 flex flex-col">
-          <Dashboard />
+          {renderJobId ? <RenderJobView jobId={renderJobId} /> : <Dashboard />}
         </main>
       </div>
     </AuthContext.Provider>

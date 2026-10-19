@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, AlertTriangle, CheckCircle2, Video } from 'lucide-react';
 import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
-import { renderVideoBlob } from '../lib/blotato';
+import { renderSlideBlobs, renderVideoBlob } from '../lib/blotato';
 import { uploadImageToAlbum } from '../lib/photoAlbum';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
@@ -16,6 +16,11 @@ const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
  * target album (`ig-reels-<username>`, the same album create_media_upload uses) and marks the job
  * done with the public URL — which get_vemotion_render then hands back to the MCP client.
  * Progress is reported to the job as it goes, so the client sees rendering / uploading too.
+ *
+ * A job of kind "frames" (preview_vemotion_frames, 2026-10-19) renders still PNGs at the job's
+ * `times` instead — scaled so the long side is at most 960 px, enough to judge a design and small
+ * enough for the MCP server to hand the images straight to Claude — uploads them to the job's album
+ * (vemotion-previews) and marks the job done with one URL per time.
  */
 
 interface RenderJob {
@@ -27,6 +32,9 @@ interface RenderJob {
   target?: { platform?: string; accountId?: string; username?: string; album?: string } | null;
   composition?: CompositionData;
   progress?: number;
+  kind?: 'video' | 'frames';
+  times?: number[] | null;
+  outputUrls?: string[] | null;
   updatedAt?: string;
 }
 
@@ -55,6 +63,20 @@ async function updateJob(id: string, body: Record<string, unknown>): Promise<voi
   }
 }
 
+// Preview frames: long side at most this many pixels.
+const PREVIEW_MAX_SIDE = 960;
+
+async function shrinkPng(blob: Blob, maxSide: number): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  if (scale >= 1) return blob;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the PNG'))), 'image/png'));
+}
+
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'vemotion-reel';
 }
@@ -66,14 +88,45 @@ export function RenderJobView({ jobId }: { jobId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [frameUrls, setFrameUrls] = useState<string[]>([]);
   const started = useRef(false);
   const objectUrlRef = useRef<string | null>(null);
+
+  const runFrames = async (data: RenderJob, composition: CompositionData, album: string) => {
+    const times = data.times ?? [];
+    if (times.length === 0) throw new Error('The job has no frame times.');
+    setPhase('rendering');
+    await updateJob(jobId, { status: 'rendering', progress: 0 });
+    // The last frame of a d-second clip is at d − 1/fps; a time of exactly d would be past it.
+    const lastFrame = Math.max(0, composition.duration - 1 / (composition.fps || 30));
+    const blobs = await renderSlideBlobs(composition, times.map((t) => Math.min(t, lastFrame)), (done, total) => {
+      setMessage(`Rendering frame ${done} of ${total}…`);
+    });
+    setPhase('uploading');
+    await updateJob(jobId, { status: 'uploading', progress: 50 });
+    const urls: string[] = [];
+    for (let i = 0; i < blobs.length; i++) {
+      setMessage(`Uploading frame ${i + 1} of ${blobs.length} to album ${album}…`);
+      const small = await shrinkPng(blobs[i], PREVIEW_MAX_SIDE);
+      const file = new File([small], `${slugify(data.name || 'vemotion')}-t${String(times[i]).replace('.', '_')}s.png`, { type: 'image/png' });
+      urls.push(await uploadImageToAlbum(file, album));
+      setFrameUrls([...urls]);
+    }
+    await updateJob(jobId, { status: 'done', outputUrls: urls });
+    setOutputUrl(urls[0]);
+    setPhase('done');
+    setMessage(`${urls.length} frame(s) rendered and uploaded.`);
+  };
 
   const run = async (data: RenderJob) => {
       try {
         if (!data.composition) throw new Error('The job carries no composition.');
         const album = data.target?.album;
         if (!album) throw new Error('The job has no target album.');
+        if (data.kind === 'frames') {
+          await runFrames(data, data.composition, album);
+          return;
+        }
 
         setPhase('rendering');
         await updateJob(jobId, { status: 'rendering', progress: 0 });
@@ -123,6 +176,7 @@ export function RenderJobView({ jobId }: { jobId: string }) {
 
         if (data.status === 'done' && data.outputUrl) {
           setOutputUrl(data.outputUrl);
+          setFrameUrls(data.outputUrls ?? []);
           setPhase('done');
           setMessage('This job is already rendered.');
           return;
@@ -149,18 +203,28 @@ export function RenderJobView({ jobId }: { jobId: string }) {
   }, [jobId]);
 
   const target = job?.target;
+  const isFrames = job?.kind === 'frames';
   return (
     <div className="flex-1 flex items-start justify-center p-4 sm:p-8">
       <div className="w-full max-w-xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
         <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
           <Video className="w-5 h-5" />
-          <h1 className="text-lg font-semibold">Render for Instagram</h1>
+          <h1 className="text-lg font-semibold">{isFrames ? 'Render preview frames' : 'Render for Instagram'}</h1>
         </div>
         <dl className="text-sm text-slate-600 dark:text-slate-300 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
           <dt className="font-medium">Composition</dt>
           <dd>{job?.name || '…'}</dd>
-          <dt className="font-medium">Account</dt>
-          <dd>{target?.username ? `@${target.username}` : '…'}</dd>
+          {isFrames ? (
+            <>
+              <dt className="font-medium">Frames at</dt>
+              <dd>{(job?.times ?? []).map((t) => `${t}s`).join(', ')}</dd>
+            </>
+          ) : (
+            <>
+              <dt className="font-medium">Account</dt>
+              <dd>{target?.username ? `@${target.username}` : '…'}</dd>
+            </>
+          )}
           <dt className="font-medium">Album</dt>
           <dd>{target?.album || '…'}</dd>
           <dt className="font-medium">Job</dt>
@@ -190,6 +254,17 @@ export function RenderJobView({ jobId }: { jobId: string }) {
           <p className="text-xs text-slate-500 dark:text-slate-400">Keep this tab open until the upload is done.</p>
         )}
 
+        {frameUrls.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {frameUrls.map((u, i) => (
+              <a key={u} href={u} target="_blank" rel="noreferrer" className="block">
+                <img src={u} alt={`Frame at ${job?.times?.[i]}s`} className="w-full rounded-md bg-black" />
+                <span className="text-xs text-slate-500">{job?.times?.[i]}s</span>
+              </a>
+            ))}
+          </div>
+        )}
+
         {videoSrc && <video src={videoSrc} controls className="w-full max-h-[60vh] rounded-lg bg-black" />}
 
         {phase === 'done' && outputUrl && (
@@ -197,8 +272,8 @@ export function RenderJobView({ jobId }: { jobId: string }) {
             <div className="flex items-center gap-2 font-medium">
               <CheckCircle2 className="w-4 h-4" /> {message}
             </div>
-            <a href={outputUrl} target="_blank" rel="noreferrer" className="underline break-all">{outputUrl}</a>
-            <p>Go back to Claude: it can now preview and post this reel.</p>
+            {!isFrames && <a href={outputUrl} target="_blank" rel="noreferrer" className="underline break-all">{outputUrl}</a>}
+            <p>{isFrames ? 'Go back to Claude: it can now look at these frames.' : 'Go back to Claude: it can now preview and post this reel.'}</p>
           </div>
         )}
 

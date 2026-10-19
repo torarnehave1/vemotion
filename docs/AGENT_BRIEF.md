@@ -183,7 +183,7 @@ Both are the source of truth for endpoint contracts. Fetch them before generatin
 - **Token source:** the user row in D1. In the frontend, it lives at `window.localStorage.user.emailVerificationToken` (88-char hex). See [src/lib/auth.ts:21](../src/lib/auth.ts).
 - **Format:** single opaque hex string per user. No OAuth bearer, no JWT.
 - **Public endpoints:** only `/health` and `/openapi.json`. Everything else is auth-gated.
-- **Dev token** (will be rotated at full prod): `b1ca2967e8165ec02fdf039d9e916af4005f7388`
+- **Token:** the user's own `emailVerificationToken` from D1 `config` — read it into a shell variable when needed; never write a token into this file (one was published here until 2026-10-19 and was rotated).
 
 ---
 

@@ -26,9 +26,16 @@ interface RenderJob {
   error?: string | null;
   target?: { platform?: string; accountId?: string; username?: string; album?: string } | null;
   composition?: CompositionData;
+  progress?: number;
+  updatedAt?: string;
 }
 
-type Phase = 'loading' | 'rendering' | 'uploading' | 'done' | 'failed';
+type Phase = 'loading' | 'busy' | 'rendering' | 'uploading' | 'done' | 'failed';
+
+// A job that reported progress this recently is assumed to be rendering in another tab. Older
+// than this, a 'rendering'/'uploading' job is treated as stuck (tab closed mid-render) and this
+// page restarts it. Decided 2026-10-19: stuck jobs can be re-rendered; done/failed stay final.
+const STALE_MS = 5 * 60 * 1000;
 
 function token(): string {
   const t = readStoredUser()?.emailVerificationToken;
@@ -60,28 +67,10 @@ export function RenderJobView({ jobId }: { jobId: string }) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const started = useRef(false);
+  const objectUrlRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (started.current) return; // StrictMode mounts twice; render once.
-    started.current = true;
-    let objectUrl: string | null = null;
-
-    (async () => {
+  const run = async (data: RenderJob) => {
       try {
-        const res = await fetch(`${VEMOTION_API}/render?id=${encodeURIComponent(jobId)}`, {
-          headers: { 'X-API-Token': token() },
-        });
-        const data = (await res.json().catch(() => ({}))) as RenderJob & { error?: string };
-        if (!res.ok) throw new Error(data.error || `Could not load render job (HTTP ${res.status})`);
-        setJob(data);
-
-        if (data.status === 'done' && data.outputUrl) {
-          setOutputUrl(data.outputUrl);
-          setPhase('done');
-          setMessage('This job is already rendered.');
-          return;
-        }
-        if (data.status === 'failed') throw new Error(data.error || 'This job has already failed. Queue a new one.');
         if (!data.composition) throw new Error('The job carries no composition.');
         const album = data.target?.album;
         if (!album) throw new Error('The job has no target album.');
@@ -98,8 +87,8 @@ export function RenderJobView({ jobId }: { jobId: string }) {
             updateJob(jobId, { status: 'rendering', progress: pct }).catch(() => { /* progress is best-effort */ });
           }
         });
-        objectUrl = URL.createObjectURL(blob);
-        setVideoSrc(objectUrl);
+        objectUrlRef.current = URL.createObjectURL(blob);
+        setVideoSrc(objectUrlRef.current);
 
         setPhase('uploading');
         setMessage(`Uploading to album ${album}…`);
@@ -117,11 +106,46 @@ export function RenderJobView({ jobId }: { jobId: string }) {
         setPhase('failed');
         updateJob(jobId, { status: 'failed', error: msg }).catch(() => { /* already finished or not ours */ });
       }
+  };
+
+  useEffect(() => {
+    if (started.current) return; // StrictMode mounts twice; render once.
+    started.current = true;
+
+    (async () => {
+      try {
+        const res = await fetch(`${VEMOTION_API}/render?id=${encodeURIComponent(jobId)}`, {
+          headers: { 'X-API-Token': token() },
+        });
+        const data = (await res.json().catch(() => ({}))) as RenderJob & { error?: string };
+        if (!res.ok) throw new Error(data.error || `Could not load render job (HTTP ${res.status})`);
+        setJob(data);
+
+        if (data.status === 'done' && data.outputUrl) {
+          setOutputUrl(data.outputUrl);
+          setPhase('done');
+          setMessage('This job is already rendered.');
+          return;
+        }
+        if (data.status === 'failed') throw new Error(data.error || 'This job has already failed. Queue a new one.');
+        const lastSeen = data.updatedAt ? Date.parse(data.updatedAt) : 0;
+        if ((data.status === 'rendering' || data.status === 'uploading') && Date.now() - lastSeen < STALE_MS) {
+          const mins = Math.max(1, Math.round((Date.now() - lastSeen) / 60000));
+          setPhase('busy');
+          setMessage(`This job is ${data.status} in another tab (${data.progress ?? 0}%, last progress ${mins} min ago).`);
+          return;
+        }
+        await run(data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        setPhase('failed');
+      }
     })();
 
     return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
   const target = job?.target;
@@ -149,6 +173,19 @@ export function RenderJobView({ jobId }: { jobId: string }) {
             <span>{message}</span>
           </div>
         )}
+        {phase === 'busy' && job && (
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-900 dark:text-amber-200 space-y-2">
+            <p>{message} If that tab was closed, render it here instead.</p>
+            <button
+              type="button"
+              onClick={() => run(job)}
+              className="rounded-md bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 text-sm font-medium"
+            >
+              Render here anyway
+            </button>
+          </div>
+        )}
+
         {phase === 'rendering' && (
           <p className="text-xs text-slate-500 dark:text-slate-400">Keep this tab open until the upload is done.</p>
         )}

@@ -1052,6 +1052,16 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
           : undefined)
       : buildAnimation(preset, compositionDuration, compositionWidth, compositionHeight, width, height);
 
+    // Editing keeps every property this form does not manage (lineHeight, shadow, fontWeight,
+    // borderRadius, strokeColor, letterSpacing written by an agent, …). Rebuilding from the form
+    // fields alone silently dropped them on the first edit (found 2026-10-19). Keys the form DOES
+    // manage are removed first, so clearing one in the form still clears it on the layer.
+    const kept = (managed: string[]): Record<string, unknown> => {
+      if (!isEditing) return {};
+      const props = (editingLayer.properties || {}) as Record<string, unknown>;
+      return Object.fromEntries(Object.entries(props).filter(([k]) => !managed.includes(k)));
+    };
+
     const layer: Layer = {
       id: isEditing ? editingLayer.id : generateId(),
       type: layerType,
@@ -1062,11 +1072,13 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       animation,
       properties: layerType === 'text'
         ? {
+            // fontWeight has no field here: a new layer gets '600', an edited one keeps its own.
+            ...(isEditing ? {} : { fontWeight: '600' }),
+            ...kept(['text', 'fontSize', 'color', 'align', 'opacity', 'rotation', 'fontFamily', 'motionScenes', 'fillMode', 'fillSource']),
             text,
             fontSize,
             color,
             align,
-            fontWeight: '600',
             opacity: opacityValue,
             rotation: layerRotation,
             ...(fontFamily ? { fontFamily } : {}),
@@ -1076,8 +1088,12 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               : {}),
           }
         : layerType === 'shape'
-          ? { shape, color, opacity: opacityValue, rotation: layerRotation, ...(motionScenes ? { motionScenes } : {}) }
+          ? {
+              ...kept(['shape', 'color', 'opacity', 'rotation', 'motionScenes']),
+              shape, color, opacity: opacityValue, rotation: layerRotation, ...(motionScenes ? { motionScenes } : {}),
+            }
           : {
+              ...kept(['mathKind', 'stroke', 'strokeWidth', 'fill', 'samples', 'tStart', 'tEnd', 'xFormula', 'yFormula', 'closePath', 'opacity', 'motionScenes']),
               mathKind,
               stroke: color,
               strokeWidth,

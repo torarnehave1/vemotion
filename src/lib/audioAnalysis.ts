@@ -207,3 +207,15 @@ export function buildSyntheticAudioTrack(
   }
   return { sampleRate, duration, left, right, mono };
 }
+
+/**
+ * The audio URL whose loudness track a composition is missing (2026-10-19). An agent (Claude via
+ * MCP, the Agent-Builder agent) can add an audio layer but cannot run Web Audio, so it never writes
+ * `meta.audioTrack` — and without it `amp`/`ampL`/`ampR` in formulas read 0. The editor and the
+ * render-job page call this and fill the track themselves. Returns null when nothing is missing.
+ */
+export function missingAudioTrackSource(composition: { layers?: Array<{ type?: string; visible?: boolean; properties?: Record<string, unknown> }>; meta?: { audioTrack?: unknown } }): string | null {
+  if (composition?.meta?.audioTrack) return null;
+  const layer = (composition?.layers ?? []).find((l) => l?.type === 'audio' && l.visible !== false && typeof l.properties?.r2Url === 'string' && l.properties.r2Url);
+  return layer ? (layer.properties!.r2Url as string) : null;
+}

@@ -21,8 +21,9 @@ const generateId = () => `layer-${Date.now().toString(36)}`;
 /**
  * Video-tab content for AddLayerModal.
  *
- * Source is either an uploaded file (pushed to R2 via the transcription
- * worker, same binary→R2 path the audio layer uses) or a pasted direct URL.
+ * Source is an uploaded file (pushed to vemotion-worker's video R2 via
+ * POST /vemotion/video/upload, with its measured length and size), a clip from
+ * Google Photos (stored the same way), or a pasted direct URL.
  * The chosen source becomes a `type: 'video'` layer. The renderer draws the
  * video frame onto the canvas each tick, so the layer shows in preview,
  * respects z-order, and bakes into the MP4 export. The video's own audio is

@@ -39,6 +39,10 @@ export async function uploadVideoFile(file: File): Promise<VideoUploadResult> {
     );
   }
 
+  // Measured here and stored with the clip, so an agent listing the clips later knows each one's
+  // length and aspect without a browser (GET /vemotion/videos, 2026-10-19). Best-effort.
+  const meta = await probeLocalVideo(file);
+
   let res: Response;
   try {
     res = await fetch(`${VEMOTION_API}/video/upload`, {
@@ -47,6 +51,8 @@ export async function uploadVideoFile(file: File): Promise<VideoUploadResult> {
         'X-API-Token': token,
         'X-File-Name': encodeURIComponent(file.name),
         'Content-Type': file.type || 'video/mp4',
+        ...(meta.duration ? { 'X-Video-Duration': String(meta.duration) } : {}),
+        ...(meta.width ? { 'X-Video-Width': String(meta.width), 'X-Video-Height': String(meta.height) } : {}),
       },
       body: file,
     });
@@ -64,4 +70,20 @@ export async function uploadVideoFile(file: File): Promise<VideoUploadResult> {
   const data = await res.json() as { url?: string; key?: string };
   if (!data.url) throw new Error('Video upload returned no URL');
   return { url: data.url, key: data.key ?? '' };
+}
+
+function probeLocalVideo(file: File): Promise<{ duration: number; width: number; height: number }> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    const done = (r: { duration: number; width: number; height: number }) => { URL.revokeObjectURL(url); resolve(r); };
+    const timer = setTimeout(() => done({ duration: 0, width: 0, height: 0 }), 8000);
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => {
+      clearTimeout(timer);
+      done({ duration: Number.isFinite(v.duration) ? v.duration : 0, width: v.videoWidth || 0, height: v.videoHeight || 0 });
+    };
+    v.onerror = () => { clearTimeout(timer); done({ duration: 0, width: 0, height: 0 }); };
+    v.src = url;
+  });
 }

@@ -8,6 +8,7 @@ import { FileMenu } from './FileMenu';
 import { ExportShareMenu } from './ExportShareMenu';
 import { AppearanceModal } from './AppearanceModal';
 import { useAuth } from '../App';
+import { analyseAudioFromUrl, missingAudioTrackSource } from '../lib/audioAnalysis';
 import { getCompositionFromCloud, hasCloudToken, readCompositionIdFromUrl, readLastCompositionRef, saveCompositionToCloud, writeCompositionIdToUrl, writeLastCompositionRef } from '../lib/cloud-compositions';
 import { type StreamSettings } from './PathStreamPanel';
 
@@ -94,6 +95,20 @@ const defaultComposition: CompositionData = {
 export const Dashboard: React.FC = () => {
   const auth = useAuth();
   const [composition, setComposition] = useState<CompositionData>(defaultComposition);
+  // An audio layer added by an agent arrives without meta.audioTrack (agents cannot run Web Audio),
+  // so formulas reading amp/ampL/ampR would see silence. Analyse it here, once per URL; the change
+  // then autosaves like any edit (2026-10-19).
+  const audioTrackTriedRef = useRef<string | null>(null);
+  const audioTrackUrl = missingAudioTrackSource(composition);
+  useEffect(() => {
+    if (!audioTrackUrl || audioTrackTriedRef.current === audioTrackUrl) return;
+    audioTrackTriedRef.current = audioTrackUrl;
+    analyseAudioFromUrl(audioTrackUrl, 30)
+      .then((track) => setComposition((prev) => (missingAudioTrackSource(prev) === audioTrackUrl
+        ? { ...prev, meta: { ...prev.meta, audioTrack: track } }
+        : prev)))
+      .catch((e) => console.warn('[audioTrack] analysis failed; amp stays 0', e));
+  }, [audioTrackUrl]);
   const [cloudCompositionId, setCloudCompositionId] = useState<string | null>(null);
   const [cloudCompositionName, setCloudCompositionName] = useState('Untitled composition');
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -470,11 +485,11 @@ export const Dashboard: React.FC = () => {
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-200 flex-shrink-0">Vemotion</h1>
         {/* Build marker — visual confirmation of latest deploy. Bump the label on each push. */}
         <span
-          aria-label="Build marker WU"
-          title="Build marker WU — visual confirmation of latest deploy"
+          aria-label="Build marker WV"
+          title="Build marker WV — visual confirmation of latest deploy"
           className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-slate-900 dark:text-white text-[10px] font-bold tracking-wider flex-shrink-0"
         >
-          WU
+          WV
         </span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wide flex-shrink-0">
           Research Preview

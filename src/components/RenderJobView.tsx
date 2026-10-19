@@ -4,6 +4,8 @@ import type { CompositionData } from '../lib/api';
 import { readStoredUser } from '../lib/auth';
 import { renderSlideBlobs, renderVideoBlob } from '../lib/blotato';
 import { uploadImageToAlbum } from '../lib/photoAlbum';
+import { analyseAudioFromUrl, missingAudioTrackSource } from '../lib/audioAnalysis';
+import { buildKnittingChart } from '../lib/knitting';
 
 const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
 
@@ -21,6 +23,13 @@ const VEMOTION_API = 'https://api.vegvisr.org/vemotion';
  * `times` instead — scaled so the long side is at most 960 px, enough to judge a design and small
  * enough for the MCP server to hand the images straight to Claude — uploads them to the job's album
  * (vemotion-previews) and marks the job done with one URL per time.
+ *
+ * A job of kind "pixel-grid" (pixelate_image_for_vemotion) carries no composition: it turns one
+ * image into a knitting-chart grid with the Pixel Grid tab's own code (buildKnittingChart needs a
+ * canvas) and reports { cols, rows, palette, cells } as the job's result.
+ *
+ * Before drawing, a composition with an audio layer but no meta.audioTrack gets one (an agent cannot
+ * analyse audio), so formulas reading amp draw the same here as in the editor.
  */
 
 interface RenderJob {
@@ -32,9 +41,11 @@ interface RenderJob {
   target?: { platform?: string; accountId?: string; username?: string; album?: string } | null;
   composition?: CompositionData;
   progress?: number;
-  kind?: 'video' | 'frames';
+  kind?: 'video' | 'frames' | 'pixel-grid';
   times?: number[] | null;
   outputUrls?: string[] | null;
+  pixelGrid?: { imageUrl: string; cols: number; colors: number } | null;
+  result?: { cols: number; rows: number; palette: string[]; cells: string[] } | null;
   updatedAt?: string;
 }
 
@@ -89,6 +100,7 @@ export function RenderJobView({ jobId }: { jobId: string }) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [frameUrls, setFrameUrls] = useState<string[]>([]);
+  const [pixelResult, setPixelResult] = useState<string | null>(null);
   const started = useRef(false);
   const objectUrlRef = useRef<string | null>(null);
 
@@ -118,20 +130,59 @@ export function RenderJobView({ jobId }: { jobId: string }) {
     setMessage(`${urls.length} frame(s) rendered and uploaded.`);
   };
 
+  const runPixelGrid = async (spec: NonNullable<RenderJob['pixelGrid']>) => {
+    setPhase('rendering');
+    setMessage('Loading the image…');
+    await updateJob(jobId, { status: 'rendering', progress: 0 });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.crossOrigin = 'anonymous';
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Could not load the image (it must be a public image that allows cross-origin use).'));
+      el.src = spec.imageUrl;
+    });
+    setMessage(`Pixelating into ${spec.cols} columns, ${spec.colors} colours…`);
+    const chart = buildKnittingChart(img, spec.cols, spec.colors);
+    await updateJob(jobId, { status: 'done', result: { cols: chart.cols, rows: chart.rows, palette: chart.palette, cells: chart.cells } });
+    setPixelResult(`${chart.cols} × ${chart.rows} stitches, ${chart.palette.length} colours`);
+    setPhase('done');
+    setMessage('Grid made.');
+  };
+
+  // An agent-built composition has no loudness track for its audio layer; make it here so the
+  // render draws amp-driven formulas the way the editor does. The job's snapshot is not changed.
+  const withAudioTrack = async (composition: CompositionData): Promise<CompositionData> => {
+    const url = missingAudioTrackSource(composition);
+    if (!url) return composition;
+    try {
+      setMessage('Analysing the audio…');
+      const track = await analyseAudioFromUrl(url, 30);
+      return { ...composition, meta: { ...composition.meta, audioTrack: track } };
+    } catch {
+      return composition;
+    }
+  };
+
   const run = async (data: RenderJob) => {
       try {
+        if (data.kind === 'pixel-grid') {
+          if (!data.pixelGrid) throw new Error('The job has no image to pixelate.');
+          await runPixelGrid(data.pixelGrid);
+          return;
+        }
         if (!data.composition) throw new Error('The job carries no composition.');
+        const composition = await withAudioTrack(data.composition);
         const album = data.target?.album;
         if (!album) throw new Error('The job has no target album.');
         if (data.kind === 'frames') {
-          await runFrames(data, data.composition, album);
+          await runFrames(data, composition, album);
           return;
         }
 
         setPhase('rendering');
         await updateJob(jobId, { status: 'rendering', progress: 0 });
         let lastReported = 0;
-        const blob = await renderVideoBlob(data.composition, (p) => {
+        const blob = await renderVideoBlob(composition, (p) => {
           setMessage(p.message || `Rendering… ${Math.round(p.percent)}%`);
           const pct = Math.round(p.percent);
           // Report every 10% so the MCP client can see it move, without a request per frame.
@@ -174,6 +225,12 @@ export function RenderJobView({ jobId }: { jobId: string }) {
         if (!res.ok) throw new Error(data.error || `Could not load render job (HTTP ${res.status})`);
         setJob(data);
 
+        if (data.status === 'done' && data.kind === 'pixel-grid' && data.result) {
+          setPixelResult(`${data.result.cols} × ${data.result.rows} stitches, ${data.result.palette.length} colours`);
+          setPhase('done');
+          setMessage('This grid is already made.');
+          return;
+        }
         if (data.status === 'done' && data.outputUrl) {
           setOutputUrl(data.outputUrl);
           setFrameUrls(data.outputUrls ?? []);
@@ -204,17 +261,25 @@ export function RenderJobView({ jobId }: { jobId: string }) {
 
   const target = job?.target;
   const isFrames = job?.kind === 'frames';
+  const isPixel = job?.kind === 'pixel-grid';
   return (
     <div className="flex-1 flex items-start justify-center p-4 sm:p-8">
       <div className="w-full max-w-xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
         <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
           <Video className="w-5 h-5" />
-          <h1 className="text-lg font-semibold">{isFrames ? 'Render preview frames' : 'Render for Instagram'}</h1>
+          <h1 className="text-lg font-semibold">{isPixel ? 'Make a pixel grid' : isFrames ? 'Render preview frames' : 'Render for Instagram'}</h1>
         </div>
         <dl className="text-sm text-slate-600 dark:text-slate-300 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
           <dt className="font-medium">Composition</dt>
           <dd>{job?.name || '…'}</dd>
-          {isFrames ? (
+          {isPixel ? (
+            <>
+              <dt className="font-medium">Image</dt>
+              <dd className="break-all">{job?.pixelGrid?.imageUrl}</dd>
+              <dt className="font-medium">Grid</dt>
+              <dd>{job?.pixelGrid ? `${job.pixelGrid.cols} columns, ${job.pixelGrid.colors} colours` : '…'}</dd>
+            </>
+          ) : isFrames ? (
             <>
               <dt className="font-medium">Frames at</dt>
               <dd>{(job?.times ?? []).map((t) => `${t}s`).join(', ')}</dd>
@@ -225,8 +290,12 @@ export function RenderJobView({ jobId }: { jobId: string }) {
               <dd>{target?.username ? `@${target.username}` : '…'}</dd>
             </>
           )}
-          <dt className="font-medium">Album</dt>
-          <dd>{target?.album || '…'}</dd>
+          {!isPixel && (
+            <>
+              <dt className="font-medium">Album</dt>
+              <dd>{target?.album || '…'}</dd>
+            </>
+          )}
           <dt className="font-medium">Job</dt>
           <dd className="font-mono text-xs break-all">{jobId}</dd>
         </dl>
@@ -267,7 +336,16 @@ export function RenderJobView({ jobId }: { jobId: string }) {
 
         {videoSrc && <video src={videoSrc} controls className="w-full max-h-[60vh] rounded-lg bg-black" />}
 
-        {phase === 'done' && outputUrl && (
+        {phase === 'done' && isPixel && pixelResult && (
+          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-sm text-emerald-800 dark:text-emerald-200 space-y-1">
+            <div className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="w-4 h-4" /> {message} {pixelResult}.
+            </div>
+            <p>Go back to Claude: it can now put this grid in a composition.</p>
+          </div>
+        )}
+
+        {phase === 'done' && !isPixel && outputUrl && (
           <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-sm text-emerald-800 dark:text-emerald-200 space-y-1">
             <div className="flex items-center gap-2 font-medium">
               <CheckCircle2 className="w-4 h-4" /> {message}

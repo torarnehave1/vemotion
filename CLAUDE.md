@@ -126,7 +126,7 @@ Can we build a composable, AI-assisted video generation system that is lightweig
 
 **Vemotion Worker OpenAPI spec:** `https://api.vegvisr.org/vemotion/openapi.json`
 
-**Auth token** (`X-API-Token` header): `b1ca2967e8165ec02fdf039d9e916af4005f7388` (torarnehave@gmail.com `emailVerificationToken` from D1)
+**Auth token** (`X-API-Token` header): the user's `emailVerificationToken` from D1 `config` — read it into a shell variable when needed, never write it into a file (it was published in this public repo until 2026-10-19 and has to be rotated).
 
 **Key endpoints (all require `X-API-Token` header except health/openapi):**
 - `GET  /vemotion/health` — health check

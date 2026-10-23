@@ -265,49 +265,67 @@ export function renderKnittingChart(
   const gw = cell * cols;
   const gh = cell * rows;
 
+  // Pixel snapping. When the context is only scaled/translated (the export
+  // canvas, the editor's DPR transform), every cell edge and grid line is
+  // placed on a whole DEVICE pixel, so lines are crisp instead of smeared over
+  // two pixels. The grid keeps its size: edges round to the nearest pixel, so
+  // neighbouring cells may differ by one pixel. Under rotation/skew nothing is
+  // snapped and cells keep the +0.5 seam overdraw.
+  const t = ctx.getTransform();
+  const aligned = Math.abs(t.b) < 1e-9 && Math.abs(t.c) < 1e-9 && t.a > 0 && t.d > 0;
+  const sx = aligned ? t.a : 1;
+  const sy = aligned ? t.d : 1;
+  const snapX = (v: number) => (aligned ? (Math.round(v * t.a + t.e) - t.e) / t.a : v);
+  const snapY = (v: number) => (aligned ? (Math.round(v * t.d + t.f) - t.f) / t.d : v);
+  const seam = aligned ? 0 : 0.5;
+
   // Stitch cells.
   for (let r = 0; r < rows; r++) {
     const rowStr = cells[r] ?? '';
+    const y0 = snapY(gy + r * cell);
+    const y1 = snapY(gy + (r + 1) * cell);
     for (let c = 0; c < cols; c++) {
       if (hidden && hidden.has(r * cols + c)) continue; // not yet "drawn"
       const idx = cellIndex(rowStr[c] ?? '0');
       ctx.fillStyle = palette[idx] ?? '#000000';
-      // +0.5 overdraw hides hairline seams between adjacent cells.
-      ctx.fillRect(gx + c * cell, gy + r * cell, cell + 0.5, cell + 0.5);
+      const x0 = snapX(gx + c * cell);
+      const x1 = snapX(gx + (c + 1) * cell);
+      ctx.fillRect(x0, y0, x1 - x0 + seam, y1 - y0 + seam);
     }
   }
 
-  // Grid lines (skip when cells are too small to be legible).
+  // Grid lines (skip when cells are too small to be legible). Widths are whole
+  // device pixels, at least 1; an odd width is centred on the middle of a
+  // pixel so it covers exactly that pixel.
   if (style.showGrid && cell >= 3) {
+    const strokeGrid = (step: number, deviceWidth: number) => {
+      const w = aligned ? deviceWidth : deviceWidth / Math.max(sx, sy);
+      const ox = aligned && deviceWidth % 2 === 1 ? 0.5 / sx : 0;
+      const oy = aligned && deviceWidth % 2 === 1 ? 0.5 / sy : 0;
+      ctx.lineWidth = aligned ? w / sx : w;
+      ctx.beginPath();
+      const top = snapY(gy) + oy;
+      const bottom = snapY(gy + gh) + oy;
+      for (let c = 0; c <= cols; c += step) {
+        const px = snapX(gx + c * cell) + ox;
+        ctx.moveTo(px, top);
+        ctx.lineTo(px, bottom);
+      }
+      const left = snapX(gx) + ox;
+      const right = snapX(gx + gw) + ox;
+      for (let r = 0; r <= rows; r += step) {
+        const py = snapY(gy + r * cell) + oy;
+        ctx.moveTo(left, py);
+        ctx.lineTo(right, py);
+      }
+      ctx.stroke();
+    };
+    const devCell = cell * Math.min(sx, sy);
     ctx.strokeStyle = style.gridColor || '#999999';
-    ctx.lineWidth = Math.max(0.5, cell * 0.04);
-    ctx.beginPath();
-    for (let c = 0; c <= cols; c++) {
-      const px = gx + c * cell;
-      ctx.moveTo(px, gy);
-      ctx.lineTo(px, gy + gh);
-    }
-    for (let r = 0; r <= rows; r++) {
-      const py = gy + r * cell;
-      ctx.moveTo(gx, py);
-      ctx.lineTo(gx + gw, py);
-    }
-    ctx.stroke();
-
+    const thin = Math.max(1, Math.round(devCell * 0.04));
+    strokeGrid(1, thin);
     // Heavier lines every 10 stitches/rows — the standard chart guide.
-    ctx.lineWidth = Math.max(1, cell * 0.1);
-    ctx.beginPath();
-    for (let c = 0; c <= cols; c += 10) {
-      const px = gx + c * cell;
-      ctx.moveTo(px, gy);
-      ctx.lineTo(px, gy + gh);
-    }
-    for (let r = 0; r <= rows; r += 10) {
-      const py = gy + r * cell;
-      ctx.moveTo(gx, py);
-      ctx.lineTo(gx + gw, py);
-    }
-    ctx.stroke();
+    strokeGrid(10, Math.max(thin + 1, Math.round(devCell * 0.1)));
   }
 
   // Row / column numbers.

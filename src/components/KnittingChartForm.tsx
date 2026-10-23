@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Upload, Grid3x3, Loader2 } from 'lucide-react';
+import { Upload, Grid3x3, Loader2, Plus, Minus } from 'lucide-react';
 import type { Layer } from '../lib/api';
 import { buildKnittingChart, renderKnittingChart, type KnittingChart } from '../lib/knitting';
 import {
@@ -25,6 +25,10 @@ const generateId = () => `layer-${Date.now().toString(36)}`;
 
 const BACKGROUND = '#ffffff';
 const GRID_COLOR = '#999999';
+
+// Blank grid: starting yarns offered next to the background (palette index 0).
+const BLANK_START_COLORS = ['#000000', '#d62828', '#1d4ed8'];
+const BLANK_MAX = 200;
 
 /**
  * Knitting-chart tab content for AddLayerModal.
@@ -66,6 +70,14 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
   const [albumLoading, setAlbumLoading] = useState(false);
   const [albumError, setAlbumError] = useState('');
   const [pickedKey, setPickedKey] = useState('');
+
+  // 'image' pixelates a picture; 'blank' starts an empty grid to paint by hand
+  // (no source image — the edit form's paint tools take it from there).
+  const [mode, setMode] = useState<'image' | 'blank'>('image');
+  const [blankCols, setBlankCols] = useState(40);
+  const [blankRows, setBlankRows] = useState(30);
+  const [blankBg, setBlankBg] = useState(BACKGROUND);
+  const [blankColors, setBlankColors] = useState<string[]>(BLANK_START_COLORS);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -170,13 +182,20 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
   };
 
   // Recompute the chart whenever the image or grid/palette parameters change.
+  // A blank grid is every cell = palette index 0 (the background yarn).
   useEffect(() => {
+    if (mode === 'blank') {
+      const c = Math.max(2, Math.min(BLANK_MAX, Math.round(blankCols) || 2));
+      const r = Math.max(2, Math.min(BLANK_MAX, Math.round(blankRows) || 2));
+      setChart({ cols: c, rows: r, palette: [blankBg, ...blankColors], cells: Array.from({ length: r }, () => '0'.repeat(c)) });
+      return;
+    }
     if (!img) {
       setChart(null);
       return;
     }
     setChart(buildKnittingChart(img, cols, paletteSize));
-  }, [img, cols, paletteSize]);
+  }, [mode, img, cols, paletteSize, blankCols, blankRows, blankBg, blankColors]);
 
   // Reset the editable palette to the auto colours whenever the chart rebuilds.
   useEffect(() => {
@@ -186,6 +205,8 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
   // The palette actually used for preview + the saved layer: the user's edits
   // when they line up with the current chart, else the auto palette.
   const effectivePalette = (chart && palette.length === chart.palette.length) ? palette : (chart?.palette ?? []);
+
+  const background = mode === 'blank' ? blankBg : BACKGROUND;
 
   // Redraw the live preview when the chart or display toggles change.
   useEffect(() => {
@@ -203,10 +224,10 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       showGrid,
       showNumbers,
       showLegend,
-      background: BACKGROUND,
+      background,
       gridColor: GRID_COLOR,
     });
-  }, [chart, effectivePalette, showGrid, showNumbers, showLegend]);
+  }, [chart, effectivePalette, showGrid, showNumbers, showLegend, background]);
 
   const handleAdd = () => {
     if (!chart) return;
@@ -237,10 +258,10 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         showGrid,
         showNumbers,
         showLegend,
-        background: BACKGROUND,
+        background,
         gridColor: GRID_COLOR,
-        name: name || 'pixel grid',
-        ...(sourceUrl ? { sourceImage: sourceUrl } : {}),
+        name: mode === 'blank' ? 'blank grid' : (name || 'pixel grid'),
+        ...(mode === 'image' && sourceUrl ? { sourceImage: sourceUrl } : {}),
       },
     };
     onAdd(layer);
@@ -255,6 +276,61 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
         className="hidden"
         onChange={handleFile}
       />
+      {/* Start from a picture, or from an empty grid to paint by hand. */}
+      <div className="flex gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
+        <button type="button" onClick={() => setMode('image')}
+          className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition ${mode === 'image' ? 'bg-sky-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}>
+          From image
+        </button>
+        <button type="button" onClick={() => setMode('blank')}
+          className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition ${mode === 'blank' ? 'bg-sky-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}>
+          Blank grid
+        </button>
+      </div>
+
+      {mode === 'blank' ? (
+        <div className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Stitches across</label>
+              <input type="number" min={2} max={BLANK_MAX} value={blankCols}
+                onChange={(e) => setBlankCols(Math.max(2, Math.min(BLANK_MAX, Math.round(Number(e.target.value)) || 2)))}
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Rows</label>
+              <input type="number" min={2} max={BLANK_MAX} value={blankRows}
+                onChange={(e) => setBlankRows(Math.max(2, Math.min(BLANK_MAX, Math.round(Number(e.target.value)) || 2)))}
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 dark:text-slate-400 w-24">Background</span>
+            <input type="color" value={blankBg} onChange={(e) => setBlankBg(e.target.value)} title="Background (colour 1)"
+              className="w-7 h-7 rounded border border-slate-600 bg-transparent cursor-pointer p-0" />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-slate-500 dark:text-slate-400 w-24">Start colours</span>
+            {blankColors.map((hex, i) => (
+              <input key={i} type="color" value={hex} title={`Colour ${i + 2}`}
+                onChange={(e) => setBlankColors((prev) => prev.map((h, j) => (j === i ? e.target.value : h)))}
+                className="w-7 h-7 rounded border border-slate-600 bg-transparent cursor-pointer p-0" />
+            ))}
+            <button type="button" onClick={() => setBlankColors((prev) => [...prev, '#000000'])} disabled={blankColors.length >= 35}
+              title="Add a start colour"
+              className="w-7 h-7 rounded border-2 border-dashed border-slate-600 hover:border-sky-400 disabled:opacity-40 text-slate-500 dark:text-slate-400 flex items-center justify-center transition">
+              <Plus className="w-4 h-4" />
+            </button>
+            {blankColors.length > 1 && (
+              <button type="button" onClick={() => setBlankColors((prev) => prev.slice(0, -1))} title="Remove the last start colour"
+                className="w-7 h-7 rounded border-2 border-dashed border-slate-600 hover:border-red-400 text-slate-500 dark:text-slate-400 flex items-center justify-center transition">
+                <Minus className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500">Every stitch starts as the background. Paint on the grid from the layer's edit form after adding it.</p>
+        </div>
+      ) : (<>
       <div className="flex items-center gap-3">
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -316,6 +392,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
 
       {/* AI image generation (gpt-image-2) */}
       <AiImagePrompt onResult={handleAiResult} busy={stockBusy} />
+      </>)}
 
       {/* Live preview */}
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-2">
@@ -325,7 +402,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
           height={360}
           className="w-full rounded bg-white dark:bg-slate-900"
         />
-        {!img && (
+        {!img && mode === 'image' && (
           <p className="text-center text-xs text-slate-500 py-2 flex items-center justify-center gap-2">
             <Grid3x3 className="w-4 h-4" /> Choose an image to preview the chart
           </p>
@@ -334,6 +411,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
 
       {/* Grid controls */}
       <div className="space-y-3">
+        {mode === 'image' && (<>
         <div className="space-y-1">
           <label className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Stitches across</span>
@@ -364,6 +442,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
             className="w-full accent-sky-500"
           />
         </div>
+        </>)}
 
         <div className="flex flex-wrap gap-4 pt-1">
           {([
@@ -385,7 +464,7 @@ export const KnittingChartForm: React.FC<KnittingChartFormProps> = ({
       </div>
 
       {/* Editable palette — click a small swatch to recolor every pixel using it */}
-      {chart && effectivePalette.length > 0 && (
+      {mode === 'image' && chart && effectivePalette.length > 0 && (
         <div className="space-y-2">
           <label className="text-xs text-slate-500 dark:text-slate-400 block">Colors (click to change)</label>
           <div className="flex flex-wrap gap-1.5">

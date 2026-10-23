@@ -1,10 +1,217 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Loader2, Eraser, Plus } from 'lucide-react';
 import type { Layer } from '../lib/api';
-import { buildKnittingChart, renderKnittingChart, knittingCellAt, type KnittingChart } from '../lib/knitting';
+import { buildKnittingChart, renderKnittingChart, knittingCellAt, knittingChartGeometry, type KnittingChart } from '../lib/knitting';
 import { uploadImageToAlbum, importImageUrlToAlbum, trackUnsplashDownload, type StockImage } from '../lib/photoAlbum';
 import { StockImagePicker } from './StockImagePicker';
 import { AiImagePrompt } from './AiImagePrompt';
+
+/**
+ * Logical size of the editor preview. The layout (gutters, legend, hit-testing)
+ * is computed in these units; the canvas backing store is the on-screen size ×
+ * devicePixelRatio and a transform maps between them, so the grid is drawn at
+ * the screen's real resolution instead of being stretched.
+ */
+const PREVIEW_W = 480;
+const PREVIEW_H = 360;
+
+/** Largest grid the "add stitches" buttons grow to (per side). */
+const MAX_GRID = 200;
+
+type GrowSide = 'left' | 'right' | 'top' | 'bottom';
+
+/**
+ * Grow a chart by `n` columns (left/right) or rows (top/bottom) without
+ * touching what is drawn. New cells get palette index `blankIdx`. The recorded
+ * paint sequence stores flat indices r*cols+c, so every entry is re-addressed
+ * to the new width and the shifted origin.
+ */
+function growChart(
+  chart: KnittingChart,
+  drawOrder: number[],
+  side: GrowSide,
+  n: number,
+  blankIdx: number,
+): { chart: KnittingChart; drawOrder: number[] } {
+  const horizontal = side === 'left' || side === 'right';
+  const cols = chart.cols + (horizontal ? n : 0);
+  const rows = chart.rows + (horizontal ? 0 : n);
+  const dc = side === 'left' ? n : 0;
+  const dr = side === 'top' ? n : 0;
+  const blank = blankIdx.toString(36);
+  const old = Array.from({ length: chart.rows }, (_, r) => (chart.cells[r] ?? '').padEnd(chart.cols, '0').slice(0, chart.cols));
+  let cells: string[];
+  if (side === 'left') cells = old.map((row) => blank.repeat(n) + row);
+  else if (side === 'right') cells = old.map((row) => row + blank.repeat(n));
+  else {
+    const fresh = Array.from({ length: n }, () => blank.repeat(cols));
+    cells = side === 'top' ? [...fresh, ...old] : [...old, ...fresh];
+  }
+  const order = drawOrder.map((f) => {
+    const r = Math.floor(f / chart.cols);
+    const c = f % chart.cols;
+    return (r + dr) * cols + (c + dc);
+  });
+  return { chart: { ...chart, cols, rows, cells }, drawOrder: order };
+}
+
+/** A selected block of cells, inclusive, normalised so r0<=r1 and c0<=c1. */
+interface CellRect { r0: number; c0: number; r1: number; c1: number }
+
+const normRect = (a: { r: number; c: number }, b: { r: number; c: number }): CellRect => ({
+  r0: Math.min(a.r, b.r), c0: Math.min(a.c, b.c), r1: Math.max(a.r, b.r), c1: Math.max(a.c, b.c),
+});
+
+type RepeatDir = 'horizontal' | 'vertical' | 'both';
+
+/**
+ * Repeat the selected block to the edges of the grid (a knitting "rapport"),
+ * phase-aligned with the selection: horizontal fills the selection's rows
+ * across the full width, vertical fills its columns over the full height, both
+ * fills the whole grid. Existing cells are overwritten; partial tiles at the
+ * edges are cut.
+ *
+ * Changed cells that are not background are appended to the paint sequence so
+ * the repeat draws itself in the video: tile by tile moving out from the
+ * selection, and inside a tile in the same order the source cells were drawn
+ * (unrecorded source cells after, row by row). Cells already in the sequence
+ * keep their place, as with brush painting.
+ */
+function repeatSelection(
+  chart: KnittingChart,
+  drawOrder: number[],
+  sel: CellRect,
+  dir: RepeatDir,
+  blankIdx: number,
+): { chart: KnittingChart; drawOrder: number[] } {
+  const { cols, rows } = chart;
+  const h = sel.r1 - sel.r0 + 1;
+  const w = sel.c1 - sel.c0 + 1;
+  const src = Array.from({ length: rows }, (_, r) => (chart.cells[r] ?? '').padEnd(cols, '0').slice(0, cols));
+  const out = src.map((row) => row.split(''));
+  const rank = new Map<number, number>();
+  drawOrder.forEach((f, i) => { if (!rank.has(f)) rank.set(f, i); });
+  const inOrder = new Set(drawOrder);
+  const blank = blankIdx.toString(36);
+  const mod = (a: number, m: number) => ((a % m) + m) % m;
+
+  const rFrom = dir === 'horizontal' ? sel.r0 : 0;
+  const rTo = dir === 'horizontal' ? sel.r1 : rows - 1;
+  const cFrom = dir === 'vertical' ? sel.c0 : 0;
+  const cTo = dir === 'vertical' ? sel.c1 : cols - 1;
+
+  const added: { flat: number; key: number[] }[] = [];
+  for (let r = rFrom; r <= rTo; r++) {
+    for (let c = cFrom; c <= cTo; c++) {
+      const tr = Math.floor((r - sel.r0) / h);
+      const tc = Math.floor((c - sel.c0) / w);
+      if (tr === 0 && tc === 0) continue; // the selection itself
+      const sr = sel.r0 + mod(r - sel.r0, h);
+      const sc = sel.c0 + mod(c - sel.c0, w);
+      const ch = src[sr][sc];
+      if (out[r][c] === ch) continue;
+      out[r][c] = ch;
+      const flat = r * cols + c;
+      if (ch !== blank && !inOrder.has(flat)) {
+        const srcFlat = sr * cols + sc;
+        const within = rank.has(srcFlat) ? rank.get(srcFlat)! : drawOrder.length + srcFlat;
+        added.push({ flat, key: [Math.abs(tr) + Math.abs(tc), tr, tc, within] });
+      }
+    }
+  }
+  added.sort((a, b) => {
+    for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i];
+    return 0;
+  });
+  return {
+    chart: { ...chart, cells: out.map((row) => row.join('')) },
+    drawOrder: [...drawOrder, ...added.map((a) => a.flat)],
+  };
+}
+
+/**
+ * Mirror the selected block. `axis` 'h' flips left↔right, 'v' flips top↕bottom.
+ *
+ * - In place: the block is flipped inside the selection. Recorded paint steps
+ *   inside it move with their stitches, so the playback draws the mirrored
+ *   stroke (the sequence length is unchanged).
+ * - Copy: a mirrored copy is written next to the selection on `side`
+ *   ('before' = left/above, 'after' = right/below), cut at the grid edge and
+ *   overwriting what is there. `sharedCentre` uses the outer row/column of the
+ *   selection as the mirror line, so it is not doubled; otherwise the selection
+ *   edge is the mirror line and the outer row/column repeats. Changed
+ *   non-background cells are appended to the paint sequence in the order the
+ *   source stitches were drawn.
+ */
+function mirrorSelection(
+  chart: KnittingChart,
+  drawOrder: number[],
+  sel: CellRect,
+  axis: 'h' | 'v',
+  mode: 'inplace' | 'copy',
+  side: 'before' | 'after',
+  sharedCentre: boolean,
+  blankIdx: number,
+): { chart: KnittingChart; drawOrder: number[] } {
+  const { cols, rows } = chart;
+  const src = Array.from({ length: rows }, (_, r) => (chart.cells[r] ?? '').padEnd(cols, '0').slice(0, cols));
+  const out = src.map((row) => row.split(''));
+
+  if (mode === 'inplace') {
+    const flip = (r: number, c: number) => (axis === 'h' ? [r, sel.c0 + sel.c1 - c] : [sel.r0 + sel.r1 - r, c]);
+    for (let r = sel.r0; r <= sel.r1; r++) {
+      for (let c = sel.c0; c <= sel.c1; c++) {
+        const [fr, fc] = flip(r, c);
+        out[fr][fc] = src[r][c];
+      }
+    }
+    const order = drawOrder.map((f) => {
+      const r = Math.floor(f / cols);
+      const c = f % cols;
+      if (r < sel.r0 || r > sel.r1 || c < sel.c0 || c > sel.c1) return f;
+      const [fr, fc] = flip(r, c);
+      return fr * cols + fc;
+    });
+    return { chart: { ...chart, cells: out.map((row) => row.join('')) }, drawOrder: order };
+  }
+
+  // Copy beside: target of source (r, c), or null when it falls on the axis / off the grid.
+  const shift = sharedCentre ? 0 : 1;
+  const target = (r: number, c: number): [number, number] | null => {
+    let tr = r;
+    let tc = c;
+    if (axis === 'h') tc = side === 'after' ? sel.c1 + shift + (sel.c1 - c) : sel.c0 - shift - (c - sel.c0);
+    else tr = side === 'after' ? sel.r1 + shift + (sel.r1 - r) : sel.r0 - shift - (r - sel.r0);
+    if (tr >= sel.r0 && tr <= sel.r1 && tc >= sel.c0 && tc <= sel.c1) return null; // the shared axis itself
+    if (tr < 0 || tr >= rows || tc < 0 || tc >= cols) return null;
+    return [tr, tc];
+  };
+  const rank = new Map<number, number>();
+  drawOrder.forEach((f, i) => { if (!rank.has(f)) rank.set(f, i); });
+  const inOrder = new Set(drawOrder);
+  const blank = blankIdx.toString(36);
+  const added: { flat: number; key: number }[] = [];
+  for (let r = sel.r0; r <= sel.r1; r++) {
+    for (let c = sel.c0; c <= sel.c1; c++) {
+      const t = target(r, c);
+      if (!t) continue;
+      const [tr, tc] = t;
+      const ch = src[r][c];
+      if (out[tr][tc] === ch) continue;
+      out[tr][tc] = ch;
+      const flat = tr * cols + tc;
+      if (ch !== blank && !inOrder.has(flat)) {
+        const srcFlat = r * cols + c;
+        added.push({ flat, key: rank.has(srcFlat) ? rank.get(srcFlat)! : drawOrder.length + srcFlat });
+      }
+    }
+  }
+  added.sort((a, b) => a.key - b.key);
+  return {
+    chart: { ...chart, cells: out.map((row) => row.join('')) },
+    drawOrder: [...drawOrder, ...added.map((a) => a.flat)],
+  };
+}
 
 interface PixelGridEditFormProps {
   editingLayer: Layer;
@@ -65,6 +272,11 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   const [brushIndex, setBrushIndex] = useState(0);
   const painting = useRef(false);
 
+  // Select tool: drag a rectangle of cells, then repeat it (rapport).
+  const [tool, setTool] = useState<'paint' | 'select'>('paint');
+  const [selection, setSelection] = useState<CellRect | null>(null);
+  const selectAnchor = useRef<{ r: number; c: number } | null>(null);
+
   // Recorded paint sequence (flat cell indices r*cols+c), first-occurrence
   // order. Drives the pixel-reveal animation. Cleared when the grid is cleared
   // or re-pixelated from a source image (the old drawing no longer applies).
@@ -117,6 +329,26 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   }, [animateDrawing, secondsPerPixel, drawOrder.length]);
 
   const previewRef = useRef<HTMLCanvasElement>(null);
+  // Backing-store size of the preview canvas (device pixels); follows the
+  // canvas's CSS size and the devicePixelRatio.
+  const [previewPx, setPreviewPx] = useState({ w: PREVIEW_W, h: PREVIEW_H });
+  useEffect(() => {
+    const canvas = previewRef.current;
+    if (!canvas) return;
+    const measure = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+      const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      setPreviewPx((p) => (p.w === w && p.h === h ? p : { w, h }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(canvas);
+    // A DPR change (window moved to another screen) does not resize the box.
+    const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    mq.addEventListener('change', measure);
+    return () => { ro.disconnect(); mq.removeEventListener('change', measure); };
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const touched = useRef(false); // true once a slider moved / source attached
 
@@ -140,6 +372,7 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     setChart(next);
     setPalette(next.palette.slice());
     setDrawOrder([]); // re-pixelating replaces the drawing — old order is moot
+    setSelection(null);
   };
   useEffect(() => {
     if (sourceImg && touched.current) rebuildFrom(sourceImg, cols, colors);
@@ -202,6 +435,60 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     setChart(nextChart);
     setBrushIndex(0);
     setDrawOrder([]); // blank canvas — nothing drawn yet
+    setSelection(null);
+  };
+
+  // Add stitches on one side, keeping the drawing. New cells are the background
+  // yarn (added to the palette if missing, as clearGrid does). The layer box is
+  // unchanged, so the cells shrink to fit.
+  const [growBy, setGrowBy] = useState(1);
+  const grow = (side: GrowSide) => {
+    const current = chartRef.current;
+    if (current.cols <= 0 || current.rows <= 0) return;
+    const horizontal = side === 'left' || side === 'right';
+    const n = Math.max(0, Math.min(Math.round(growBy) || 0, MAX_GRID - (horizontal ? current.cols : current.rows)));
+    if (n <= 0) return;
+    const pal = (palette.length === current.palette.length ? palette : current.palette).slice();
+    let blankIdx = pal.findIndex((h) => h.toLowerCase() === background.toLowerCase());
+    if (blankIdx === -1) {
+      if (pal.length >= 36) blankIdx = 0; // palette full — fall back to colour 1
+      else { pal.push(background); blankIdx = pal.length - 1; }
+    }
+    const next = growChart({ ...current, palette: pal }, drawOrderRef.current, side, n, blankIdx);
+    chartRef.current = next.chart;
+    drawOrderRef.current = next.drawOrder;
+    setPalette(pal);
+    setChart(next.chart);
+    setDrawOrder(next.drawOrder);
+    setSelection(null); // cell addresses moved
+  };
+
+  // Background yarn index for repeat (cells of this colour are not "drawn").
+  const backgroundIndex = (pal: string[]) => pal.findIndex((h) => h.toLowerCase() === background.toLowerCase());
+
+  const repeat = (dir: RepeatDir) => {
+    if (!selection) return;
+    const current = chartRef.current;
+    const pal = palette.length === current.palette.length ? palette : current.palette;
+    const next = repeatSelection(current, drawOrderRef.current, selection, dir, backgroundIndex(pal));
+    chartRef.current = next.chart;
+    drawOrderRef.current = next.drawOrder;
+    setChart(next.chart);
+    setDrawOrder(next.drawOrder);
+  };
+
+  // Mirror line for "copy beside": the selection edge (outer row/column
+  // doubled) or its outer row/column shared (not doubled).
+  const [sharedCentre, setSharedCentre] = useState(false);
+  const mirror = (axis: 'h' | 'v', mode: 'inplace' | 'copy', side: 'before' | 'after' = 'after') => {
+    if (!selection) return;
+    const current = chartRef.current;
+    const pal = palette.length === current.palette.length ? palette : current.palette;
+    const next = mirrorSelection(current, drawOrderRef.current, selection, axis, mode, side, sharedCentre, backgroundIndex(pal));
+    chartRef.current = next.chart;
+    drawOrderRef.current = next.drawOrder;
+    setChart(next.chart);
+    setDrawOrder(next.drawOrder);
   };
 
   // Append a new yarn colour and select it as the active brush.
@@ -219,15 +506,27 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
   // through the refs so rapid drag events stay consistent and every painted
   // cell is recorded into the draw order (first occurrence wins, so a later
   // recolor of the same cell doesn't move it in the reveal sequence).
-  const paintAtPointer = (clientX: number, clientY: number) => {
+  const cellAtPointer = (clientX: number, clientY: number) => {
     const canvas = previewRef.current;
     const current = chartRef.current;
-    if (!canvas || current.cols <= 0) return;
+    if (!canvas || current.cols <= 0) return null;
     const rect = canvas.getBoundingClientRect();
-    const px = (clientX - rect.left) * (canvas.width / rect.width);
-    const py = (clientY - rect.top) * (canvas.height / rect.height);
-    const hit = knittingCellAt(canvas.width, canvas.height, current,
-      { showNumbers, showLegend }, px, py);
+    const px = (clientX - rect.left) * (PREVIEW_W / rect.width);
+    const py = (clientY - rect.top) * (PREVIEW_H / rect.height);
+    return knittingCellAt(PREVIEW_W, PREVIEW_H, current, { showNumbers, showLegend }, px, py);
+  };
+
+  // Select tool: press sets the anchor cell, drag extends the rectangle.
+  const selectAtPointer = (clientX: number, clientY: number, start: boolean) => {
+    const hit = cellAtPointer(clientX, clientY);
+    if (!hit) return;
+    if (start || !selectAnchor.current) selectAnchor.current = hit;
+    setSelection(normRect(selectAnchor.current, hit));
+  };
+
+  const paintAtPointer = (clientX: number, clientY: number) => {
+    const current = chartRef.current;
+    const hit = cellAtPointer(clientX, clientY);
     if (!hit) return;
     const ch = safeBrush.toString(36);
     let row = current.cells[hit.r] ?? '';
@@ -256,11 +555,31 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    if (canvas.width !== previewPx.w) canvas.width = previewPx.w;
+    if (canvas.height !== previewPx.h) canvas.height = previewPx.h;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    renderKnittingChart(ctx, 0, 0, canvas.width, canvas.height, { ...chart, palette: effectivePalette }, {
+    ctx.setTransform(canvas.width / PREVIEW_W, 0, 0, canvas.height / PREVIEW_H, 0, 0);
+    renderKnittingChart(ctx, 0, 0, PREVIEW_W, PREVIEW_H, { ...chart, palette: effectivePalette }, {
       showGrid, showNumbers, showLegend, background, gridColor,
     });
-  }, [chart, effectivePalette, showGrid, showNumbers, showLegend, background, gridColor]);
+    // Selection outline — editor overlay only, never part of the layer/video.
+    if (selection && chart.cols > 0 && chart.rows > 0) {
+      const { gx, gy, cell } = knittingChartGeometry(0, 0, PREVIEW_W, PREVIEW_H, chart, { showNumbers, showLegend });
+      const x = gx + selection.c0 * cell;
+      const y = gy + selection.r0 * cell;
+      const w = (selection.c1 - selection.c0 + 1) * cell;
+      const h = (selection.r1 - selection.r0 + 1) * cell;
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = '#0284c7';
+      ctx.strokeRect(x, y, w, h);
+      ctx.restore();
+    }
+  }, [chart, effectivePalette, showGrid, showNumbers, showLegend, background, gridColor, selection, previewPx]);
 
   const handleSave = () => {
     // Pixel-reveal animation lives in animations[] (keyframes in layer-local
@@ -321,15 +640,92 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-2">
         <canvas
           ref={previewRef}
-          width={480}
-          height={360}
+          width={PREVIEW_W}
+          height={PREVIEW_H}
           className="w-full rounded bg-white dark:bg-slate-900"
-          style={{ cursor: canPaint ? 'crosshair' : 'default', touchAction: 'none' }}
-          onMouseDown={(e) => { if (!canPaint) return; painting.current = true; paintAtPointer(e.clientX, e.clientY); }}
-          onMouseMove={(e) => { if (painting.current) paintAtPointer(e.clientX, e.clientY); }}
-          onMouseUp={() => { painting.current = false; }}
+          style={{ aspectRatio: `${PREVIEW_W} / ${PREVIEW_H}`, cursor: canPaint ? 'crosshair' : 'default', touchAction: 'none' }}
+          onMouseDown={(e) => {
+            if (!canPaint) return;
+            painting.current = true;
+            if (tool === 'select') selectAtPointer(e.clientX, e.clientY, true);
+            else paintAtPointer(e.clientX, e.clientY);
+          }}
+          onMouseMove={(e) => {
+            if (!painting.current) return;
+            if (tool === 'select') selectAtPointer(e.clientX, e.clientY, false);
+            else paintAtPointer(e.clientX, e.clientY);
+          }}
+          onMouseUp={(e) => {
+            // A quick drag can end without a move over the end cell — take the release point too.
+            if (painting.current && tool === 'select') selectAtPointer(e.clientX, e.clientY, false);
+            painting.current = false;
+          }}
           onMouseLeave={() => { painting.current = false; }}
         />
+      </div>
+
+      {/* Tool: paint with the brush, or select a block of cells to repeat */}
+      <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1 rounded-lg bg-slate-200/60 dark:bg-slate-800 p-1">
+            <button type="button" onClick={() => setTool('paint')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${tool === 'paint' ? 'bg-sky-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}>Paint</button>
+            <button type="button" onClick={() => setTool('select')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${tool === 'select' ? 'bg-sky-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}>Select</button>
+          </div>
+          <span className="text-[11px] text-slate-500">
+            {selection
+              ? `Selected ${selection.c1 - selection.c0 + 1} × ${selection.r1 - selection.r0 + 1} stitches`
+              : tool === 'select' ? 'drag over the grid to select a pattern' : 'click/drag to paint with the selected colour'}
+          </span>
+          {selection && (
+            <button type="button" onClick={() => setSelection(null)} className="text-[11px] text-sky-500 hover:underline">clear selection</button>
+          )}
+        </div>
+        {selection && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Repeat to the edge</span>
+            <button onClick={() => repeat('horizontal')} disabled={!selection}
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">↔ Horizontal</button>
+            <button onClick={() => repeat('vertical')} disabled={!selection}
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">↕ Vertical</button>
+            <button onClick={() => repeat('both')} disabled={!selection}
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">Both</button>
+          </div>
+        )}
+        {selection && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Mirror in place</span>
+            <button onClick={() => mirror('h', 'inplace')} title="Flip the selection left ↔ right"
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">↔ Flip</button>
+            <button onClick={() => mirror('v', 'inplace')} title="Flip the selection top ↕ bottom"
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">↕ Flip</button>
+          </div>
+        )}
+        {selection && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-500 dark:text-slate-400">Mirrored copy</span>
+              <button onClick={() => mirror('h', 'copy', 'before')} title="Mirrored copy to the left of the selection"
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">← Left</button>
+              <button onClick={() => mirror('h', 'copy', 'after')} title="Mirrored copy to the right of the selection"
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">Right →</button>
+              <button onClick={() => mirror('v', 'copy', 'before')} title="Mirrored copy above the selection"
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">↑ Above</button>
+              <button onClick={() => mirror('v', 'copy', 'after')} title="Mirrored copy below the selection"
+              className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">Below ↓</button>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-slate-500">Mirror line</span>
+              <div className="flex gap-1 rounded-lg bg-slate-200/60 dark:bg-slate-800 p-1">
+                <button type="button" onClick={() => setSharedCentre(false)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition ${sharedCentre === false ? 'bg-sky-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}>Edge (outer stitch doubled)</button>
+                <button type="button" onClick={() => setSharedCentre(true)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition ${sharedCentre === true ? 'bg-sky-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}>Shared centre (not doubled)</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Clear / paint toolbar */}
@@ -342,6 +738,29 @@ export const PixelGridEditForm: React.FC<PixelGridEditFormProps> = ({
           <Eraser className="w-4 h-4" /> Clear grid
         </button>
         <span className="text-[11px] text-slate-500">blanks every cell — then click a colour below and paint on the grid</span>
+      </div>
+
+      {/* Add stitches on a chosen side — keeps the drawing (unlike the source sliders). */}
+      <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Add</span>
+          <input type="number" min={1} max={MAX_GRID} value={growBy}
+            onChange={(e) => setGrowBy(Math.max(1, Math.min(MAX_GRID, Math.round(Number(e.target.value)) || 1)))}
+            className="w-16 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500" />
+          <span className="text-xs text-slate-500 dark:text-slate-400">columns</span>
+          <button onClick={() => grow('left')} disabled={!canPaint}
+            className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">← Left</button>
+          <button onClick={() => grow('right')} disabled={!canPaint}
+            className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">Right →</button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Add {growBy} rows</span>
+          <button onClick={() => grow('top')} disabled={!canPaint}
+            className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">↑ Top</button>
+          <button onClick={() => grow('bottom')} disabled={!canPaint}
+            className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition">Bottom ↓</button>
+        </div>
+        <p className="text-[11px] text-slate-500">New stitches are background colour. Your drawing and its playback order are kept; the stitches get smaller to fit the layer.</p>
       </div>
 
       {/* Stitches / colours — need the source image */}

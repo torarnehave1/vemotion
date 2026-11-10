@@ -2,6 +2,7 @@ import type { Animation, CompositionData, Layer, Keyframe, MotionScene, PathAnch
 import { samplePath } from './pathSampling';
 import { sampleAudioTrack } from './audioAnalysis';
 import { renderKnittingChart, type KnittingChart } from './knitting';
+import { computeDots } from './dotField';
 import { layoutTelemetryTrack, DEFAULT_TELEMETRY_COLORS, type TelemetryTrackProps, type TelemetrySegType } from './telemetryTrack';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
@@ -1129,6 +1130,9 @@ export class CanvasRenderer {
       case 'telemetry-track':
         this.drawTelemetryTrack(layer, values);
         break;
+      case 'dot-field':
+        this.drawDotField(layer, values, time);
+        break;
     }
 
     this.ctx.restore();
@@ -1836,6 +1840,56 @@ export class CanvasRenderer {
     this.ctx.strokeStyle = stroke;
     this.ctx.lineWidth = strokeWidth;
     this.ctx.stroke();
+  }
+
+  // ── Dot-field layer ───────────────────────────────────────────────────────
+  // A math-shape that draws a dot at each sample instead of a line through them: `count` dots
+  // in ONE layer, each placed by the x/y formulas with its own number as `i`. All the logic is
+  // in dotField.ts (pure); this only paints. Each dot's alpha multiplies the layer opacity
+  // drawLayer already set, so a layer fade and a per-dot opacityFormula combine.
+  private drawDotField(layer: Layer, values: Record<string, unknown>, time = 0): void {
+    // Each property is read here BY NAME on purpose: Agent-Builder's catalog drift test
+    // (worker/test-vemotion-catalog.mjs) derives a layer type's properties from the per-key
+    // reads in its draw method. Passing `values` through whole would hide them from it.
+    const dots = computeDots(
+      {
+        count: values.count,
+        radius: values.radius,
+        xFormula: values.xFormula,
+        yFormula: values.yFormula,
+        radiusFormula: values.radiusFormula,
+        opacityFormula: values.opacityFormula,
+        color: values.color,
+        color2: values.color2,
+        mixFormula: values.mixFormula,
+        m: values.m,
+        seed: values.seed,
+        tStart: values.tStart,
+        tEnd: values.tEnd,
+      },
+      {
+        x0: layer.position.x + ((values.offsetX as number) ?? 0),
+        y0: layer.position.y + ((values.offsetY as number) ?? 0),
+        w: layer.size.width,
+        h: layer.size.height,
+      },
+      time,
+      {
+        amp: typeof values.__amp === 'number' ? values.__amp : 0,
+        ampL: typeof values.__ampL === 'number' ? values.__ampL : 0,
+        ampR: typeof values.__ampR === 'number' ? values.__ampR : 0,
+      },
+    );
+    if (dots.length === 0) return;
+    const layerAlpha = this.ctx.globalAlpha;
+    for (const d of dots) {
+      this.ctx.globalAlpha = layerAlpha * d.alpha;
+      this.ctx.fillStyle = d.color;
+      this.ctx.beginPath();
+      this.ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    this.ctx.globalAlpha = layerAlpha;
   }
 
   // ── Rounded rectangle helper ──────────────────────────────────────────────

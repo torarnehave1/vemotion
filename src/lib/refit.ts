@@ -27,6 +27,8 @@ const UNIFORM_SCALABLE_PROPS = [
   'padding',
   'gap',
   'borderRadius',
+  // dot-field: the dot size. Its formulas follow the layer box (x0/y0/w/h) like a math-shape's.
+  'radius',
 ];
 
 /**
@@ -34,7 +36,7 @@ const UNIFORM_SCALABLE_PROPS = [
  * every layer scaled to suit. Does not mutate the input.
  *
  * Known caveats (callers should surface to the user):
- *   - math-shape `xFormula` / `yFormula` with hard-coded pixel constants
+ *   - math-shape and dot-field `xFormula` / `yFormula` with hard-coded pixel constants
  *     (e.g. `t * 60`) don't auto-scale; only `x0`, `y0`, `w`, `h` references
  *     adapt. Same for motionScenes formulas.
  *   - `fillSource` image URLs aren't re-fetched at a new size; the renderer

@@ -21,6 +21,7 @@ Layer `type` discriminators (the agent must use one of these):
 - `text` — text with `fontSize`, `color`, `align`, `fontWeight`, `fontFamily`, `lineHeight`, and `letterSpacing` **in em** (a fraction of `fontSize`: `0.05` = 5% of the font size between letters; `0` = the font's own spacing; range −0.2 to 1; never pixels — `8` would mean eight font-sizes). `letterSpacing` is animatable: `{ property: "letterSpacing", keyframes: [{ time: 0, value: 0.4 }, { time: 1.2, value: 0.02 }] }` is a tracking-in. **Image-fill (letters become a window onto an image): see §11.**
 - `shape` — primitives (`rect`, `circle`, `ellipse`, `polygon`) with `color`, `opacity`. Optional `strokeColor` + `strokeWidth` for an outline (both required; stroke is drawn on top of fill). Optional `borderRadius` on rect for rounded corners. Any layer (including this one) can carry `motionScenes` to follow a formula-driven path over time — see §13.
 - `math-shape` — formula-driven parametric shapes (sine, spiral, circle, ellipse) with `drawProgress`. **See §9 (the `x0`/`y0` convention — required) and §13 (authoring patterns + worked example).**
+- `dot-field` — many dots in ONE layer, each placed by the same x/y formulas with its own number as `i` (a math-shape that draws a dot at each sample instead of a line). **See §13b.**
 - `path` — hand-authored polyline or cubic-Bezier curve, drawn as a stroke + usable as a motion source by other layers. **See §18.** Authored via the Pen tool in the editor; programmatic via `properties.anchors[]`. Coexists with `math-shape` (formula curves) and `motionScenes` formulas — pick the tool that fits.
 - `audio` — sound layer (voice-over, music, sound effects). Reuses the existing vegvisr audio-portfolio + transcription workers — see §17.
 - `image` — raster, with `src`, `fit`, `opacity`, `offset`. **Plus (new): optional `borderColor`+`borderWidth` border, a `mask` cut-out clip, and `patches[]` clone/heal repairs — see §20.**
@@ -47,7 +48,7 @@ type CompositionData = {
 type Layer = {
   id: string;
   type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card'
-      | 'math-shape' | 'audio' | 'path' | 'knitting-chart';
+      | 'math-shape' | 'audio' | 'path' | 'knitting-chart' | 'telemetry-track' | 'dot-field';
   name?: string;             // display label in timeline/layer list (renderer ignores it)
   groupId?: string;
   position: { x: number; y: number };
@@ -732,6 +733,49 @@ Composing with a `scale` keyframe animation: `scaleFormula` OVERRIDES any keyfra
 For all of these, set the layer's base `position` such that the FORMULA OUTPUT for `p = 0` matches where you want the layer to start. The renderer evaluates the formula and translates the layer there; `position` is the anchor everything is relative to.
 
 ---
+
+
+## 13b. dot-field — many dots in one layer (2026-11-10)
+
+A `dot-field` layer draws `count` dots (1–2000). `xFormula` / `yFormula` run once per dot and
+return ABSOLUTE canvas coordinates, exactly like a math-shape (start with `x0 + …` / `y0 + …`).
+Logic: `src/lib/dotField.ts` (pure); painting: `drawDotField` in `renderer.ts`.
+
+Properties: `count`, `radius` (px), `xFormula`, `yFormula`, `radiusFormula?`, `opacityFormula?`
+(0–1 per dot, multiplies the layer opacity), `color`, `color2?` + `mixFormula?` (0 = color,
+1 = color2; `#rgb` / `#rrggbb` only), `m` (a plain number — animate it with an ordinary `layer`
+keyframe animation), `seed`, `tStart` / `tEnd` (default 0 … 2π).
+
+Formula vocabulary = everything a math-shape formula knows, plus:
+
+| Name | Meaning |
+|---|---|
+| `i`, `n` | the dot's number (0 … n-1) and the count |
+| `u` | `i / n` — closed layouts (a ring has no doubled dot) |
+| `p` | `i / (n-1)` — open layouts (a line reaches both ends) |
+| `t` | `tStart + (tEnd - tStart) * p` — so a math-shape curve formula works unchanged: the dots sit along the curve |
+| `time` | seconds on the layer clock |
+| `rnd`, `rnd2` | two fixed random numbers 0–1 per dot, the same in every frame; `seed` changes the arrangement |
+| `m` | the layer's `m` property — keyframe it 0 → 1 to slide between two layouts |
+| `r` | the layer's `radius`, for `radiusFormula` |
+| `floor(x)`, `smooth(a, b, x)` | grid rows/columns; a soft 0 → 1 step |
+
+A formula outside the vocabulary draws nothing for x/y, and falls back to the plain property for
+radius / opacity / mix. No conditionals: use `smooth`, `min`, `max`. No `exp`: `pow(2.71828, x)`.
+
+Ready-made layouts are `DOT_FIELD_PRESETS` in `dotField.ts` (sunflower, grid, ring, cluster, wave,
+grid → sunflower with `m`, heartbeat). Example — a grid that gathers into one body over 4 s:
+
+```json
+{ "id": "papers", "type": "dot-field",
+  "position": { "x": 660, "y": 240 }, "size": { "width": 600, "height": 600 },
+  "properties": { "count": 208, "radius": 7, "color": "#6b6f68", "color2": "#a63a46",
+    "xFormula": "<grid-to-sunflower xFormula>", "yFormula": "<grid-to-sunflower yFormula>",
+    "mixFormula": "smooth(0, 1, m) * rnd", "m": 0 },
+  "animations": [{ "property": "m", "keyframes": [{ "time": 2, "value": 0 }, { "time": 6, "value": 1 }] }] }
+```
+
+Not covered: lines between dots (use math-shapes), per-dot text, more than two colours.
 
 ## 14. Keyframes — the timing primitive every animation rests on
 

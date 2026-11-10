@@ -158,7 +158,7 @@ export type LayerGroup = {
 
 export type Layer = {
   id: string;
-  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio' | 'path' | 'knitting-chart' | 'telemetry-track';
+  type: 'text' | 'shape' | 'image' | 'video' | 'kg-shape' | 'card' | 'math-shape' | 'audio' | 'path' | 'knitting-chart' | 'telemetry-track' | 'dot-field';
   /**
    * Optional human-readable label shown in the timeline + layer list instead of
    * the generated `id`. Display-only; the renderer never reads it. Resolve a

@@ -11,6 +11,7 @@ import { ANIMATED_ELEMENTS } from '../lib/animatedElements';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader2, Upload, ChevronDown, Image as ImageIcon, Link2, Link2Off, Check } from 'lucide-react';
 import type { AudioTrack, Layer, LayerGroup, MotionScene, PathMask, PathAnchor, PathMeasurements } from '../lib/api';
+import { DOT_FIELD_PRESETS, DOT_FIELD_DEFAULT_COUNT, DOT_FIELD_DEFAULT_RADIUS, DOT_FIELD_DEFAULT_COLOR, DOT_FIELD_MAX_COUNT, dotFormulaProblem } from '../lib/dotField';
 import { readStoredUser } from '../lib/auth';
 
 const KG_SHAPES_GRAPH = 'vemotion-shapes';
@@ -401,8 +402,8 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
       .catch(() => setKgError('Failed to load cards from graph.'))
       .finally(() => setKgLoading(false));
   }, [tab]);
-  const [layerType, setLayerType] = useState<'text' | 'shape' | 'math-shape'>(
-    (editingLayer?.type === 'text' || editingLayer?.type === 'shape' || editingLayer?.type === 'math-shape') ? editingLayer.type : 'text'
+  const [layerType, setLayerType] = useState<'text' | 'shape' | 'math-shape' | 'dot-field'>(
+    (editingLayer?.type === 'text' || editingLayer?.type === 'shape' || editingLayer?.type === 'math-shape' || editingLayer?.type === 'dot-field') ? editingLayer.type : 'text'
   );
   const [text, setText] = useState((editingLayer?.properties.text as string) ?? 'Hello World');
   const [color, setColor] = useState((editingLayer?.properties.color as string) ?? '#ffffff');
@@ -419,6 +420,22 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [xFormula, setXFormula] = useState((editingLayer?.properties.xFormula as string) ?? 'x0 + w/2 + min(w,h)*0.35*cos(t)');
   const [yFormula, setYFormula] = useState((editingLayer?.properties.yFormula as string) ?? 'y0 + h/2 + min(w,h)*0.35*sin(t)');
   const [closePath, setClosePath] = useState(editingLayer?.properties.closePath !== false);
+  // dot-field: its own formula fields, so switching type never carries a curve formula across.
+  const dotProps = (editingLayer?.type === 'dot-field' ? editingLayer.properties : {}) as Record<string, unknown>;
+  const dotStr = (k: string, fallback: string) => (typeof dotProps[k] === 'string' ? (dotProps[k] as string) : fallback);
+  const dotNum = (k: string, fallback: number) => (Number.isFinite(Number(dotProps[k])) && dotProps[k] !== undefined && dotProps[k] !== null ? Number(dotProps[k]) : fallback);
+  // '' = the formulas currently in the fields (a new layer starts as a sunflower).
+  const [dotPreset, setDotPreset] = useState('');
+  const [dotCount, setDotCount] = useState(dotNum('count', DOT_FIELD_DEFAULT_COUNT));
+  const [dotRadius, setDotRadius] = useState(dotNum('radius', DOT_FIELD_DEFAULT_RADIUS));
+  const [dotX, setDotX] = useState(dotStr('xFormula', DOT_FIELD_PRESETS[0].properties.xFormula));
+  const [dotY, setDotY] = useState(dotStr('yFormula', DOT_FIELD_PRESETS[0].properties.yFormula));
+  const [dotRadiusFormula, setDotRadiusFormula] = useState(dotStr('radiusFormula', ''));
+  const [dotOpacityFormula, setDotOpacityFormula] = useState(dotStr('opacityFormula', ''));
+  const [dotColor2, setDotColor2] = useState(dotStr('color2', ''));
+  const [dotMixFormula, setDotMixFormula] = useState(dotStr('mixFormula', ''));
+  const [dotM, setDotM] = useState(dotNum('m', 0));
+  const [dotSeed, setDotSeed] = useState(dotNum('seed', 1));
   const [fillColor, setFillColor] = useState(
     typeof editingLayer?.properties.fill === 'string' ? (editingLayer.properties.fill as string) : ''
   );
@@ -456,7 +473,7 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   // rebuilds the layer as a 'Hello World' text layer — silently destroying the
   // original (e.g. knitting-chart, path). See handleSaveGeneric.
   const isGenericEdit = isEditing && !isImgLayer && !isVideoLayer && !isKgShape && !isKgCard && !isPixelGrid
-    && !(editingLayer && ['text', 'shape', 'math-shape'].includes(editingLayer.type));
+    && !(editingLayer && ['text', 'shape', 'math-shape', 'dot-field'].includes(editingLayer.type));
 
   // Editing a 'Word scramble' element: a text layer whose animation is
   // char-scramble. It gets a dedicated compact form (Word / size / colour) whose
@@ -712,6 +729,33 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
   const [cardPreset,   setCardPreset]   = useState<AnimationPreset>('fade-in');
   const cardPresetInitial = useRef(cardPreset);
   const [cardPickPreset, setCardPickPreset] = useState<AnimationPreset>('fade-in');
+
+  // A preset replaces every formula field, including the optional ones, so a preset without a
+  // radius formula does not keep the previous preset's.
+  const applyDotFieldPreset = (presetId: string) => {
+    setDotPreset(presetId);
+    const found = DOT_FIELD_PRESETS.find((x) => x.id === presetId);
+    if (!found) return;
+    setDotX(found.properties.xFormula);
+    setDotY(found.properties.yFormula);
+    setDotRadiusFormula(found.properties.radiusFormula ?? '');
+    setDotOpacityFormula(found.properties.opacityFormula ?? '');
+    setDotMixFormula(found.properties.mixFormula ?? '');
+  };
+
+  // The text default box (600 × 80) squeezes every layout flat. A NEW dot-field gets a centred
+  // square; an edited layer keeps its own box.
+  const chooseLayerType = (next: 'text' | 'shape' | 'math-shape' | 'dot-field') => {
+    setLayerType(next);
+    if (next === 'dot-field' && !isEditing && layerType !== 'dot-field') {
+      const side = Math.round(Math.min(compositionWidth, compositionHeight) * 0.6);
+      setWidth(side);
+      setHeight(side);
+      setPosX(Math.floor((compositionWidth - side) / 2));
+      setPosY(Math.floor((compositionHeight - side) / 2));
+      if (color === '#ffffff') setColor(DOT_FIELD_DEFAULT_COLOR);
+    }
+  };
 
   const applyMathShapePreset = (curveId: string) => {
     setMathPreset(curveId);
@@ -1130,6 +1174,23 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
               ...kept(['shape', 'color', 'opacity', 'rotation', 'motionScenes']),
               shape, color, opacity: opacityValue, rotation: layerRotation, ...(motionScenes ? { motionScenes } : {}),
             }
+          : layerType === 'dot-field'
+            ? {
+                ...kept(['count', 'radius', 'xFormula', 'yFormula', 'radiusFormula', 'opacityFormula', 'color', 'color2', 'mixFormula', 'm', 'seed', 'opacity', 'motionScenes']),
+                count: Math.max(1, Math.min(DOT_FIELD_MAX_COUNT, Math.round(dotCount) || DOT_FIELD_DEFAULT_COUNT)),
+                radius: dotRadius,
+                xFormula: dotX,
+                yFormula: dotY,
+                ...(dotRadiusFormula.trim() ? { radiusFormula: dotRadiusFormula.trim() } : {}),
+                ...(dotOpacityFormula.trim() ? { opacityFormula: dotOpacityFormula.trim() } : {}),
+                color,
+                ...(dotColor2.trim() ? { color2: dotColor2.trim() } : {}),
+                ...(dotMixFormula.trim() ? { mixFormula: dotMixFormula.trim() } : {}),
+                m: dotM,
+                seed: dotSeed,
+                opacity: opacityValue,
+                ...(motionScenes ? { motionScenes } : {}),
+              }
           : {
               ...kept(['mathKind', 'stroke', 'strokeWidth', 'fill', 'samples', 'tStart', 'tEnd', 'xFormula', 'yFormula', 'closePath', 'opacity', 'motionScenes']),
               mathKind,
@@ -2156,10 +2217,10 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
             <>
               {/* Layer type */}
               <div className="flex gap-2">
-                {(['text', 'shape', 'math-shape'] as const).map(t => (
+                {(['text', 'shape', 'math-shape', 'dot-field'] as const).map(t => (
                   <button
                     key={t}
-                    onClick={() => setLayerType(t)}
+                    onClick={() => chooseLayerType(t)}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition ${layerType === t ? 'bg-sky-600 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   >
                     {t}
@@ -2261,6 +2322,80 @@ export const AddLayerModal: React.FC<AddLayerModalProps> = ({
                     <input type="number" value={layerRotation} step={1}
                       onChange={e => setLayerRotation(Number(e.target.value))}
                       className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                </div>
+              ) : layerType === 'dot-field' ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500">
+                    Many dots in one layer. The formulas run once per dot: <code>i</code> is the dot&apos;s number, <code>n</code> the count, <code>u</code> = i/n, <code>p</code> = i/(n-1), <code>rnd</code> and <code>rnd2</code> a fixed random number per dot, <code>time</code> the seconds, <code>m</code> the animatable number below, <code>r</code> the radius. Also <code>floor</code>, <code>smooth(a, b, x)</code> and everything a math-shape formula knows.
+                  </p>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Layout</label>
+                    <select value={dotPreset} onChange={e => applyDotFieldPreset(e.target.value)}
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                      <option value="">Current formulas — pick a layout…</option>
+                      {DOT_FIELD_PRESETS.map((x) => (
+                        <option key={x.id} value={x.id} title={x.summary}>{x.label}</option>
+                      ))}
+                    </select>
+                    {dotPreset && <p className="text-xs text-slate-500 mt-1">{DOT_FIELD_PRESETS.find((x) => x.id === dotPreset)?.summary}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Dots (1–{DOT_FIELD_MAX_COUNT})</label>
+                      <input type="number" min="1" max={DOT_FIELD_MAX_COUNT} value={dotCount} onChange={e => setDotCount(parseInt(e.target.value) || DOT_FIELD_DEFAULT_COUNT)}
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Radius (px)</label>
+                      <input type="number" step="0.5" min="0" value={dotRadius} onChange={e => setDotRadius(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">m (animate 0 → 1)</label>
+                      <input type="number" step="0.05" value={dotM} onChange={e => setDotM(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Seed (random arrangement)</label>
+                      <input type="number" step="1" value={dotSeed} onChange={e => setDotSeed(parseInt(e.target.value) || 0)}
+                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">xFormula</label>
+                    <input value={dotX} onChange={e => { setDotX(e.target.value); setDotPreset(''); }}
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    {dotFormulaProblem(dotX) && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dotFormulaProblem(dotX)}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">yFormula</label>
+                    <input value={dotY} onChange={e => { setDotY(e.target.value); setDotPreset(''); }}
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    {dotFormulaProblem(dotY) && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dotFormulaProblem(dotY)}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">radiusFormula (optional)</label>
+                    <input value={dotRadiusFormula} onChange={e => { setDotRadiusFormula(e.target.value); setDotPreset(''); }} placeholder="r * (1 + 0.2*sin(time*2 + rnd*2*pi))"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    {dotFormulaProblem(dotRadiusFormula) && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dotFormulaProblem(dotRadiusFormula)}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">opacityFormula (optional, 0–1)</label>
+                    <input value={dotOpacityFormula} onChange={e => { setDotOpacityFormula(e.target.value); setDotPreset(''); }} placeholder="smooth(0, 0.6, time - u*2)"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    {dotFormulaProblem(dotOpacityFormula) && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dotFormulaProblem(dotOpacityFormula)}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Second colour (optional)</label>
+                    <input value={dotColor2} onChange={e => setDotColor2(e.target.value)} placeholder="#c08a3e or leave blank"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">mixFormula (optional, 0 = colour, 1 = second colour)</label>
+                    <input value={dotMixFormula} onChange={e => { setDotMixFormula(e.target.value); setDotPreset(''); }} placeholder="rnd"
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                    {dotFormulaProblem(dotMixFormula) && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dotFormulaProblem(dotMixFormula)}</p>}
                   </div>
                 </div>
               ) : (

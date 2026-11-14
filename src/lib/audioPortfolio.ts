@@ -78,7 +78,12 @@ export async function saveRecordingMetadata(payload: AudioRecording & { userEmai
   try {
     await fetch(`${PORTFOLIO_WORKER}/save-recording`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-User-Email': payload.userEmail },
+      // X-API-Token: audio-portfolio-worker requires it on /save-recording (2026-11-14).
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Email': payload.userEmail,
+        'X-API-Token': readStoredUser()?.emailVerificationToken ?? '',
+      },
       body: JSON.stringify({
         userEmail: payload.userEmail,
         fileName: payload.fileName,

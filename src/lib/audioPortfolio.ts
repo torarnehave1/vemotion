@@ -14,6 +14,7 @@
  * category. Vemotion uses them the same way, tagged 'vemotion' + 'voice-over'
  * with category 'Vemotion'.
  */
+import { readStoredUser } from './auth';
 
 const TRANSCRIPTION_WORKER = 'https://norwegian-transcription-worker.torarnehave.workers.dev';
 const PORTFOLIO_WORKER = 'https://audio-portfolio-worker.torarnehave.workers.dev';
@@ -113,8 +114,12 @@ export async function listVemotionRecordings(userEmail: string): Promise<AudioRe
   // but the actual response disagreed. Hard-coding 200 keeps the picker
   // from silently hiding tagged recordings beyond the first short page
   // until the underlying worker default is investigated.
+  // audio-portfolio-worker requires X-API-Token (emailVerificationToken) on /list-recordings
+  // since 2026-11-14; without it the call is 401.
+  const token = readStoredUser()?.emailVerificationToken ?? '';
   const res = await fetch(
     `${PORTFOLIO_WORKER}/list-recordings?userEmail=${encodeURIComponent(userEmail)}&limit=200`,
+    { headers: { 'X-API-Token': token } },
   );
   if (!res.ok) {
     throw new Error(`Audio list failed: HTTP ${res.status}`);

@@ -37,11 +37,10 @@ export interface AudioRecording {
   audioFormat?: string;
   createdAt?: string;
   /**
-   * 'draft' | 'published'. The portfolio worker defaults a saved recording to
-   * 'draft', and /list-recordings only returns published recordings to a
-   * regular-role caller (superadmin sees everything). Vemotion saves with
-   * 'published' so recordings appear in the Pick-from-portfolio picker
-   * regardless of role.
+   * Read-only here. /save-recording stores every regular user's recording as
+   * 'draft' and ignores a publicationState sent by the client; only a
+   * Superadmin publishes (/update-publication-state). /list-recordings returns
+   * the caller's own recordings in either state, so the picker needs nothing.
    */
   publicationState?: 'draft' | 'published';
 }
@@ -95,10 +94,6 @@ export async function saveRecordingMetadata(payload: AudioRecording & { userEmai
         tags: payload.tags ?? [],
         category: payload.category,
         audioFormat: payload.audioFormat ?? 'webm',
-        // Publish by default so the recording is listable for any role, not
-        // just superadmin. Without this the worker stores it as 'draft' and
-        // /list-recordings hides it from regular-role callers.
-        publicationState: payload.publicationState ?? 'published',
       }),
     });
   } catch {

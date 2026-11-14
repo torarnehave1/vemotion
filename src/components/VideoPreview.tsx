@@ -592,7 +592,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ composition, onFrame
               tags: [VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG],
               category: VEMOTION_AUDIO_CATEGORY,
               audioFormat: fmt,
-              publicationState: 'published',
             });
           }
           onAddLayers?.([{

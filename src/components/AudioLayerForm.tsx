@@ -48,9 +48,8 @@ const generateId = () => `layer-${Date.now().toString(36)}`;
  *   - 'pick': lists the user's already-saved Vemotion-tagged recordings
  *     from /list-recordings and lets them attach one without re-recording.
  *
- * Both 'record' and 'upload' save metadata tagged 'vemotion' with
- * publicationState 'published' — the two conditions /list-recordings needs to
- * surface the recording back in the 'pick' picker for any role.
+ * Both 'record' and 'upload' save metadata tagged 'vemotion', which is what
+ * the 'pick' picker filters /list-recordings on.
  *
  * Common per-layer fields: volume (0–1), startTime (sec), layerDuration (sec).
  */
@@ -140,7 +139,6 @@ export const AudioLayerForm: React.FC<AudioLayerFormProps> = ({ onAdd, onUpdateM
           tags: [VEMOTION_AUDIO_TAG, VEMOTION_AUDIO_VOICEOVER_TAG],
           category: VEMOTION_AUDIO_CATEGORY,
           audioFormat,
-          publicationState: 'published',
         });
         if (!displayName.trim()) setDisplayName(niceName);
       }

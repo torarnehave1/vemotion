@@ -32,15 +32,43 @@ export const EmbedView: React.FC = () => {
       return;
     }
     setState('loading');
+    let got = false;
+    const ready = (c: CompositionData) => {
+      got = true;
+      setComposition(c);
+      setState('ready');
+    };
+    // Inside the vegr.ai chat panel this page is a frame on another site and has no login of its own. The
+    // parent reads the composition with the person's token and hands the CONTENT over (never the token).
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== 'https://vegr.ai' && e.origin !== 'https://www.vegr.ai') return;
+      const m = e.data;
+      if (m && m.type === 'vegr-composition' && m.compositionId === id && m.composition && typeof m.composition === 'object') ready(m.composition as CompositionData);
+      else if (m && m.type === 'vegr-composition-error' && m.compositionId === id && !got) {
+        setErrorMessage(`could not be read (${m.status || 0})`);
+        setState('error');
+      }
+    };
+    const framed = window.parent !== window;
+    if (framed) {
+      window.addEventListener('message', onMessage);
+      window.parent.postMessage({ type: 'vegr-composition-request', compositionId: id }, '*');
+    }
+    // The usual way (other embedders, same-site frames): the token in this page's own storage. A failure is only
+    // shown after a few seconds when a parent may still answer.
     getCompositionFromCloud(id)
       .then((data) => {
-        setComposition(data.composition);
-        setState('ready');
+        if (!got) ready(data.composition);
       })
       .catch((err: unknown) => {
-        setErrorMessage(err instanceof Error ? err.message : 'unknown error');
-        setState('error');
+        const message = err instanceof Error ? err.message : 'unknown error';
+        window.setTimeout(() => {
+          if (got) return;
+          setErrorMessage(message);
+          setState('error');
+        }, framed ? 4000 : 0);
       });
+    return () => window.removeEventListener('message', onMessage);
   }, []);
 
   return (

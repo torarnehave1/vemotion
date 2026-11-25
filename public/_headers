@@ -2,4 +2,4 @@
 # Vite copies public/_headers → dist/_headers at build time; Pages serves it.
 
 /*
-  Content-Security-Policy: frame-ancestors 'self' https://*.vegvisr.org
+  Content-Security-Policy: frame-ancestors 'self' https://*.vegvisr.org https://vegr.ai https://*.vegr.ai
